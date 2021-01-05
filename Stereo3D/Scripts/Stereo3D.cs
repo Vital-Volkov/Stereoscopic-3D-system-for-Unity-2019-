@@ -1,6 +1,7 @@
 
 // Stereoscopic 3D system by Vital Volkov
 // Usage:
+// Add this script to any Camera to make it Stereoscopic.
 // 1) The main parameter for the correct size of `User IPD`(Interpupillary distance) in millimeters is `PPI`(Pixels Per Inch) or `Pixel Pitch`(distance between pixel centers) of the screen. Required for precision to calculate screen width.
 // The system will try to autodetect `PPI` of the screen (In my case PPI = 96 on 23 inch LG D2342P monitor). If correct `PPI` failed autodetected from the screen then find one of two in Tech Specs of your screen and set it manually.
 // 2) If PPI or Pixel Pitch is set correctly then "User IPD" will have real distance in millimeters and for precision realistic Stereo3D vision, it must be set the same as user real IPD.
@@ -118,7 +119,7 @@ public class Stereo3D : MonoBehaviour
         VirtualIPDSet();
         HFOVSet();
         CamSet();
-	    RTSet();
+	RTSet();
 
         lastS3DEnabled = S3DEnabled;
         lastSwapLR = swapLR;
