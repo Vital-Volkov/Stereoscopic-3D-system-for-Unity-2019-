@@ -8,7 +8,7 @@ Also there always problems with the not correct depth of shadows, post-process e
 I good understand how Stereoscopic 3D working and made the correct system for Unity.  
 Now I using precision Stereo3D in my projects and enjoying it like never.  
 
-Move `Stereo3D` folder to Unity `Asset` folder or import `Stereo3D.unitypackage`. Just add C# script to any camera and go.  
+Move `Stereo3D` folder to Unity `Assets` folder or import `Stereo3D.unitypackage`. Just add C# script to any camera and go.  
 Tested on Unity 2019 and 2020 with default render + Post Processing Stack v2, URP, and HDRP.  
 More info in the script file.  
 Enjoy.
