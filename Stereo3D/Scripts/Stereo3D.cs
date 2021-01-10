@@ -706,7 +706,7 @@ public class Stereo3D : MonoBehaviour
 			    virtualIPD = GUILayout.HorizontalSlider(virtualIPD, 0, 1000, GUILayout.Width(300));
 
 			    GUILayout.Space(9);
-			    hFOV = GUILayout.HorizontalSlider(hFOV, .1f, 179.9f, GUILayout.Width(300));
+			    hFOV = GUILayout.HorizontalSlider(hFOV, 1, 179, GUILayout.Width(300));
 
 		    GUILayout.EndVertical();
 		    GUILayout.BeginVertical();
