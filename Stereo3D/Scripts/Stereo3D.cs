@@ -315,7 +315,7 @@ public class Stereo3D : MonoBehaviour
 
     void HFOVSet()
     {
-        hFOV = Mathf.Clamp(hFOV, .1f, 179.9f);
+        hFOV = Mathf.Clamp(hFOV, 1, 179);
 
         ViewSet();
     }
