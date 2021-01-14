@@ -141,6 +141,37 @@ public class Stereo3D : MonoBehaviour
 
     void Update()
     {
+        if (Input.GetKeyDown(GuiKey))
+            GuiVisible = !GuiVisible;
+
+        if (Input.GetKeyDown(S3DKey))
+            S3DEnabled = !S3DEnabled;
+
+        if (Input.GetKey(increaseFovKey) && !Input.GetKey(KeyCode.LeftControl))
+            if (Input.GetKey(KeyCode.LeftShift))
+                hFOV += 1;
+            else
+                hFOV += .1f;
+
+        if (Input.GetKey(decreaseFovKey) && !Input.GetKey(KeyCode.LeftControl))
+            if (Input.GetKey(KeyCode.LeftShift))
+                hFOV -= 1;
+            else
+                hFOV -= .1f;
+
+        if (Input.GetKey(decreaseFovKey) && Input.GetKey(KeyCode.LeftControl))
+            if (Input.GetKey(KeyCode.LeftShift))
+                virtualIPD += 10;
+            else
+                virtualIPD += 1;
+
+        if (Input.GetKey(increaseFovKey) && Input.GetKey(KeyCode.LeftControl))
+            if (Input.GetKey(KeyCode.LeftShift))
+                virtualIPD -= 10;
+            else
+                virtualIPD -= 1;
+
+        //check variable changes after Keys pressed
         if (lastS3DEnabled != S3DEnabled)
         {
             lastS3DEnabled = S3DEnabled;
@@ -223,59 +254,8 @@ public class Stereo3D : MonoBehaviour
             ViewSet();
             RTSet();
         }
-
-        if (mainCam) //exclude GUI and Key controls from secondary cameras
-        {
-            if (Input.GetKeyUp(GuiKey))
-                GuiVisible = !GuiVisible;
-
-            if (Input.GetKeyDown(S3DKey))
-            {
-                S3DEnabled = !S3DEnabled;
-                RTSet();
-            }
-
-            if (Input.GetKey(increaseFovKey) && !Input.GetKey(KeyCode.LeftControl))
-            {
-                if (Input.GetKey(KeyCode.LeftShift))
-                    hFOV += 1;
-                else
-                    hFOV += .1f;
-
-                HFOVSet();
-            }
-
-            if (Input.GetKey(decreaseFovKey) && !Input.GetKey(KeyCode.LeftControl))
-            {
-                if (Input.GetKey(KeyCode.LeftShift))
-                    hFOV -= 1;
-                else
-                    hFOV -= .1f;
-
-                HFOVSet();
-            }
-
-            if (Input.GetKey(decreaseFovKey) && Input.GetKey(KeyCode.LeftControl))
-            {
-                if (Input.GetKey(KeyCode.LeftShift))
-                    virtualIPD += 10;
-                else
-                    virtualIPD += 1;
-
-                VirtualIPDSet();
-            }
-
-            if (Input.GetKey(increaseFovKey) && Input.GetKey(KeyCode.LeftControl))
-            {
-                if (Input.GetKey(KeyCode.LeftShift))
-                    virtualIPD -= 10;
-                else
-                    virtualIPD -= 1;
-
-                VirtualIPDSet();
-            }
-        }
     }
+
 
     void PPISet()
     {
@@ -322,31 +302,40 @@ public class Stereo3D : MonoBehaviour
 
     void CamSet()
     {	
+        Vector3 leftCamPos;
+        Vector3 rightCamPos;
+
         if (parentCam == ParentCam.Left)
         {
-			leftCam.transform.localPosition = Vector3.left * virtualIPD * .001f;
-			rightCam.transform.localPosition = Vector3.zero;
+            leftCamPos = Vector3.zero;
+            rightCamPos = Vector3.right * virtualIPD * .001f;
 		}
         else 
             if (parentCam == ParentCam.Right)
             {
-			    leftCam.transform.localPosition = Vector3.zero;
-			    rightCam.transform.localPosition = Vector3.right * virtualIPD * .001f;
+			    leftCamPos = Vector3.left * virtualIPD * .001f;
+			    rightCamPos = Vector3.zero;
 		    }
             else
             {
-			    leftCam.transform.localPosition = Vector3.left * virtualIPD * .0005f;
-			    rightCam.transform.localPosition = Vector3.right * virtualIPD * .0005f;
+			    leftCamPos = Vector3.left * virtualIPD * .0005f;
+			    rightCamPos = Vector3.right * virtualIPD * .0005f;
 		    }
 
         if (swapLR)
         {
-            leftCam.transform.localPosition *= -1;
-            rightCam.transform.localPosition *= -1;
+            leftCam.transform.localPosition = rightCamPos;
+            rightCam.transform.localPosition = leftCamPos;
+        }
+        else
+        {
+            leftCam.transform.localPosition = leftCamPos;
+            rightCam.transform.localPosition = rightCamPos;
         }
 
         ViewSet();
     }
+
 
     float scaleX;
     float scaleY;
