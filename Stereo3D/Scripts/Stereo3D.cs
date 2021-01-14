@@ -54,7 +54,6 @@ public class Stereo3D : MonoBehaviour
     int cullingMask;
     float nearClip;
     vertex[] vertices = new vertex[4];
-    bool mainCam;
     bool defaultRender;
 
     struct vertex
@@ -88,9 +87,6 @@ public class Stereo3D : MonoBehaviour
 
 	    cam = GetComponent<Camera>();
 
-        if (cam == Camera.main)
-            mainCam = true;
-
         cullingMask = cam.cullingMask;
         nearClip = cam.nearClipPlane;
 
@@ -120,7 +116,7 @@ public class Stereo3D : MonoBehaviour
         VirtualIPDSet();
         HFOVSet();
         CamSet();
-	RTSet();
+	    RTSet();
 
         lastS3DEnabled = S3DEnabled;
         lastSwapLR = swapLR;
@@ -144,8 +140,11 @@ public class Stereo3D : MonoBehaviour
         if (Input.GetKeyDown(GuiKey))
             GuiVisible = !GuiVisible;
 
-        if (Input.GetKeyDown(S3DKey))
+        if (Input.GetKeyDown(S3DKey) && !Input.GetKey(KeyCode.LeftControl))
             S3DEnabled = !S3DEnabled;
+
+        if (Input.GetKeyDown(S3DKey) && Input.GetKey(KeyCode.LeftControl))
+            swapLR = !swapLR;
 
         if (Input.GetKey(increaseFovKey) && !Input.GetKey(KeyCode.LeftControl))
             if (Input.GetKey(KeyCode.LeftShift))
@@ -256,7 +255,6 @@ public class Stereo3D : MonoBehaviour
         }
     }
 
-
     void PPISet()
     {
 		PPI = Mathf.Max(PPI, 1);
@@ -335,7 +333,6 @@ public class Stereo3D : MonoBehaviour
 
         ViewSet();
     }
-
 
     float scaleX;
     float scaleY;
@@ -589,22 +586,21 @@ public class Stereo3D : MonoBehaviour
 
     void OnGUI()
     {
-        if (mainCam)
-   	        if (GuiVisible)
-            {
-   		        Cursor.lockState = CursorLockMode.None;
-                Cursor.visible = true;
+   	    if (GuiVisible)
+        {
+   		    Cursor.lockState = CursorLockMode.None;
+            Cursor.visible = true;
 
-    	        guiWindow = GUILayout.Window(0, guiWindow, GuiWindowContent, "Stereo3D Settings");
+    	    guiWindow = GUILayout.Window(0, guiWindow, GuiWindowContent, "Stereo3D Settings");
 
-		        if (!guiWindow.Contains(Event.current.mousePosition) && !Input.GetMouseButton(0))
-			        GUI.UnfocusWindow();
-	        }
-            else
-            {
-   		        Cursor.lockState = CursorLockMode.Locked;
-                Cursor.visible = false;
-	        }
+		    if (!guiWindow.Contains(Event.current.mousePosition) && !Input.GetMouseButton(0))
+			    GUI.UnfocusWindow();
+	    }
+        else
+        {
+   		    Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+	    }
     }
 
     void GuiWindowContent (int windowID)
@@ -695,6 +691,7 @@ public class Stereo3D : MonoBehaviour
 			    virtualIPD = GUILayout.HorizontalSlider(virtualIPD, 0, 1000, GUILayout.Width(300));
 
 			    GUILayout.Space(9);
+			    //hFOV = GUILayout.HorizontalSlider(hFOV, .1f, 179.9f, GUILayout.Width(300)); //179.9f will cause the slider stuck in the standalone player but OK in the editor
 			    hFOV = GUILayout.HorizontalSlider(hFOV, 1, 179, GUILayout.Width(300));
 
 		    GUILayout.EndVertical();
