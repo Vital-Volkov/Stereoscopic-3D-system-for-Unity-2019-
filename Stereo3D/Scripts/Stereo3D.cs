@@ -14,6 +14,7 @@
 
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.Rendering.PostProcessing;
 using System.Runtime.InteropServices;
 
 public class Stereo3D : MonoBehaviour
@@ -75,6 +76,8 @@ public class Stereo3D : MonoBehaviour
     Color lastAnaglyphLeftColor;
     Color lastAnaglyphRightColor;
     Rect lastCamRect;
+    PostProcessLayer PPLayer;
+    bool PPLayerStatus;
 
     void OnEnable()
     {
@@ -86,6 +89,13 @@ public class Stereo3D : MonoBehaviour
 		S3DMaterial.SetColor("_RightCol", anaglyphRightColor);
 
 	    cam = GetComponent<Camera>();
+        cam.stereoTargetEye = StereoTargetEyeMask.None;
+
+        if (GetComponent<PostProcessLayer>())
+        {
+            PPLayer = GetComponent<PostProcessLayer>();
+            PPLayerStatus = PPLayer.enabled;
+        }
 
         cullingMask = cam.cullingMask;
         nearClip = cam.nearClipPlane;
@@ -106,7 +116,10 @@ public class Stereo3D : MonoBehaviour
             leftCam.rect = rightCam.rect = Rect.MinMaxRect(0, 0, 1, 1);
         }
 	
+        leftCam.depth = rightCam.depth = cam.depth;
 	    leftCam.transform.parent = rightCam.transform.parent = transform;
+        leftCam.stereoTargetEye = StereoTargetEyeMask.Left;
+        rightCam.stereoTargetEye = StereoTargetEyeMask.Right;
 		
 		if (Screen.dpi != 0)
 			PPI = Screen.dpi;
@@ -411,6 +424,9 @@ public class Stereo3D : MonoBehaviour
 
 	    if (S3DEnabled)
         {
+            if (PPLayer)
+                PPLayer.enabled = false; //disabling Post Process Layer if exist due it heavily eats fps even when the camera doesn't render the scene
+
 		    cam.cullingMask = 0;
 		    leftCam.enabled = true;	
 		    rightCam.enabled = true;	
@@ -569,6 +585,9 @@ public class Stereo3D : MonoBehaviour
 	        leftCamRT.Release();
 	        rightCamRT.Release();
         }
+
+        if (PPLayer)
+            PPLayer.enabled = PPLayerStatus;
     }
 
     //ignored in SRP(URP or HDRP) but in default render via cam buffer even empty function give fps gain from 294 to 308
