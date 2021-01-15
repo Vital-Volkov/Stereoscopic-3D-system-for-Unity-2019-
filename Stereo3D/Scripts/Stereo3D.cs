@@ -16,6 +16,10 @@ using UnityEngine;
 using UnityEngine.Rendering;
 using System.Runtime.InteropServices;
 
+#if UNITY_POST_PROCESSING_STACK_V2
+using UnityEngine.Rendering.PostProcessing;
+#endif
+
 public class Stereo3D : MonoBehaviour
 {
     public enum Method {Interleaved, SideBySide, OverUnder, Anaglyph}; 
@@ -76,6 +80,11 @@ public class Stereo3D : MonoBehaviour
     Color lastAnaglyphRightColor;
     Rect lastCamRect;
 
+#if UNITY_POST_PROCESSING_STACK_V2
+    PostProcessLayer PPLayer;
+    bool PPLayerStatus;
+#endif
+
     void OnEnable()
     {
         if (GraphicsSettings.currentRenderPipeline == null)
@@ -86,6 +95,16 @@ public class Stereo3D : MonoBehaviour
 		S3DMaterial.SetColor("_RightCol", anaglyphRightColor);
 
 	    cam = GetComponent<Camera>();
+        cam.stereoTargetEye = StereoTargetEyeMask.None;
+
+    #if UNITY_POST_PROCESSING_STACK_V2
+        if (GetComponent<PostProcessLayer>())
+        {
+            PPLayer = GetComponent<PostProcessLayer>();
+            PPLayerStatus = PPLayer.enabled;
+        }
+    #endif
+
 
         cullingMask = cam.cullingMask;
         nearClip = cam.nearClipPlane;
@@ -106,7 +125,10 @@ public class Stereo3D : MonoBehaviour
             leftCam.rect = rightCam.rect = Rect.MinMaxRect(0, 0, 1, 1);
         }
 	
+        leftCam.depth = rightCam.depth = cam.depth;
 	    leftCam.transform.parent = rightCam.transform.parent = transform;
+        leftCam.stereoTargetEye = StereoTargetEyeMask.Left;
+        rightCam.stereoTargetEye = StereoTargetEyeMask.Right;
 		
 		if (Screen.dpi != 0)
 			PPI = Screen.dpi;
@@ -411,6 +433,11 @@ public class Stereo3D : MonoBehaviour
 
 	    if (S3DEnabled)
         {
+        #if UNITY_POST_PROCESSING_STACK_V2
+            if (PPLayer)
+                PPLayer.enabled = false; //disabling Post Process Layer if exist due it heavily eats fps even when the camera doesn't render the scene
+        #endif
+
 		    cam.cullingMask = 0;
 		    leftCam.enabled = true;	
 		    rightCam.enabled = true;	
@@ -569,6 +596,11 @@ public class Stereo3D : MonoBehaviour
 	        leftCamRT.Release();
 	        rightCamRT.Release();
         }
+
+    #if UNITY_POST_PROCESSING_STACK_V2
+        if (PPLayer)
+            PPLayer.enabled = PPLayerStatus;
+    #endif
     }
 
     //ignored in SRP(URP or HDRP) but in default render via cam buffer even empty function give fps gain from 294 to 308
