@@ -8,7 +8,7 @@
 // If you don't know your IPD you can measure it with a mirror and ruler - put a ruler on the mirror in front of your face. Close right eye and move such that left eye pupillary look at themself through Zero mark on a scale of Ruler, at this moment, is important to stay still, close the left eye and open the right eye, and look at the right eye pupillary in the mirror through the Ruler scale and you will see your IPD in millimeters. 
 // 3) Select the Stereo 3D Method. Set your real `User IPD` in the Stereo 3D system and go. If you don't see Stereo 3D then toggle `Swap Left-Right Cameras`. If you want to see virtual reality in a different size feel then uncheck the `Match User IPD` mark and set `Virtual IPD` larger than `User IPD` for toy world and vise versa.
 // 4) `Screen Distance` shows the distance between eyes and screen where real FOV(Field Of View) will match the virtual FOV. So, measure the distance from your eyes position to screen, tune FOV till `Screen Distance` matches the measured one and you get the most realistic view.
-// 5) Default shortcut Keys: `Tab` Show/Hide S3D settings panel. Numpad `*` On/Off Stereo3D. `+`,`-` FOV tune. `Ctrl` + `+`,`-` Virtual IPD tune if unlocked from `User IPD`(`Match User IPD` unchecked). Hold `Shift` for a faster tune.
+// 5) Default shortcut Keys: `Tab` Show/Hide S3D settings panel. Numpad `*` On/Off Stereo3D and `Left Ctrl + *` swap left-right cameras. `+`,`-` FOV tune. `Ctrl` + `+`,`-` Virtual IPD tune if unlocked from `User IPD`(`Match User IPD` unchecked). Hold `Shift` for a faster tune.
 // Tested on Unity 2019 and 2020 with default render + `Post Processing Stack v2`(uncheck `shiftMatrixOrLens`), URP, and HDRP.
 // Enjoy.
 
@@ -25,23 +25,23 @@ public class Stereo3D : MonoBehaviour
     [Header("Settings")]
     public bool S3DEnabled = true; //mono or Stereo3D enabled
     public bool swapLR; //swap left-right cameras
-    public float userIPD = 66; //important setting in mm for correct Stereo3D. User should set his REAL IPD(Interpupillary Distance) and REAL screen size via PPI or pixelPitch for real millimeters match
-    public float virtualIPD = 66; //set virtual IPD not match real and see world in different size feel
-    public bool matchUserIPD = true; //set virtual IPD match to User IPD for realistic view or unset for unlock and let different settings for real and virtual IPD's
-    public float PPI = 96; //how many Pixels Per Inch screen have for correct real screen size calculation(see tech specs for screen and set PPI or pixelPitch)
-    public float pixelPitch = .265f; //distance between pixels centers in mm. If no PPI then pixelPitch must be in tech specs for screen
+    public float userIPD = 66; //an important setting in mm for correct Stereo3D. The user should set his REAL IPD(Interpupillary Distance) and REAL screen size via PPI or pixel pitch to match real millimeters
+    public float virtualIPD = 66; //virtual IPD can be different from user IPD to see the world in different size feel as another creature or armed eyes by binoculars or other stereoscopic optics with a different stereo base
+    public bool matchUserIPD = true; //set virtual IPD match to User IPD to a realistic view of the naked eye
+    public float PPI = 96; //how many Pixels Per Inch screen have to correct real screen size calculation(see tech specs of the screen and set PPI or pixel pitch)
+    public float pixelPitch = .265f; //distance between pixels centers in mm. If no PPI then pixel pitch must be in the tech specs of the screen
     public float hFOV = 90; //horizontal Field Of View
-    public bool GuiVisible = true; //GUI window visible or not on start
-    public KeyCode GuiKey = KeyCode.Tab; //GUI window show hide Key
-    public KeyCode S3DKey = KeyCode.KeypadMultiply; //S3D enable disable shortcut Key 
-    public KeyCode increaseFovKey = KeyCode.KeypadMinus; //increase Field Of View shortcut Key + hold "Shift" Key for faster change
-    public KeyCode decreaseFovKey = KeyCode.KeypadPlus; //decrease Field Of View shortcut Key + hold "Shift" Key for faster change
+    public bool GuiVisible = true; //GUI window visible or not on the start
+    public KeyCode GuiKey = KeyCode.Tab; //GUI window show/hide Key
+    public KeyCode S3DKey = KeyCode.KeypadMultiply; //S3D enable/disable shortcut Key and hold "LeftControl" Key to swap left-right cameras
+    public KeyCode increaseFovKey = KeyCode.KeypadMinus; //increase Field Of View shortcut Key + hold "Shift" Key to faster change + hold "LeftControl" Key to increase virtual IPD if "matchUserIPD" unchecked
+    public KeyCode decreaseFovKey = KeyCode.KeypadPlus; //decrease Field Of View shortcut Key + hold "Shift" Key to faster change + hold "LeftControl" Key to decrease virtual IPD if "matchUserIPD" unchecked
     public Method method = Method.Interleaved; //Stereo3D output method
     public InterleavedType interleavedType = InterleavedType.Horizontal; //Type of Interleaved Stereo3D output method
     public ParentCam parentCam = ParentCam.Center; //for which of eye parent camera renders: left, right or center-symmetric(important for sight aiming in VR)
     public Color anaglyphLeftColor = Color.red; //tweak colors at runtime to best match different goggles
     public Color anaglyphRightColor = Color.cyan;
-    public GameObject cameraPrefab; //if empty, Stereo3D cameras is copy of main cam. Set prefab if need custom settings &/or components
+    public GameObject cameraPrefab; //if empty, Stereo3D cameras are copies of the main cam. Set prefab if need custom settings &/or components
     public RenderTextureFormat RTFormat = RenderTextureFormat.DefaultHDR; //DefaultHDR(16bitFloat) be able to contain Post Process Effects and give fps gain from 328 to 343. In my case RGB111110Float is fastest - 346fps.
     public bool shiftMatrixOrLens = true; //shift image Vanish points to User IPD directly via camera Matrix(fps gain) or via camera's "physically" settings "lensShift"(required for Post Processing Stack V2 pack as it resets matrix and yields incorrect aspect)
 
