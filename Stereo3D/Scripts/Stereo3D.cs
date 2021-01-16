@@ -9,7 +9,7 @@
 // 3) Select the Stereo 3D Method. Set your real `User IPD` in the Stereo 3D system and go. If you don't see Stereo 3D then toggle `Swap Left-Right Cameras`. If you want to see virtual reality in a different size feel then uncheck the `Match User IPD` mark and set `Virtual IPD` larger than `User IPD` for toy world and vise versa.
 // 4) `Screen Distance` shows the distance between eyes and screen where real FOV(Field Of View) will match the virtual FOV. So, measure the distance from your eyes position to screen, tune FOV till `Screen Distance` matches the measured one and you get the most realistic view.
 // 5) Default shortcut Keys: `Tab` Show/Hide S3D settings panel. Numpad `*` On/Off Stereo3D and `Left Ctrl + *` swap left-right cameras. `+`,`-` FOV tune. `Ctrl` + `+`,`-` Virtual IPD tune if unlocked from `User IPD`(`Match User IPD` unchecked). Hold `Shift` for a faster tune.
-// Tested on Unity 2019 and 2020 with default render + `Post Processing Stack v2`(uncheck `shiftMatrixOrLens`), URP, and HDRP.
+// Tested on Unity 2018, 2019 and 2020 with default render + `Post Processing Stack v2`(uncheck `shiftMatrixOrLens`), URP, and HDRP.
 // Enjoy.
 
 using UnityEngine;
@@ -87,7 +87,7 @@ public class Stereo3D : MonoBehaviour
 
     void OnEnable()
     {
-        if (GraphicsSettings.currentRenderPipeline == null)
+        if (GraphicsSettings.renderPipelineAsset == null)
             defaultRender = true;
 
         S3DMaterial = new Material(Shader.Find("Stereo3D Screen Quad"));
@@ -97,13 +97,13 @@ public class Stereo3D : MonoBehaviour
 	    cam = GetComponent<Camera>();
         cam.stereoTargetEye = StereoTargetEyeMask.None;
 
-    #if UNITY_POST_PROCESSING_STACK_V2
+#if UNITY_POST_PROCESSING_STACK_V2
         if (GetComponent<PostProcessLayer>())
         {
             PPLayer = GetComponent<PostProcessLayer>();
             PPLayerStatus = PPLayer.enabled;
         }
-    #endif
+#endif
 
 
         cullingMask = cam.cullingMask;
@@ -433,10 +433,10 @@ public class Stereo3D : MonoBehaviour
 
 	    if (S3DEnabled)
         {
-        #if UNITY_POST_PROCESSING_STACK_V2
+#if UNITY_POST_PROCESSING_STACK_V2
             if (PPLayer)
                 PPLayer.enabled = false; //disabling Post Process Layer if exist due it heavily eats fps even when the camera doesn't render the scene
-        #endif
+#endif
 
 		    cam.cullingMask = 0;
 		    leftCam.enabled = true;	
@@ -511,11 +511,13 @@ public class Stereo3D : MonoBehaviour
             verticesBuffer.SetData(vertices);
             S3DMaterial.SetBuffer("buffer", verticesBuffer);
 
+#if UNITY_2019_1_OR_NEWER
             if (!defaultRender)
             {
                 RenderPipelineManager.endCameraRendering += RenderQuad; //add render context
                 cam.nearClipPlane = -1; //Hack for more fps in SRP(Scriptable Render Pipeline)
             }
+#endif
 
             if (!Application.isEditor)
                 cam.projectionMatrix = Matrix4x4.zero; //give fps gain from 308 to 328
@@ -524,6 +526,7 @@ public class Stereo3D : MonoBehaviour
 
     CommandBuffer commandBuffer;
 
+#if UNITY_2019_1_OR_NEWER
     void RenderQuad(ScriptableRenderContext context, Camera camera) //render context for SRP
     {
         if (camera == cam)
@@ -540,6 +543,7 @@ public class Stereo3D : MonoBehaviour
             context.Submit();
         }
     }
+#endif
 
     void Vertices() //set clip space vertices and texture coordinates for render fullscreen quad via shader buffer
     {
@@ -579,8 +583,10 @@ public class Stereo3D : MonoBehaviour
 
     void ReleaseRT()
     {
+#if UNITY_2019_1_OR_NEWER
         if (!defaultRender)
             RenderPipelineManager.endCameraRendering -= RenderQuad; //remove render context
+#endif
 
         leftCam.targetTexture = null;
         rightCam.targetTexture = null;
@@ -597,10 +603,10 @@ public class Stereo3D : MonoBehaviour
 	        rightCamRT.Release();
         }
 
-    #if UNITY_POST_PROCESSING_STACK_V2
+#if UNITY_POST_PROCESSING_STACK_V2
         if (PPLayer)
             PPLayer.enabled = PPLayerStatus;
-    #endif
+#endif
     }
 
     //ignored in SRP(URP or HDRP) but in default render via cam buffer even empty function give fps gain from 294 to 308
