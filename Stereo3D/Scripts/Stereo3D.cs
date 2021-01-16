@@ -9,7 +9,7 @@
 // 3) Select the Stereo 3D Method. Set your real `User IPD` in the Stereo 3D system and go. If you don't see Stereo 3D then toggle `Swap Left-Right Cameras`. If you want to see virtual reality in a different size feel then uncheck the `Match User IPD` mark and set `Virtual IPD` larger than `User IPD` for toy world and vise versa.
 // 4) `Screen Distance` shows the distance between eyes and screen where real FOV(Field Of View) will match the virtual FOV. So, measure the distance from your eyes position to screen, tune FOV till `Screen Distance` matches the measured one and you get the most realistic view.
 // 5) Default shortcut Keys: `Tab` Show/Hide S3D settings panel. Numpad `*` On/Off Stereo3D and `Left Ctrl + *` swap left-right cameras. `+`,`-` FOV tune. `Ctrl` + `+`,`-` Virtual IPD tune if unlocked from `User IPD`(`Match User IPD` unchecked). Hold `Shift` for a faster tune.
-// Tested on Unity 2018, 2019 and 2020 with default render + `Post Processing Stack v2`(uncheck `shiftMatrixOrLens`), URP, and HDRP.
+// Tested on Unity 2018, 2019 and 2020 with default render + `Post Processing Stack v2`(uncheck `setMatrixDirectly`), URP, and HDRP.
 // Enjoy.
 
 using UnityEngine;
@@ -47,7 +47,7 @@ public class Stereo3D : MonoBehaviour
     public Color anaglyphRightColor = Color.cyan;
     public GameObject cameraPrefab; //if empty, Stereo3D cameras are copies of the main cam. Set prefab if need custom settings &/or components
     public RenderTextureFormat RTFormat = RenderTextureFormat.DefaultHDR; //DefaultHDR(16bitFloat) be able to contain Post Process Effects and give fps gain from 328 to 343. In my case RGB111110Float is fastest - 346fps.
-    public bool shiftMatrixOrLens = true; //shift image Vanish points to User IPD directly via camera Matrix(fps gain) or via camera's "physically" settings "lensShift"(required for Post Processing Stack V2 pack as it resets matrix and yields incorrect aspect)
+    public bool setMatrixDirectly = true; //shift image Vanish points to User IPD directly via camera Matrix(fps gain) or via camera's "physically" settings "lensShift"(required for Post Processing Stack V2 pack as it resets matrix and yields incorrect aspect)
 
     [Header("Info")]
     public Material S3DMaterial; //generated material
@@ -102,6 +102,9 @@ public class Stereo3D : MonoBehaviour
         {
             PPLayer = GetComponent<PostProcessLayer>();
             PPLayerStatus = PPLayer.enabled;
+
+            if (PPLayerStatus)
+                setMatrixDirectly = false;
         }
 #endif
 
@@ -372,7 +375,7 @@ public class Stereo3D : MonoBehaviour
 
         screenDistance = scaleX * imageWidth * .5f; //calculated distance to screen from user eyes where real FOV will match to virtual for realistic view
 
-        if (shiftMatrixOrLens)
+        if (setMatrixDirectly)
         {
             //set "shift" via matrix give fps gain from 304 to 308
             if (swapLR)
