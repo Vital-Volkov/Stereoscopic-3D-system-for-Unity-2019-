@@ -14,7 +14,6 @@ Move the `Stereo3D` folder to the Unity `Assets` folder or import `Stereo3D.unit
 Just add C# script to any camera and go.  
 Tested on Unity 2019 and 2020 with default render + Post Processing Stack v2, URP, and HDRP.  
 More info in the script file.  
-Enjoy.
 
 I also made the build `Stereo3D_Unity_Demo.7z` with Unity default demo scene with `Post Processing Stack V2`.  
 Post-process effects: Color Grading, Bloom, Motion Blur, Vignette, Ambient Occlusion, Depth Of Field, Temporal Anti-aliasing.  
@@ -32,4 +31,3 @@ Key Controls:
 When launch, Monitor's Dots Per Inch(DPI) will be autodetected and precision Screen width will be calculated,
    as result - settings will be in real millimeters so you don't need to set `DPI` or `Pixel Pitch` manually, set it only if `DPI` incorrect.  
 `Screen Distance` will show how far from the screen your eyes should be(camera's point) where Real and Virtual FOV will match and you get a 100% realistic view. (Very important for Vehicle Simulators).  
-Enjoy.
