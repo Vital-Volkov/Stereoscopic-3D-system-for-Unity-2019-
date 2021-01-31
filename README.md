@@ -29,5 +29,8 @@ Key Controls:
    `Esc` exit  
 
 When launch, Monitor's Dots Per Inch(DPI) will be autodetected and precision Screen width will be calculated,
-   as result - settings will be in real millimeters so you don't need to set `DPI` or `Pixel Pitch` manually, set it only if `DPI` incorrect.  
-`Screen Distance` will show how far from the screen your eyes should be(camera's point) where Real and Virtual FOV will match and you get a 100% realistic view. (Very important for Vehicle Simulators).  
+as result - settings will be in real millimeters so you don't need to set `DPI` or `Pixel Pitch` manually, set it only if `DPI` incorrect.
+Set `User IPD` to your own interpupillary distance(IPD) for a realistic view with infinity S3D depth.
+Or set `User IPD` lower than your own IPD for close distance max depth(aquarium back wall effect).
+Uncheck `Match user IPD` and set `Virtual IPD`(Cameras IPD in the virtual world) larger than your own IPD for toy world effect.
+With realistic IPD's `Screen Distance` will show how far from the screen your eyes should be(camera's point) where Real and Virtual FOV will match and you get a 100% realistic view. (Very important for Vehicle Simulators). 
