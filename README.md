@@ -32,5 +32,6 @@ When launch, Monitor's Dots Per Inch(DPI) will be autodetected and precision Scr
 as result - settings will be in real millimeters so you don't need to set `DPI` or `Pixel Pitch` manually, set it only if `DPI` incorrect.
 Set `User IPD` to your own interpupillary distance(IPD) for a realistic view with infinity S3D depth.
 Or set `User IPD` lower than your own IPD for close distance max depth(aquarium back wall effect).
-Uncheck `Match user IPD` and set `Virtual IPD`(Cameras IPD in the virtual world) larger than your own IPD for toy world effect.
+Uncheck `Match user IPD` and set `Virtual IPD`(Cameras IPD in the virtual world) larger than your own IPD for toy world effect and vise versa.
 With realistic IPD's `Screen Distance` will show how far from the screen your eyes should be(camera's point) where Real and Virtual FOV will match and you get a 100% realistic view. (Very important for Vehicle Simulators). 
+Also you can download S3D demo as zip archive from here - https://drive.google.com/file/d/1M1_0xh2xfjxxfKH_L2xQxV09Ill5nllv/view?usp=sharing
