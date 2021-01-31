@@ -36,7 +36,7 @@ Key Controls:
    `Mouse` Look around  
    `Esc` exit  
 
-When launch, Monitor's Pixels Per Inch(PPI) will be autodetected and precision Screen width will be calculated,
+When launch, Monitor's Pixels Per Inch(PPI) will be autodetected and precision screen width will be calculated,
    as result - settings will be in real millimeters so you don't need to set `PPI` or `Pixel Pitch` manually, set it only if `PPI` incorrect.
 Set `User IPD` to your own interpupillary distance(IPD) for a realistic view with infinity S3D depth.
 Or set `User IPD` lower than your own IPD for close distance max depth(aquarium back wall effect).
