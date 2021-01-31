@@ -34,4 +34,5 @@ Set `User IPD` to your own interpupillary distance(IPD) for a realistic view wit
 Or set `User IPD` lower than your own IPD for close distance max depth(aquarium back wall effect).
 Uncheck `Match user IPD` and set `Virtual IPD`(Cameras IPD in the virtual world) larger than your own IPD for toy world effect and vise versa.
 With realistic IPD's `Screen Distance` will show how far from the screen your eyes should be(camera's point) where Real and Virtual FOV will match and you get a 100% realistic view. (Very important for Vehicle Simulators). 
-Also you can download S3D demo as zip archive from here - https://drive.google.com/file/d/1cORanOGO8Elsz7Cn8yj2XwyNVYY5t9lg/view?usp=sharing
+Also you can download S3D demo as zip archive from here:  
+https://drive.google.com/file/d/1cORanOGO8Elsz7Cn8yj2XwyNVYY5t9lg/view?usp=sharing
