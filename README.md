@@ -1,10 +1,10 @@
 # Stereoscopic 3D system for Unity 2019 and 2020 with default render + Post Processing Stack v2, URP, and HDRP
 ![Stereo3D](https://forum.unity.com/attachments/8xmsaa-taa-png.768466/)
 
-I spent thousands of hours in virtual reality using the horizontal interleaved Stereo3D method with my Zalman polarized glasses and LG D2342P monitor, sometimes more than 12 hours per day without any problems with my eyes. This even more healthy for the eyes as they not holding converge fixed focus on the screen unlike mono image - focus all-time dynamically changes from near to very far on distant objects, same like watching through a window in a reality where eyes relaxing being on parallel axes. :sunglasses:
+I spent thousands of hours in virtual reality using the horizontal interleaved Stereo3D method with my Zalman polarized glasses and LG D2342P monitor, sometimes more than 12 hours per day without any problems with eyes. Stereo 3D even more healthy for the eyes as they not holding constant geometry focus on the screen plane like with mono image - in S3D geometry focus dynamically changes in the full depth range from before a screen to infinity far behind a screen on distant objects, same like watching through a window in a reality where eyes relaxing being on parallel axes. :sunglasses:
 
-I love Stereoscopic 3D and don't want to see a mono image of the 3D world on screen anymore, but using drivers like iZ3D, Tridef, Nvidia 3D Vision, etc was always a pain.
-All of them have incorrect approaches in settings like Separation/Convergence which valid only for fixed FOV(Field Of View), when FOV is changed then settings no longer valid.
+I love Stereoscopic 3D and don't want to see a mono image of the 3D world anymore, but using drivers like iZ3D, Tridef, Nvidia 3D Vision, etc was always a pain.
+All of them have incorrect approaches in settings like Separation/Convergence which valid only for fixed FOV(Field Of View), when FOV is changed then settings ruined.
 Also there always problems with the not correct depth of shadows, post-process effects, etc, bad profiles for games. I also made fixes and profiles for games in past.
 
 I good understand how Stereoscopic 3D working and made the correct system for Unity.  
@@ -36,9 +36,8 @@ Key Controls:
    `Mouse` Look around  
    `Esc` exit  
 
-When launch, Monitor's Pixels Per Inch(PPI) will be autodetected and precision screen width will be calculated,
-   as result - settings will be in real millimeters so you don't need to set `PPI` or `Pixel Pitch` manually, set it only if `PPI` incorrect.
+When launch, Monitor's Pixels Per Inch(PPI) should be autodetected and precision screen width will be calculated internally and settings should be in real millimeters, so you don't need to set `PPI` or `Pixel Pitch` manually if the `PPI` of your screen autodetected correctly. Sure, also Save/Load user settings should be implemented with a Unity project.
 Set `User IPD` to your own interpupillary distance(IPD) for a realistic view with infinity S3D depth.
 Or set `User IPD` lower than your own IPD for close distance max depth(aquarium back wall effect).
 Uncheck `Match user IPD` and set `Virtual IPD`(Cameras IPD in the virtual world) larger than your own IPD for toy world effect and vise versa.
-With realistic IPD's `Screen Distance` will show how far from the screen your eyes should be(camera's point) where Real and Virtual FOV will match and you get a 100% realistic view. (Very important for Vehicle Simulators).
+`Screen Distance` will show how far from the screen your eyes should be(camera's point) where Real and Virtual FOV will match and you get a 100% realistic view. (Very important for Vehicle Simulators).
