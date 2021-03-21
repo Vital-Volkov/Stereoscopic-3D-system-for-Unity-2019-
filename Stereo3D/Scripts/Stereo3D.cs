@@ -9,7 +9,12 @@
 // 3) Select the Stereo 3D Method. Set your real `User IPD` in the Stereo 3D system and go. If you don't see Stereo 3D then toggle `Swap Left-Right Cameras`. If you want to see virtual reality in a different size feel then uncheck the `Match User IPD` mark and set `Virtual IPD` larger than `User IPD` for toy world and vise versa.
 // 4) `Screen Distance` shows the distance between eyes and screen where real FOV(Field Of View) will match the virtual FOV. So, measure the distance from your eyes position to screen, tune FOV till `Screen Distance` matches the measured one and you get the most realistic view.
 // 5) Default shortcut Keys: `Tab` Show/Hide S3D settings panel. Numpad `*` On/Off Stereo3D and `Left Ctrl + *` swap left-right cameras. `+`,`-` FOV tune. `Ctrl` + `+`,`-` Virtual IPD tune if unlocked from `User IPD`(`Match User IPD` unchecked). Hold `Shift` for a faster tune.
-// Tested on Unity 2018, 2019 and 2020 with default render + `Post Processing Stack v2`(uncheck `setMatrixDirectly`), URP, and HDRP.
+// 6) DirectX11.1 S3D active if `Stereo Display` SDK is added in `Project Settings-Player-XR Settings-Virtual Reality Supported`(Unity2018,2019 or via custom Editor panel menu "VR SDK\Build with Stereo3D") and `Stereo 3D` enabled in Player launch window(in Unity 2019+ it always enabled) and DirectX11.1 Stereoscopic driver is enabled in Windows8.1+.
+//      Set the same Key for DirectX11.1 S3D driver on/off in Windows and `driverS3DKey` in this script to toggle them together by one Key(useful for the jump from S3D to mono of this script for more FPS and correct eye of `parentCam`(DirectX11.1's S3D mono is slow and using left eye always).
+// Tested on Unity 2019 and 2020 with default render + `Post Processing Stack v2`, URP, and HDRP.
+// In Unity 2018 SRP not rendering screenQuad so use it only with the default render.
+// DirectX11.1 S3D works in Gamma color space in Unity 2018(Linear color space not work) and 2019(exclusive fullscreen not work, Linear white-out, SRP broke S3D when switching fullscreen/window mode if `DirectX11.1 S3D` disabled, so switch window mode while it enabled).
+// If DirectX11.1 S3D not working correctly then just not include `Stereo Display` SDK in the build.
 // Enjoy.
 
 using UnityEngine;
@@ -38,6 +43,7 @@ public class Stereo3D : MonoBehaviour
     public bool GuiVisible = true; //GUI window visible or not on the start
     public KeyCode GuiKey = KeyCode.Tab; //GUI window show/hide Key
     public KeyCode S3DKey = KeyCode.KeypadMultiply; //S3D enable/disable shortcut Key and hold "LeftControl" Key to swap left-right cameras
+    public KeyCode driverS3DKey = KeyCode.ScrollLock; //set the same Key as DirectX11.1 S3D driver on/off in Windows10 to toggle them together by one Key(useful for the jump from S3D to mono of this script for more FPS and correct eye of `parentCam`(DirectX11.1's S3D mono is slow and using left eye always)
     public KeyCode increaseFovKey = KeyCode.KeypadMinus; //increase Field Of View shortcut Key + hold "Shift" Key to faster change + hold "LeftControl" Key to increase virtual IPD if "matchUserIPD" unchecked
     public KeyCode decreaseFovKey = KeyCode.KeypadPlus; //decrease Field Of View shortcut Key + hold "Shift" Key to faster change + hold "LeftControl" Key to decrease virtual IPD if "matchUserIPD" unchecked
     public Method method = Method.Interleaved; //Stereo3D output method
@@ -46,8 +52,8 @@ public class Stereo3D : MonoBehaviour
     public Color anaglyphLeftColor = Color.red; //tweak colors at runtime to best match different goggles
     public Color anaglyphRightColor = Color.cyan;
     public GameObject cameraPrefab; //if empty, Stereo3D cameras are copies of the main cam. Set prefab if need custom settings &/or components
-    public RenderTextureFormat RTFormat = RenderTextureFormat.DefaultHDR; //DefaultHDR(16bitFloat) be able to contain Post Process Effects and give fps gain from 328 to 343. In my case RGB111110Float is fastest - 346fps.
-    public bool setMatrixDirectly = true; //shift image Vanish points to User IPD directly via camera Matrix(fps gain) or via camera's "physically" settings "lensShift"(required for Post Processing Stack V2 pack as it resets matrix and yields incorrect aspect)
+    public RenderTextureFormat RTFormat = RenderTextureFormat.DefaultHDR; //DefaultHDR(16bitFloat) be able to contain Post Process Effects and give FPS gain from 328 to 343. In my case RGB111110Float is fastest - 346fps.
+    public bool setMatrixDirectly = true; //shift image Vanish points to User IPD directly via camera Matrix(FPS gain) or via camera's "physically" settings "lensShift"(required for Post Processing Stack V2 pack as it resets matrix and yields incorrect aspect)
 
     [Header("Info")]
     public Material S3DMaterial; //generated material
@@ -59,6 +65,8 @@ public class Stereo3D : MonoBehaviour
     float nearClip;
     vertex[] vertices = new vertex[4];
     bool defaultRender;
+    bool driver; //true if DirectX11.1 S3D driver connected
+    bool driverS3D; //use DirectX11.1 builtin S3D or custom independent S3D methods of this script 
 
     struct vertex
     {
@@ -79,6 +87,7 @@ public class Stereo3D : MonoBehaviour
     Color lastAnaglyphLeftColor;
     Color lastAnaglyphRightColor;
     Rect lastCamRect;
+    bool lastDriverS3D;
 
 #if UNITY_POST_PROCESSING_STACK_V2
     PostProcessLayer PPLayer;
@@ -95,7 +104,9 @@ public class Stereo3D : MonoBehaviour
 		S3DMaterial.SetColor("_RightCol", anaglyphRightColor);
 
 	    cam = GetComponent<Camera>();
+        cam.stereoSeparation = 0;
         cam.stereoTargetEye = StereoTargetEyeMask.None;
+        driver = driverS3D = cam.stereoEnabled; //check cam.stereoEnabled after set StereoTargetEyeMask.None otherwise it returns true even when Stereo3D unchecked in Player and not working
 
 #if UNITY_POST_PROCESSING_STACK_V2
         if (GetComponent<PostProcessLayer>())
@@ -107,7 +118,6 @@ public class Stereo3D : MonoBehaviour
                 setMatrixDirectly = false;
         }
 #endif
-
 
         cullingMask = cam.cullingMask;
         nearClip = cam.nearClipPlane;
@@ -125,11 +135,11 @@ public class Stereo3D : MonoBehaviour
 	        rightCam = new GameObject("rightCam").AddComponent<Camera>();
 	        leftCam.CopyFrom(cam);
 	        rightCam.CopyFrom (cam);
-            leftCam.rect = rightCam.rect = Rect.MinMaxRect(0, 0, 1, 1);
         }
 	
         leftCam.depth = rightCam.depth = cam.depth;
 	    leftCam.transform.parent = rightCam.transform.parent = transform;
+
         leftCam.stereoTargetEye = StereoTargetEyeMask.Left;
         rightCam.stereoTargetEye = StereoTargetEyeMask.Right;
 		
@@ -194,6 +204,9 @@ public class Stereo3D : MonoBehaviour
                 virtualIPD -= 10;
             else
                 virtualIPD -= 1;
+
+        if (Input.GetKeyDown(driverS3DKey))
+            driverS3D = !driverS3D;
 
         //check variable changes after Keys pressed
         if (lastS3DEnabled != S3DEnabled)
@@ -277,6 +290,18 @@ public class Stereo3D : MonoBehaviour
             lastCamRect = cam.rect;
             ViewSet();
             RTSet();
+        }
+
+        if (lastDriverS3D != driverS3D)
+        {
+            if (driver)
+            {
+                lastDriverS3D = driverS3D;
+                ViewSet();
+                RTSet();
+            }
+            else
+                lastDriverS3D = driverS3D = false;
         }
     }
 
@@ -362,54 +387,90 @@ public class Stereo3D : MonoBehaviour
     float scaleX;
     float scaleY;
     float screenDistance;
+    float shift;
 
     void ViewSet()
     {
         float imageWidth = cam.pixelWidth * pixelPitch; //real size of rendered image on screen
         float aspect = cam.aspect;
 
-        float shift = userIPD / imageWidth; //shift optic axis relative to the screen size (UserIPD/screenSize)
+        shift = userIPD / imageWidth; //shift optic axis relative to the screen size (UserIPD/screenSize)
         scaleX = 1 / Mathf.Tan(hFOV * Mathf.PI / 360);
 		scaleY = scaleX * aspect;
 		vFOV = 360 * Mathf.Atan(1 / scaleY) / Mathf.PI;
 
         screenDistance = scaleX * imageWidth * .5f; //calculated distance to screen from user eyes where real FOV will match to virtual for realistic view
 
+        float separation = 1e-6f; //can't be zero for matrix shift via convergence, but about zero 1/1000 mm is OK
+
+        if (swapLR)
+            leftCam.stereoSeparation = rightCam.stereoSeparation = separation;
+        else
+            leftCam.stereoSeparation = rightCam.stereoSeparation = -separation;
+
+        leftCam.stereoConvergence = rightCam.stereoConvergence = -separation / shift * .5f * scaleX;
+
         if (setMatrixDirectly)
         {
-            //set "shift" via matrix give fps gain from 304 to 308
+            leftCam.stereoSeparation = rightCam.stereoSeparation = 0;
+
+            //set "shift" via matrix give FPS gain from 304 to 308
             if (swapLR)
             {
-		        leftCam.projectionMatrix = MatrixSet(leftCam.projectionMatrix, -shift);
-		        rightCam.projectionMatrix = MatrixSet(rightCam.projectionMatrix, shift);
+                if (driverS3D)
+                {
+		            leftCam.SetStereoProjectionMatrix(Camera.StereoscopicEye.Left, MatrixSet(leftCam.GetStereoProjectionMatrix(Camera.StereoscopicEye.Left), -shift));
+		            rightCam.SetStereoProjectionMatrix(Camera.StereoscopicEye.Right, MatrixSet(rightCam.GetStereoProjectionMatrix(Camera.StereoscopicEye.Right), shift));
+                }
+                else
+                {
+		            leftCam.projectionMatrix = MatrixSet(leftCam.projectionMatrix, -shift);
+		            rightCam.projectionMatrix = MatrixSet(rightCam.projectionMatrix, shift);
+                }
             }
             else
             {
-		        leftCam.projectionMatrix = MatrixSet(leftCam.projectionMatrix, shift);
-		        rightCam.projectionMatrix = MatrixSet(rightCam.projectionMatrix, -shift);
+                if (driverS3D)
+                {
+		            leftCam.SetStereoProjectionMatrix(Camera.StereoscopicEye.Left, MatrixSet(leftCam.GetStereoProjectionMatrix(Camera.StereoscopicEye.Left), shift));
+		            rightCam.SetStereoProjectionMatrix(Camera.StereoscopicEye.Right, MatrixSet(rightCam.GetStereoProjectionMatrix(Camera.StereoscopicEye.Right), -shift));
+                }
+                else
+                {
+		            leftCam.projectionMatrix = MatrixSet(leftCam.projectionMatrix, shift);
+		            rightCam.projectionMatrix = MatrixSet(rightCam.projectionMatrix, -shift);
+                }
             }
         }
         else
         {
-            //return matrix control to camera settings
-            leftCam.ResetProjectionMatrix();
-            rightCam.ResetProjectionMatrix();
-
-            //set "shift" via cam "lensShift" required set "physical" cam
-            leftCam.usePhysicalProperties = rightCam.usePhysicalProperties = true; //need set again after ResetProjectionMatrix
-            cam.sensorSize = leftCam.sensorSize = rightCam.sensorSize = new Vector2(imageWidth, imageWidth / aspect);
-            cam.gateFit = leftCam.gateFit = rightCam.gateFit = Camera.GateFitMode.None;
-            Vector2 lensShift = new Vector2(-shift * .5f, 0);
-
-            if (swapLR)
+            if (driverS3D)
             {
-                leftCam.lensShift = lensShift;
-		        rightCam.lensShift = -lensShift;
+                leftCam.ResetStereoProjectionMatrices();
+                rightCam.ResetStereoProjectionMatrices();
             }
             else
             {
-                leftCam.lensShift = -lensShift;
-		        rightCam.lensShift = lensShift;
+                //return matrix control to camera settings
+                leftCam.ResetProjectionMatrix();
+                rightCam.ResetProjectionMatrix();
+
+                //set "shift" via cam "lensShift" required set "physical" cam
+                leftCam.usePhysicalProperties = rightCam.usePhysicalProperties = true; //need set again after ResetProjectionMatrix
+                cam.sensorSize = leftCam.sensorSize = rightCam.sensorSize = new Vector2(imageWidth, imageWidth / aspect);
+                cam.gateFit = leftCam.gateFit = rightCam.gateFit = Camera.GateFitMode.None;
+                Vector2 lensShift = new Vector2(-shift * .5f, 0);
+
+                if (swapLR)
+                {
+                    leftCam.lensShift = lensShift;
+		            rightCam.lensShift = -lensShift;
+                }
+                else
+                {
+                    leftCam.lensShift = -lensShift;
+		            rightCam.lensShift = lensShift;
+                }
             }
         }
 
@@ -434,97 +495,112 @@ public class Stereo3D : MonoBehaviour
     {
         ReleaseRT(); //remove RT before adding new to avoid duplication
 
-	    if (S3DEnabled)
+        if (driverS3D)
         {
+            cam.stereoTargetEye = StereoTargetEyeMask.None;
+            cam.enabled = false;
+            leftCam.enabled = true;
+            rightCam.enabled = true;
+            leftCam.rect = rightCam.rect = cam.rect;
+
+            //required to fix "IMGUI shows only in left cam" for Direct3D 11.1 S3D
+            leftCam.targetTexture = new RenderTexture(1, 1, 0);
+            leftCam.targetTexture = null;
+        }
+        else
+	        if (S3DEnabled)
+            {
 #if UNITY_POST_PROCESSING_STACK_V2
-            if (PPLayer)
-                PPLayer.enabled = false; //disabling Post Process Layer if exist due it heavily eats fps even when the camera doesn't render the scene
+                if (PPLayer)
+                    PPLayer.enabled = false; //disabling Post Process Layer if exist due it heavily eats FPS even when the camera doesn't render the scene
 #endif
 
-		    cam.cullingMask = 0;
-		    leftCam.enabled = true;	
-		    rightCam.enabled = true;	
-		    int rtWidth = cam.pixelWidth;
-		    int rtHeight = cam.pixelHeight;
-            Vertices();
+		        leftCam.enabled = true;	
+		        rightCam.enabled = true;	
+                leftCam.rect = rightCam.rect = Rect.MinMaxRect(0, 0, 1, 1);
 
-            switch (method)
-            {
-                case Method.Interleaved:
+		        cam.cullingMask = 0;
+		        int rtWidth = cam.pixelWidth;
+		        int rtHeight = cam.pixelHeight;
+                Vertices();
 
-                    int columns = 1;
-                    int rows = 1;
+                switch (method)
+                {
+                    case Method.Interleaved:
 
-                   switch (interleavedType)
-                    {
-		                case InterleavedType.Horizontal:
-   		                    rows = rtHeight;
-			                rtHeight /= 2; //optimize render as half of the rows not using per eye
-                            pass = 0;
-	   	                break;
+                        int columns = 1;
+                        int rows = 1;
 
-   		                case InterleavedType.Vertical:
-   		                    columns = rtWidth;
-			                rtWidth /= 2; //optimize render as half of the columns not using per eye
-                            pass = 1;
-	   	                break;
+                        switch (interleavedType)
+                        {
+		                    case InterleavedType.Horizontal:
+   		                        rows = rtHeight;
+			                    rtHeight /= 2; //optimize render as half of the rows not using per eye
+                                pass = 0;
+	   	                    break;
 
-   		                case InterleavedType.Checkerboard:
-   		                    columns = rtWidth;
-   		                    rows = rtHeight;
-                            pass = 2;
-	   	                break;
-  	                }
+   		                    case InterleavedType.Vertical:
+   		                        columns = rtWidth;
+			                    rtWidth /= 2; //optimize render as half of the columns not using per eye
+                                pass = 1;
+	   	                    break;
 
-		            S3DMaterial.SetInt("_Columns", columns);
-		            S3DMaterial.SetInt("_Rows", rows);
-                break;
+   		                    case InterleavedType.Checkerboard:
+   		                        columns = rtWidth;
+   		                        rows = rtHeight;
+                                pass = 2;
+	   	                    break;
+  	                    }
 
-                case Method.SideBySide:
-				    rtWidth /= 2; //optimize render as image per eye squeeze in half to fit screen
-                    vertices[2].uv = new Vector2(2, 1);
-                    vertices[3].uv = new Vector2(2, 0);
-                    pass = 3;
-                break;
+		                S3DMaterial.SetInt("_Columns", columns);
+		                S3DMaterial.SetInt("_Rows", rows);
+                    break;
 
-                case Method.OverUnder:
-				    rtHeight /= 2; //optimize render as image per eye squeeze in half to fit screen
-                    vertices[1].uv = new Vector2(0, 2);
-                    vertices[2].uv = new Vector2(1, 2);
-                    pass = 4;
-                break;
+                    case Method.SideBySide:
+				        rtWidth /= 2; //optimize render as image per eye squeeze in half to fit screen
+                        vertices[2].uv = new Vector2(2, 1);
+                        vertices[3].uv = new Vector2(2, 0);
+                        pass = 3;
+                    break;
 
-                case Method.Anaglyph:
-                    pass = 5;
-                break;
-            }
+                    case Method.OverUnder:
+				        rtHeight /= 2; //optimize render as image per eye squeeze in half to fit screen
+                        vertices[1].uv = new Vector2(0, 2);
+                        vertices[2].uv = new Vector2(1, 2);
+                        pass = 4;
+                    break;
 
-	        leftCamRT = new RenderTexture(rtWidth, rtHeight, 24, RTFormat);
-	        rightCamRT = new RenderTexture(rtWidth, rtHeight, 24, RTFormat);
-            leftCamRT.filterMode = FilterMode.Point;
-            rightCamRT.filterMode = FilterMode.Point;
+                    case Method.Anaglyph:
+                        pass = 5;
+                    break;
+                }
 
-            leftCam.targetTexture = leftCamRT;
-            rightCam.targetTexture = rightCamRT;
+	            leftCamRT = new RenderTexture(rtWidth, rtHeight, 24, RTFormat);
+	            rightCamRT = new RenderTexture(rtWidth, rtHeight, 24, RTFormat);
+                leftCamRT.filterMode = FilterMode.Point;
+                rightCamRT.filterMode = FilterMode.Point;
 
-            S3DMaterial.SetTexture("_LeftTex", leftCamRT);
-	        S3DMaterial.SetTexture("_RightTex", rightCamRT);
+                leftCam.targetTexture = leftCamRT;
+                rightCam.targetTexture = rightCamRT;
 
-            verticesBuffer = new ComputeBuffer(4, Marshal.SizeOf(typeof(vertex)));
-            verticesBuffer.SetData(vertices);
-            S3DMaterial.SetBuffer("buffer", verticesBuffer);
+                S3DMaterial.SetTexture("_LeftTex", leftCamRT);
+	            S3DMaterial.SetTexture("_RightTex", rightCamRT);
+
+                verticesBuffer = new ComputeBuffer(4, Marshal.SizeOf(typeof(vertex)));
+                verticesBuffer.SetData(vertices);
+                S3DMaterial.SetBuffer("buffer", verticesBuffer);
 
 #if UNITY_2019_1_OR_NEWER
-            if (!defaultRender)
-            {
-                RenderPipelineManager.endCameraRendering += RenderQuad; //add render context
-                cam.nearClipPlane = -1; //Hack for more fps in SRP(Scriptable Render Pipeline)
-            }
+                if (!defaultRender)
+                {
+                    RenderPipelineManager.endCameraRendering += RenderQuad; //add render context
+                    cam.nearClipPlane = -1; //Hack for more FPS in SRP(Scriptable Render Pipeline)
+                }
 #endif
 
-            if (!Application.isEditor)
-                cam.projectionMatrix = Matrix4x4.zero; //give fps gain from 308 to 328
-        }
+                if (!Application.isEditor)
+                    cam.projectionMatrix = Matrix4x4.zero; //give FPS gain from 308 to 328
+            }
     }
 
     CommandBuffer commandBuffer;
@@ -593,9 +669,10 @@ public class Stereo3D : MonoBehaviour
 
         leftCam.targetTexture = null;
         rightCam.targetTexture = null;
-		leftCam.enabled = false;
-		rightCam.enabled = false;
-		cam.cullingMask = cullingMask;
+        leftCam.enabled = false;
+        rightCam.enabled = false;
+        cam.enabled = true;
+        cam.cullingMask = cullingMask;
         cam.nearClipPlane = nearClip;
         cam.ResetProjectionMatrix();
 
@@ -606,17 +683,22 @@ public class Stereo3D : MonoBehaviour
 	        rightCamRT.Release();
         }
 
+        if (driver)
+            cam.stereoTargetEye = StereoTargetEyeMask.Left;
+        else
+            cam.stereoTargetEye = StereoTargetEyeMask.None;
+
 #if UNITY_POST_PROCESSING_STACK_V2
         if (PPLayer)
             PPLayer.enabled = PPLayerStatus;
 #endif
     }
 
-    //ignored in SRP(URP or HDRP) but in default render via cam buffer even empty function give fps gain from 294 to 308
+    //ignored in SRP(URP or HDRP) but in default render via cam buffer even empty function give FPS gain from 294 to 308
     void OnRenderImage(RenderTexture source, RenderTexture destination)
     {
         //if (defaultRender) //commented till SRP don't go here
-        if (S3DEnabled)
+        if (S3DEnabled && !driverS3D)
             Graphics.Blit(null, destination, S3DMaterial, pass);
         else
             Graphics.Blit(source, destination);
@@ -661,6 +743,10 @@ public class Stereo3D : MonoBehaviour
 			    GUILayout.BeginHorizontal();
 
 		            swapLR = GUILayout.Toggle(swapLR, " Swap Left-Right Cameras");
+
+				    GUILayout.Space(30);
+		            driverS3D = GUILayout.Toggle(driverS3D, " DirectX11.1 S3D");
+				    GUILayout.FlexibleSpace();
 
 			    GUILayout.EndHorizontal();
 			    GUILayout.BeginHorizontal();
@@ -732,7 +818,6 @@ public class Stereo3D : MonoBehaviour
 			    virtualIPD = GUILayout.HorizontalSlider(virtualIPD, 0, 1000, GUILayout.Width(300));
 
 			    GUILayout.Space(9);
-			    //hFOV = GUILayout.HorizontalSlider(hFOV, .1f, 179.9f, GUILayout.Width(300)); //179.9f will cause the slider stuck in the standalone player but OK in the editor
 			    hFOV = GUILayout.HorizontalSlider(hFOV, 1, 179, GUILayout.Width(300));
 
 		    GUILayout.EndVertical();
