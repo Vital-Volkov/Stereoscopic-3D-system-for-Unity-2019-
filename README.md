@@ -24,7 +24,7 @@ or
 
 zip - https://drive.google.com/file/d/1cORanOGO8Elsz7Cn8yj2XwyNVYY5t9lg/view?usp=sharing
 
-Post-process effects: Color Grading, Bloom, Motion Blur, Vignette, Ambient Occlusion, Depth Of Field, Temporal Anti-aliasing.
+Post-process effects: Color Grading, Bloom, Motion Blur, Vignette, Ambient Occlusion, Depth Of Field, Temporal Anti-aliasing.  
 Run via `3DWE.exe` for `Fullscreen Windowed` mode with VSync or `3DWE.exe - Exclusive Fullscreen_noVSync` for `Exclusive Fullscreen` mode without VSync.
 
 Key Controls:
@@ -33,7 +33,7 @@ Key Controls:
    `*` On/Off S3D, `Ctrl + *` swap left-right cameras  
    `+,-` Field Of View, `Ctrl + +,-` custom `Virtual IPD` when unchecked `Match User IPD`  
    All above keys  + `Left Shift` for faster changes  
-   `Mouse` Look around  
+   `Mouse move + right click` Look around  
    `Esc` exit  
 
 When launch, Monitor's Pixels Per Inch(PPI) should be autodetected and precision screen width will be calculated internally and settings should be in real millimeters, so you don't need to set `PPI` or `Pixel Pitch` manually if the `PPI` of your screen autodetected correctly. Sure, also Save/Load user settings should be implemented with a Unity project.
