@@ -13,6 +13,7 @@ Now I using precision Stereo3D in my projects and enjoying it like never.
 Move the `Stereo3D` folder to the Unity `Assets` folder or import `Stereo3D.unitypackage`.  
 Just add C# script to any camera and go.  
 Tested on Unity 2019 and 2020 with default render + Post Processing Stack v2, URP, and HDRP.  
+In Unity 2018 SRP not rendering screenQuad so use it only with the default render.  
 More info in the script file.  
 
 
