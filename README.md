@@ -16,7 +16,7 @@ Just add C# script to any camera and go.
 Tested on Unity 2019 and 2020 with default render + Post Processing Stack v2, URP, and HDRP.  
 In Unity 2018 SRP not rendering screenQuad so use it only with the default render.  
 
-Direct3D 11.1 S3D only works in built Player if `Stereo Display` SDK is added in `Project Settings-Player-XR Settings-Virtual Reality Supported`(Unity2018,2019 or via custom Editor panel menu "VR SDK\Build with Stereo3D") and `Stereo 3D` enabled in Player launch window(in Unity 2019+ it always enabled) and Direct3D 11.1 Stereoscopic driver is enabled in Windows8.1+.  
+Direct3D 11.1 S3D only works in built Player if `Stereo Display` SDK is added in `Project Settings-Player-XR Settings-Virtual Reality Supported`(Unity2018,2019 or via custom Editor panel menu `VR SDK\Build with Stereo3D`) and `Stereo 3D` enabled in Player launch window(in Unity 2019+ it always enabled) and Direct3D 11.1 Stereoscopic driver is enabled in Windows8.1+.  
 Set the same Key for Direct3D 11.1 S3D driver on/off in Windows and `driverS3DKey` in this script to toggle them together by one Key(useful for switch to mono with more FPS and correct eye of `parentCam`(Direct3D 11.1's mono is slow and using left eye always).  
 Direct3D 11.1 S3D works in Gamma color space in Unity 2018(Linear color space not work) and 2019(exclusive fullscreen not work, Linear white-out, SRP broke S3D when switching fullscreen/window mode if `DirectX11.1 S3D` disabled, so switch window mode while it enabled).  
 More info in the script file.  
