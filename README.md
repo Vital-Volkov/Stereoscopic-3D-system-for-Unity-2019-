@@ -14,16 +14,16 @@ Move the `Stereo3D` & `Editor` folder to the Unity `Assets` folder or import `St
 Just add C# script to any camera and go.  
 
 Tested on Unity 2019 and 2020 with default render + Post Processing Stack v2, URP, and HDRP.  
-In Unity 2018 SRP not rendering screenQuad so use it only with the default render.
+In Unity 2018 SRP not rendering screenQuad so use it only with the default render.  
 
-DirectX11.1 S3D only works in built Player if `Stereo Display` SDK is added in `Project Settings-Player-XR Settings-Virtual Reality Supported`(Unity2018,2019 or via custom Editor panel menu "VR SDK\Build with Stereo3D") and `Stereo 3D` enabled in Player launch window(in Unity 2019+ it always enabled) and DirectX11.1 Stereoscopic driver is enabled in Windows8.1+.
-Set the same Key for DirectX11.1 S3D driver on/off in Windows and `driverS3DKey` in this script to toggle them together by one Key(useful for switch to mono with more FPS and correct eye of `parentCam`(DirectX11.1's mono is slow and using left eye always).
-DirectX11.1 S3D works in Gamma color space in Unity 2018(Linear color space not work) and 2019(exclusive fullscreen not work, Linear white-out, SRP broke S3D when switching fullscreen/window mode if `DirectX11.1 S3D` disabled, so switch window mode while it enabled).
+DirectX11.1 S3D only works in built Player if `Stereo Display` SDK is added in `Project Settings-Player-XR Settings-Virtual Reality Supported`(Unity2018,2019 or via custom Editor panel menu "VR SDK\Build with Stereo3D") and `Stereo 3D` enabled in Player launch window(in Unity 2019+ it always enabled) and DirectX11.1 Stereoscopic driver is enabled in Windows8.1+.  
+Set the same Key for DirectX11.1 S3D driver on/off in Windows and `driverS3DKey` in this script to toggle them together by one Key(useful for switch to mono with more FPS and correct eye of `parentCam`(DirectX11.1's mono is slow and using left eye always).  
+DirectX11.1 S3D works in Gamma color space in Unity 2018(Linear color space not work) and 2019(exclusive fullscreen not work, Linear white-out, SRP broke S3D when switching fullscreen/window mode if `DirectX11.1 S3D` disabled, so switch window mode while it enabled).  
 More info in the script file.  
 
 I also made a build with Unity default demo scene with `Post Processing Stack V2`:
 
-7z Gamma - https://github.com/Vital-Volkov/Stereoscopic-3D-system-for-Unity-2019-/blob/main%26Direct3D11.1/Stereo3D%26Direct3D11.1_Gamma_Unity_Demo.7z
+7z Gamma - https://github.com/Vital-Volkov/Stereoscopic-3D-system-for-Unity-2019-/blob/main%26Direct3D11.1/Stereo3D%26Direct3D11.1_Gamma_Unity_Demo.7z  
 7z Linear - https://github.com/Vital-Volkov/Stereoscopic-3D-system-for-Unity-2019-/blob/main%26Direct3D11.1/Stereo3D%26Direct3D11.1_Linear_Unity_Demo.7z
 
 or
