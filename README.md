@@ -36,15 +36,14 @@ Run via `3DWE.exe` for `Fullscreen Windowed` mode with VSync or `3DWE.exe - Excl
 Key Controls:
    `W,S,A,D` moving, `Q,E` down/up  
    `Tab` - hide/show Stereo3D settings panel  
-   `*` On/Off S3D, `Ctrl + *` swap left-right cameras 
-   `Scroll Lock` On/Off `DirectX11.1 S3D`
+   `*` On/Off S3D, `Ctrl + *` swap left-right cameras  
+   `Scroll Lock` On/Off `DirectX11.1 S3D`  
    `+,-` Field Of View, `Ctrl + +,-` custom `Virtual IPD` when unchecked `Match User IPD`  
    All above keys  + `Left Shift` for faster changes  
    `Mouse move + right click` Look around  
    `Esc` exit  
 
 When launch, Monitor's Pixels Per Inch(PPI) should be autodetected and precision screen width will be calculated internally and settings should be in real millimeters, so you don't need to set `PPI` or `Pixel Pitch` manually if the `PPI` of your screen autodetected correctly. Sure, also Save/Load user settings should be implemented with a Unity project.
-Set `User IPD` to your own interpupillary distance(IPD) for a realistic view with infinity S3D depth.
-Or set `User IPD` lower than your own IPD for close distance max depth(aquarium back wall effect).
-Uncheck `Match user IPD` and set `Virtual IPD`(Cameras IPD in the virtual world) larger than your own IPD for toy world effect and vise versa.
+Set `User IPD` to your own interpupillary distance(IPD) for a realistic view with infinity S3D depth.  
+Uncheck `Match user IPD` and set `Virtual IPD`(Cameras IPD in the virtual world) larger than your own IPD for toy world effect and vise versa.  
 `Screen Distance` will show how far from the screen your eyes should be(camera's point) where Real and Virtual FOV will match and you get a 100% realistic view. (Very important for Vehicle Simulators).
