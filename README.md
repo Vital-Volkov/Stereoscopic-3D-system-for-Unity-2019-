@@ -33,8 +33,7 @@ Run via `3DWE.exe` for `Fullscreen Windowed` mode with VSync or `3DWE.exe - Excl
 Key Controls:
    `W,S,A,D` moving, `Q,E` down/up  
    `Tab` - hide/show Stereo3D settings panel  
-   `*` On/Off S3D, `Ctrl + *` swap left-right cameras  
-   `Scroll Lock` On/Off `DirectX11.1 S3D`  
+   `*` swap left-right cameras  
    `+,-` Field Of View, `Ctrl + +,-` custom `Virtual IPD` when unchecked `Match User IPD`  
    All above keys  + `Left Shift` for faster changes  
    `Mouse move + right click` Look around  
