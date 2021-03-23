@@ -31,7 +31,7 @@ or
 zip - https://drive.google.com/file/d/1GcSBspZIISI0UMH745li9e0Xp2iZbxyQ/view?usp=sharing
 
 Post-process effects: Color Grading, Bloom, Motion Blur, Vignette, Ambient Occlusion, Depth Of Field, Temporal Anti-aliasing.  
-Run via `3DWE.exe` for `Fullscreen Windowed` mode with VSync or `3DWE.exe - Exclusive Fullscreen_noVSync` for `Exclusive Fullscreen` mode without VSync.(`Exclusive Fullscreen` not working with Direct3D 11.1 in Unity 2019+)
+Run via `3DWE.exe` for `Fullscreen Windowed` mode with VSync or `3DWE.exe - Exclusive Fullscreen_noVSync` for `Exclusive Fullscreen` mode without VSync.(`Exclusive Fullscreen` not working with Direct3D 11.1 S3D in Unity 2019+)
 
 Key Controls:
    `W,S,A,D` moving, `Q,E` down/up  
