@@ -57,15 +57,10 @@ public class Stereo3D : MonoBehaviour
     Camera rightCam;
     int cullingMask;
     float nearClip;
-    vertex[] vertices = new vertex[4];
+    Vector2[] verticesPos = new Vector2[4];
+    Vector2[] verticesUV = new Vector2[4];
+
     bool defaultRender;
-
-    struct vertex
-    {
-        public Vector2 pos;
-        public Vector2 uv;
-    }
-
     bool lastS3DEnabled;
     bool lastSwapLR;
     float lastUserIPD;
@@ -428,7 +423,8 @@ public class Stereo3D : MonoBehaviour
     RenderTexture leftCamRT;   
     RenderTexture rightCamRT;
     int pass;
-    ComputeBuffer verticesBuffer;
+    ComputeBuffer verticesPosBuffer;
+    ComputeBuffer verticesUVBuffer;
 
     void RTSet()
     {
@@ -482,15 +478,15 @@ public class Stereo3D : MonoBehaviour
 
                 case Method.SideBySide:
 				    rtWidth /= 2; //optimize render as image per eye squeeze in half to fit screen
-                    vertices[2].uv = new Vector2(2, 1);
-                    vertices[3].uv = new Vector2(2, 0);
+                    verticesUV[2] = new Vector2(2, 1);
+                    verticesUV[3] = new Vector2(2, 0);
                     pass = 3;
                 break;
 
                 case Method.OverUnder:
 				    rtHeight /= 2; //optimize render as image per eye squeeze in half to fit screen
-                    vertices[1].uv = new Vector2(0, 2);
-                    vertices[2].uv = new Vector2(1, 2);
+                    verticesUV[1] = new Vector2(0, 2);
+                    verticesUV[2] = new Vector2(1, 2);
                     pass = 4;
                 break;
 
@@ -503,6 +499,8 @@ public class Stereo3D : MonoBehaviour
 	        rightCamRT = new RenderTexture(rtWidth, rtHeight, 24, RTFormat);
             leftCamRT.filterMode = FilterMode.Point;
             rightCamRT.filterMode = FilterMode.Point;
+            leftCamRT.wrapMode = TextureWrapMode.Repeat; //need for OpenGL SBS & OU to work with the only one 4 vertex screen quad and UV coordinates over 1
+            rightCamRT.wrapMode = TextureWrapMode.Repeat;
 
             leftCam.targetTexture = leftCamRT;
             rightCam.targetTexture = rightCamRT;
@@ -510,9 +508,13 @@ public class Stereo3D : MonoBehaviour
             S3DMaterial.SetTexture("_LeftTex", leftCamRT);
 	        S3DMaterial.SetTexture("_RightTex", rightCamRT);
 
-            verticesBuffer = new ComputeBuffer(4, Marshal.SizeOf(typeof(vertex)));
-            verticesBuffer.SetData(vertices);
-            S3DMaterial.SetBuffer("buffer", verticesBuffer);
+            verticesPosBuffer = new ComputeBuffer(4, Marshal.SizeOf(typeof(Vector2)));
+            verticesPosBuffer.SetData(verticesPos);
+            S3DMaterial.SetBuffer("verticesPosBuffer", verticesPosBuffer);
+
+            verticesUVBuffer = new ComputeBuffer(4, Marshal.SizeOf(typeof(Vector2)));
+            verticesUVBuffer.SetData(verticesUV);
+            S3DMaterial.SetBuffer("verticesUVBuffer", verticesUVBuffer);
 
 #if UNITY_2019_1_OR_NEWER
             if (!defaultRender)
@@ -538,8 +540,8 @@ public class Stereo3D : MonoBehaviour
             commandBuffer.name = "screenQuad";
 
             //render clip space screen quad using S3DMaterial preset vertices buffer with:
-            //commandBuffer.DrawProcedural(Matrix4x4.identity, S3DMaterial, pass, MeshTopology.Quads, 4); //this (need "nearClipPlane = -1" for same quad position as using Blit with custom camera Rect coordinates
-            commandBuffer.Blit(null, cam.activeTexture, S3DMaterial, pass); //or this
+            commandBuffer.DrawProcedural(Matrix4x4.identity, S3DMaterial, pass, MeshTopology.Quads, 4); //this (need "nearClipPlane = -1" for same quad position as using Blit with custom camera Rect coordinates
+            //commandBuffer.Blit(null, cam.activeTexture, S3DMaterial, pass); //or this
 
             context.ExecuteCommandBuffer(commandBuffer);
             commandBuffer.Release();
@@ -552,10 +554,10 @@ public class Stereo3D : MonoBehaviour
     {
         if (defaultRender)
         {
-            vertices[0].pos = new Vector2(-1, -1);
-            vertices[1].pos = new Vector2(-1, 1);
-            vertices[2].pos = new Vector2(1, 1);
-            vertices[3].pos = new Vector2(1, -1);
+            verticesPos[0] = new Vector2(-1, -1);
+            verticesPos[1] = new Vector2(-1, 1);
+            verticesPos[2] = new Vector2(1, 1);
+            verticesPos[3] = new Vector2(1, -1);
         }
         else
         {
@@ -563,24 +565,24 @@ public class Stereo3D : MonoBehaviour
             //need when using custom camera rect with Blit or DrawProcedural & "nearClipPlane = -1" hack
             Vector4 clipRect = new Vector4(cam.rect.min.x, cam.rect.min.y, cam.rect.max.x, cam.rect.max.y) * 2 - Vector4.one;
 
-            vertices[0].pos = new Vector2(clipRect.x, clipRect.y);
-            vertices[1].pos = new Vector2(clipRect.x, clipRect.w);
-            vertices[2].pos = new Vector2(clipRect.z, clipRect.w);
-            vertices[3].pos = new Vector2(clipRect.z, clipRect.y);
+            verticesPos[0] = new Vector2(clipRect.x, clipRect.y);
+            verticesPos[1] = new Vector2(clipRect.x, clipRect.w);
+            verticesPos[2] = new Vector2(clipRect.z, clipRect.w);
+            verticesPos[3] = new Vector2(clipRect.z, clipRect.y);
         }
 
-            vertices[0].uv = new Vector2(0, 0);
-            vertices[1].uv = new Vector2(0, 1);
-            vertices[2].uv = new Vector2(1, 1);
-            vertices[3].uv = new Vector2(1, 0);
+            verticesUV[0] = new Vector2(0, 0);
+            verticesUV[1] = new Vector2(0, 1);
+            verticesUV[2] = new Vector2(1, 1);
+            verticesUV[3] = new Vector2(1, 0);
     }
 
     void OnDisable()
     {
         ReleaseRT();
-        Destroy(leftCam.gameObject);
-        Destroy(rightCam.gameObject);
-        Destroy(S3DMaterial);
+        DestroyImmediate(leftCam.gameObject);
+        DestroyImmediate(rightCam.gameObject);
+        DestroyImmediate(S3DMaterial);
         Resources.UnloadUnusedAssets(); //free memory
     }
 
@@ -599,10 +601,11 @@ public class Stereo3D : MonoBehaviour
         cam.nearClipPlane = nearClip;
         cam.ResetProjectionMatrix();
 
-        if (verticesBuffer != null)
+        if (verticesPosBuffer != null)
         {
-            verticesBuffer.Release();
-	        leftCamRT.Release();
+            verticesPosBuffer.Release();
+            verticesUVBuffer.Release();
+            leftCamRT.Release();
 	        rightCamRT.Release();
         }
 

@@ -23,25 +23,20 @@ Shader "Stereo3D Screen Quad"
 			#pragma vertex vert
 			#pragma fragment frag
 		
-			struct vertexData
-			{
-				float2 pos;
-				float2 uv;
-			};
+			StructuredBuffer<float2> verticesPosBuffer;
+			StructuredBuffer<float2> verticesUVBuffer;
 
-			StructuredBuffer<vertexData> buffer;
-
-			struct v2f
+			struct vertData
 			{
-				float4 vertex : SV_POSITION;
+				float4 pos : SV_POSITION;
 				float2 uv : TEXCOORD0;
 			};
 
-			v2f vert(uint vertexID : SV_VertexID)
+			vertData vert(uint vertexID : SV_VertexID)
 			{
-				v2f o;
-				o.vertex = float4(buffer[vertexID].pos, 0, 1);
-				o.uv = buffer[vertexID].uv;
+				vertData o;
+				o.pos = float4(verticesPosBuffer[vertexID], 0, 1);
+				o.uv = verticesUVBuffer[vertexID];
 				return o;
 			}
 
@@ -50,7 +45,7 @@ Shader "Stereo3D Screen Quad"
 			Texture2D  _RightTex;
 			SamplerState clamp_point_sampler;
 
-			fixed4 frag( v2f i ) : SV_Target
+			fixed4 frag( vertData i ) : SV_Target
 			{
 				fixed4 left = _LeftTex.Sample(clamp_point_sampler, i.uv);
 				fixed4 right = _RightTex.Sample(clamp_point_sampler, i.uv);
@@ -71,25 +66,20 @@ Shader "Stereo3D Screen Quad"
 			#pragma vertex vert
 			#pragma fragment frag
 		
-			struct vertexData
-			{
-				float2 pos;
-				float2 uv;
-			};
+			StructuredBuffer<float2> verticesPosBuffer;
+			StructuredBuffer<float2> verticesUVBuffer;
 
-			StructuredBuffer<vertexData> buffer;
-
-			struct v2f
+			struct vertData
 			{
-				float4 vertex : SV_POSITION;
+				float4 pos : SV_POSITION;
 				float2 uv : TEXCOORD0;
 			};
 
-			v2f vert(uint vertexID : SV_VertexID)
+			vertData vert(uint vertexID : SV_VertexID)
 			{
-				v2f o;
-				o.vertex = float4(buffer[vertexID].pos, 0, 1);
-				o.uv = buffer[vertexID].uv;
+				vertData o;
+				o.pos = float4(verticesPosBuffer[vertexID], 0, 1);
+				o.uv = verticesUVBuffer[vertexID];
 				return o;
 			}
 
@@ -98,7 +88,7 @@ Shader "Stereo3D Screen Quad"
 			Texture2D  _RightTex;
 			SamplerState clamp_point_sampler;
 
-			fixed4 frag( v2f i ) : SV_Target
+			fixed4 frag( vertData i ) : SV_Target
 			{
 				fixed4 left = _LeftTex.Sample(clamp_point_sampler, i.uv);
 				fixed4 right = _RightTex.Sample(clamp_point_sampler, i.uv);
@@ -119,25 +109,20 @@ Shader "Stereo3D Screen Quad"
 			#pragma vertex vert
 			#pragma fragment frag
 		
-			struct vertexData
-			{
-				float2 pos;
-				float2 uv;
-			};
+			StructuredBuffer<float2> verticesPosBuffer;
+			StructuredBuffer<float2> verticesUVBuffer;
 
-			StructuredBuffer<vertexData> buffer;
-
-			struct v2f
+			struct vertData
 			{
-				float4 vertex : SV_POSITION;
+				float4 pos : SV_POSITION;
 				float2 uv : TEXCOORD0;
 			};
 
-			v2f vert(uint vertexID : SV_VertexID)
+			vertData vert(uint vertexID : SV_VertexID)
 			{
-				v2f o;
-				o.vertex = float4(buffer[vertexID].pos, 0, 1);
-				o.uv = buffer[vertexID].uv;
+				vertData o;
+				o.pos = float4(verticesPosBuffer[vertexID], 0, 1);
+				o.uv = verticesUVBuffer[vertexID];
 				return o;
 			}
 
@@ -147,7 +132,7 @@ Shader "Stereo3D Screen Quad"
 			Texture2D  _RightTex;
 			SamplerState clamp_point_sampler;
 
-			fixed4 frag( v2f i ) : SV_Target
+			fixed4 frag( vertData i ) : SV_Target
 			{
 				fixed4 left = _LeftTex.Sample(clamp_point_sampler, i.uv);
 				fixed4 right = _RightTex.Sample(clamp_point_sampler, i.uv);
@@ -172,25 +157,20 @@ Shader "Stereo3D Screen Quad"
 			#pragma vertex vert
 			#pragma fragment frag
 
-			struct vertexData
-			{
-				float2 pos;
-				float2 uv;
-			};
+			StructuredBuffer<float2> verticesPosBuffer;
+			StructuredBuffer<float2> verticesUVBuffer;
 
-			StructuredBuffer<vertexData> buffer;
-
-			struct v2f
+			struct vertData
 			{
-				float4 vertex : SV_POSITION;
+				float4 pos : SV_POSITION;
 				float2 uv : uv;
 			};
 
-			v2f vert(uint vertexID : SV_VertexID)
+			vertData vert(uint vertexID : SV_VertexID)
 			{
-				v2f o;
-				o.vertex = float4(buffer[vertexID].pos, 0, 1);
-				o.uv = buffer[vertexID].uv;
+				vertData o;
+				o.pos = float4(verticesPosBuffer[vertexID], 0, 1);
+				o.uv = verticesUVBuffer[vertexID];
 				return o;
 			}
 
@@ -198,7 +178,7 @@ Shader "Stereo3D Screen Quad"
 			Texture2D  _RightTex;
 			SamplerState repeat_point_sampler;
 
-			fixed4 frag(v2f i) : SV_Target
+			fixed4 frag(vertData i) : SV_Target
 			{
 				return i.uv.x < 1 ? _LeftTex.Sample(repeat_point_sampler, i.uv) : _RightTex.Sample(repeat_point_sampler, i.uv);
 			}
@@ -214,25 +194,20 @@ Shader "Stereo3D Screen Quad"
 			#pragma vertex vert
 			#pragma fragment frag
 
-			struct vertexData
-			{
-				float2 pos;
-				float2 uv;
-			};
+			StructuredBuffer<float2> verticesPosBuffer;
+			StructuredBuffer<float2> verticesUVBuffer;
 
-			StructuredBuffer<vertexData> buffer;
-
-			struct v2f
+			struct vertData
 			{
-				float4 vertex : SV_POSITION;
+				float4 pos : SV_POSITION;
 				float2 uv : uv;
 			};
 
-			v2f vert(uint vertexID : SV_VertexID)
+			vertData vert(uint vertexID : SV_VertexID)
 			{
-				v2f o;
-				o.vertex = float4(buffer[vertexID].pos, 0, 1);
-				o.uv = buffer[vertexID].uv;
+				vertData o;
+				o.pos = float4(verticesPosBuffer[vertexID], 0, 1);
+				o.uv = verticesUVBuffer[vertexID];
 				return o;
 			}
 
@@ -240,7 +215,7 @@ Shader "Stereo3D Screen Quad"
 			Texture2D  _RightTex;
 			SamplerState repeat_point_sampler;
 
-			fixed4 frag(v2f i) : SV_Target
+			fixed4 frag(vertData i) : SV_Target
 			{
 				return i.uv.y < 1 ? _LeftTex.Sample(repeat_point_sampler, i.uv) : _RightTex.Sample(repeat_point_sampler, i.uv);
 			}
@@ -256,25 +231,20 @@ Shader "Stereo3D Screen Quad"
 			#pragma vertex vert
 			#pragma fragment frag
 
-			struct vertexData
-			{
-				float2 pos;
-				float2 uv;
-			};
+			StructuredBuffer<float2> verticesPosBuffer;
+			StructuredBuffer<float2> verticesUVBuffer;
 
-			StructuredBuffer<vertexData> buffer;
-
-			struct v2f
+			struct vertData
 			{
-				float4 vertex : SV_POSITION;
+				float4 pos : SV_POSITION;
 				float2 uv : uv;
 			};
 
-			v2f vert(uint vertexID : SV_VertexID)
+			vertData vert(uint vertexID : SV_VertexID)
 			{
-				v2f o;
-				o.vertex = float4(buffer[vertexID].pos, 0, 1);
-				o.uv = buffer[vertexID].uv;
+				vertData o;
+				o.pos = float4(verticesPosBuffer[vertexID], 0, 1);
+				o.uv = verticesUVBuffer[vertexID];
 				return o;
 			}
 
@@ -284,7 +254,7 @@ Shader "Stereo3D Screen Quad"
 			fixed4 _LeftCol;
 			fixed4 _RightCol;
 
-			fixed4 frag(v2f i) : SV_Target
+			fixed4 frag(vertData i) : SV_Target
 			{
 				fixed4 leftColor = _LeftTex.Sample(clamp_point_sampler, i.uv) * _LeftCol;
 				fixed4 rightColor = _RightTex.Sample(clamp_point_sampler, i.uv) * _RightCol;
