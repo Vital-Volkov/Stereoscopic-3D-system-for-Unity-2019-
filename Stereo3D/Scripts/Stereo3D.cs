@@ -274,6 +274,8 @@ public class Stereo3D : MonoBehaviour
     CursorLockMode cursorLockModeDefault;
 #if URP
     UniversalAdditionalCameraData camData;
+    //UniversalRenderPipelineAsset URPAsset;
+    //UniversalRenderPipelineAsset lastURPAsset;
 #elif HDRP
     //public HDAdditionalCameraData canvasCamData;
     //HDAdditionalCameraData HDCamData;
@@ -763,6 +765,11 @@ public class Stereo3D : MonoBehaviour
                     additionalS3DCamerasStruct[index].cameraRight = cloneRight;
                     //i++;
                 }
+
+            //URPAsset = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
+            ////lastURPAsset = new UniversalRenderPipelineAsset();
+            //lastURPAsset = ScriptableObject.CreateInstance<UniversalRenderPipelineAsset>();
+            ////lastURPAsset = URPAsset;
 #endif
 
             if (GUIAsOverlay)
@@ -1562,6 +1569,7 @@ public class Stereo3D : MonoBehaviour
         setLastCameraDataStructTime = Time.deltaTime * 32;
         Invoke("SetLastCameraDataStruct", setLastCameraDataStructTime);
         //Debug.Log("Start cameraDataStruct " + cameraDataStruct);
+        //Invoke("CamData_Change", 5);
     }
 
     void SetLastCameraDataStruct()
@@ -1649,53 +1657,53 @@ public class Stereo3D : MonoBehaviour
         oddFrame = !oddFrame;
         //Debug.Log(oddFrame + " Update " + Time.time);
 
-        if (canvasCam && S3DEnabled)
-        {
-            if (oddFrame)
-            {
-                if (method == Method.SideBySide_HMD)
-                    canvasCamMatrix[0, 3] = (1 - imageOffset * panelDepth) * (swapLR ? -1 : 1);
-                else
-                    canvasCamMatrix[0, 3] = -imageOffset * (swapLR ? -1 : 1) * panelDepth;
+        //if (canvasCam && S3DEnabled)
+        //{
+        //    if (oddFrame)
+        //    {
+        //        if (method == Method.SideBySide_HMD)
+        //            canvasCamMatrix[0, 3] = (1 - imageOffset * panelDepth) * (swapLR ? -1 : 1);
+        //        else
+        //            canvasCamMatrix[0, 3] = -imageOffset * (swapLR ? -1 : 1) * panelDepth;
 
-                if (method == Method.Interlace_Horizontal)
-                    canvasCamMatrix[1, 3] = -oneRowShift;
+        //        if (method == Method.Interlace_Horizontal)
+        //            canvasCamMatrix[1, 3] = -oneRowShift;
 
-                canvasCam.projectionMatrix = canvasCamMatrix;
-                //canvasCam.targetTexture = leftCamRT;
-                canvasCam.targetTexture = leftCamCanvasRT;
-                //canvasCam.Render();
-                //Graphics.CopyTexture(leftCamCanvasRT, leftCamRT);
-            }
-            else
-            {
-                if (method == Method.SideBySide_HMD)
-                    canvasCamMatrix[0, 3] = (-1 + imageOffset * panelDepth) * (swapLR ? -1 : 1);
-                else
-                    canvasCamMatrix[0, 3] = imageOffset * (swapLR ? -1 : 1) * panelDepth;
+        //        canvasCam.projectionMatrix = canvasCamMatrix;
+        //        //canvasCam.targetTexture = leftCamRT;
+        //        canvasCam.targetTexture = leftCamCanvasRT;
+        //        //canvasCam.Render();
+        //        //Graphics.CopyTexture(leftCamCanvasRT, leftCamRT);
+        //    }
+        //    else
+        //    {
+        //        if (method == Method.SideBySide_HMD)
+        //            canvasCamMatrix[0, 3] = (-1 + imageOffset * panelDepth) * (swapLR ? -1 : 1);
+        //        else
+        //            canvasCamMatrix[0, 3] = imageOffset * (swapLR ? -1 : 1) * panelDepth;
 
-                if (method == Method.Interlace_Horizontal)
-                    canvasCamMatrix[1, 3] = 0;
+        //        if (method == Method.Interlace_Horizontal)
+        //            canvasCamMatrix[1, 3] = 0;
 
-                canvasCam.projectionMatrix = canvasCamMatrix;
-                //canvasCam.targetTexture = rightCamRT;
-                canvasCam.targetTexture = rightCamCanvasRT;
-                //canvasCam.Render();
-                //Graphics.CopyTexture(rightCamCanvasRT, rightCamRT);
-            }
+        //        canvasCam.projectionMatrix = canvasCamMatrix;
+        //        //canvasCam.targetTexture = rightCamRT;
+        //        canvasCam.targetTexture = rightCamCanvasRT;
+        //        //canvasCam.Render();
+        //        //Graphics.CopyTexture(rightCamCanvasRT, rightCamRT);
+        //    }
 
-            //UniversalRenderPipeline.RenderSingleCamera(context, canvasCam);
+        //    //UniversalRenderPipeline.RenderSingleCamera(context, canvasCam);
 
-            //if (oddFrame)
-            //    UniversalRenderPipeline.RenderSingleCamera(context, canvasCam);
+        //    //if (oddFrame)
+        //    //    UniversalRenderPipeline.RenderSingleCamera(context, canvasCam);
 
-            //canvasCam.Render();
-            //Debug.Break();
-            //canvasCam.enabled = false;
-            //Debug.Log(camera);
-            //Debug.Log(oddFrame + " RenderQuad camera == canvasCam " + Time.time);
-            //UniversalRenderPipeline.RenderSingleCamera(context, canvasCam);
-        }
+        //    //canvasCam.Render();
+        //    //Debug.Break();
+        //    //canvasCam.enabled = false;
+        //    //Debug.Log(camera);
+        //    //Debug.Log(oddFrame + " RenderQuad camera == canvasCam " + Time.time);
+        //    //UniversalRenderPipeline.RenderSingleCamera(context, canvasCam);
+        //}
 
         //Matrix4x4 canvasCamMatrix = canvasCam.projectionMatrix;
         //float canvasHalfSizeX = canvasSize.x * .5f;
@@ -1820,7 +1828,18 @@ public class Stereo3D : MonoBehaviour
             ClipSet();
         }
 
-#if HDRP
+#if URP
+        ////if (!lastURPAsset.Equals(GraphicsSettings.currentRenderPipeline))
+        //if (lastURPAsset.supportsMainLightShadows != ((UniversalRenderPipelineAsset)GraphicsSettings.currentRenderPipeline).supportsMainLightShadows)
+        //{
+        //    Debug.Log("!lastURPAsset.Equals(URPAsset)");
+        //    //OnOffToggle();
+        //    //lastURPAsset = (UniversalRenderPipelineAsset)GraphicsSettings.currentRenderPipeline;
+        //    lastURPAsset = ScriptableObject.CreateInstance<UniversalRenderPipelineAsset>();
+        //}
+
+        //Debug.Log("((UniversalRenderPipelineAsset)GraphicsSettings.currentRenderPipeline).supportsMainLightShadows" + ((UniversalRenderPipelineAsset)GraphicsSettings.currentRenderPipeline).supportsMainLightShadows);
+#elif HDRP
         //HDRPSettings = HDRPAsset.currentPlatformRenderPipelineSettings;
 
         //if (!GUIOpened && !GUIVisible && HDRPSettings.colorBufferFormat != defaultColorBufferFormat)
@@ -1847,6 +1866,36 @@ public class Stereo3D : MonoBehaviour
             //defaultColorBufferFormat = HDRPAsset.currentPlatformRenderPipelineSettings.colorBufferFormat;
             defaultHDRPSettings = HDRPAsset.currentPlatformRenderPipelineSettings;
             OnOffToggle();
+        }
+
+        if (canvasCam && S3DEnabled)
+        {
+            if (oddFrame)
+            {
+                if (method == Method.SideBySide_HMD)
+                    canvasCamMatrix[0, 3] = (1 - imageOffset * panelDepth) * (swapLR ? -1 : 1);
+                else
+                    canvasCamMatrix[0, 3] = -imageOffset * (swapLR ? -1 : 1) * panelDepth;
+
+                if (method == Method.Interlace_Horizontal)
+                    canvasCamMatrix[1, 3] = -oneRowShift;
+
+                canvasCam.projectionMatrix = canvasCamMatrix;
+                canvasCam.targetTexture = leftCamCanvasRT;
+            }
+            else
+            {
+                if (method == Method.SideBySide_HMD)
+                    canvasCamMatrix[0, 3] = (-1 + imageOffset * panelDepth) * (swapLR ? -1 : 1);
+                else
+                    canvasCamMatrix[0, 3] = imageOffset * (swapLR ? -1 : 1) * panelDepth;
+
+                if (method == Method.Interlace_Horizontal)
+                    canvasCamMatrix[1, 3] = 0;
+
+                canvasCam.projectionMatrix = canvasCamMatrix;
+                canvasCam.targetTexture = rightCamCanvasRT;
+            }
         }
 #endif
 
@@ -4172,7 +4221,7 @@ public class Stereo3D : MonoBehaviour
     }
 
     CommandBuffer commandBuffer;
-    //float frameTime;
+    float frameTime;
     //private HDAdditionalCameraData.ClearColorMode clearColorMode;
     //private Color backgroundColorHDR;
     //private bool clearDepth;
@@ -4218,6 +4267,7 @@ public class Stereo3D : MonoBehaviour
     {
         if (S3DEnabled && camera == canvasCam)
         {
+#if URP
             //Debug.Log(Time.time);
             //canvasCam.enabled = true;
             //canvasCam.enabled = false;
@@ -4234,58 +4284,58 @@ public class Stereo3D : MonoBehaviour
             //    //canvasCam.Render();
             //}
 
-            //if (frameTime != Time.time) //set targetTexture cause call this 5 times per frame so use condition to execute below commands only once per frame
-            //{
-            //frameTime = Time.time;
-            //Debug.Log("frameTime != Time.time " + frameTime);
-            //    //Matrix4x4 canvasCamMatrix = canvasCam.projectionMatrix;
-            //    //canvasCamMatrix = canvasCam.projectionMatrix;
+            if (frameTime != Time.time) //set targetTexture cause call this 5 times per frame so use condition to execute below commands only once per frame
+            {
+                frameTime = Time.time;
+                //Debug.Log("frameTime != Time.time " + frameTime);
+                //Matrix4x4 canvasCamMatrix = canvasCam.projectionMatrix;
+                //canvasCamMatrix = canvasCam.projectionMatrix;
 
-                //if (oddFrame)
-                //{
-                //    if (method == Method.SideBySide_HMD)
-                //        canvasCamMatrix[0, 3] = (1 - imageOffset * panelDepth) * (swapLR ? -1 : 1);
-                //    else
-                //        canvasCamMatrix[0, 3] = -imageOffset * (swapLR ? -1 : 1) * panelDepth;
+                if (oddFrame)
+                {
+                    if (method == Method.SideBySide_HMD)
+                        canvasCamMatrix[0, 3] = (1 - imageOffset * panelDepth) * (swapLR ? -1 : 1);
+                    else
+                        canvasCamMatrix[0, 3] = -imageOffset * (swapLR ? -1 : 1) * panelDepth;
 
-                //    if (method == Method.Interlace_Horizontal)
-                //        canvasCamMatrix[1, 3] = -oneRowShift;
+                    if (method == Method.Interlace_Horizontal)
+                        canvasCamMatrix[1, 3] = -oneRowShift;
 
-                //    canvasCam.projectionMatrix = canvasCamMatrix;
-                //    //canvasCam.targetTexture = leftCamRT;
-                //    canvasCam.targetTexture = leftCamCanvasRT;
-                //    //canvasCam.Render();
-                //    //Graphics.CopyTexture(leftCamCanvasRT, leftCamRT);
-                //}
-                //else
-                //{
-                //    if (method == Method.SideBySide_HMD)
-                //        canvasCamMatrix[0, 3] = (-1 + imageOffset * panelDepth) * (swapLR ? -1 : 1);
-                //    else
-                //        canvasCamMatrix[0, 3] = imageOffset * (swapLR ? -1 : 1) * panelDepth;
+                    canvasCam.projectionMatrix = canvasCamMatrix;
+                    canvasCam.targetTexture = leftCamRT;
+                    //canvasCam.targetTexture = leftCamCanvasRT;
+                    //canvasCam.Render();
+                    //Graphics.CopyTexture(leftCamCanvasRT, leftCamRT);
+                }
+                else
+                {
+                    if (method == Method.SideBySide_HMD)
+                        canvasCamMatrix[0, 3] = (-1 + imageOffset * panelDepth) * (swapLR ? -1 : 1);
+                    else
+                        canvasCamMatrix[0, 3] = imageOffset * (swapLR ? -1 : 1) * panelDepth;
 
-                //    if (method == Method.Interlace_Horizontal)
-                //        canvasCamMatrix[1, 3] = 0;
+                    if (method == Method.Interlace_Horizontal)
+                        canvasCamMatrix[1, 3] = 0;
 
-                //    canvasCam.projectionMatrix = canvasCamMatrix;
-                //    //canvasCam.targetTexture = rightCamRT;
-                //    canvasCam.targetTexture = rightCamCanvasRT;
-                //    //canvasCam.Render();
-                //    //Graphics.CopyTexture(rightCamCanvasRT, rightCamRT);
-                //}
+                    canvasCam.projectionMatrix = canvasCamMatrix;
+                    canvasCam.targetTexture = rightCamRT;
+                    //canvasCam.targetTexture = rightCamCanvasRT;
+                    //canvasCam.Render();
+                    //Graphics.CopyTexture(rightCamCanvasRT, rightCamRT);
+                }
 
             //Graphics.CopyTexture(leftCamCanvasRT, leftCamRT);
             //Graphics.CopyTexture(rightCamCanvasRT, rightCamRT);
-            Graphics.Blit(leftCamCanvasRT, leftCamRT, S3DPanelMaterial);
-            Graphics.Blit(rightCamCanvasRT, rightCamRT, S3DPanelMaterial);
+            //Graphics.Blit(leftCamCanvasRT, leftCamRT, S3DPanelMaterial);
+            //Graphics.Blit(rightCamCanvasRT, rightCamRT, S3DPanelMaterial);
             //canvasCam.enabled = false;
 
 
             //canvasCam.projectionMatrix = canvasCamMatrix;
-            //#if URP
-            //                UniversalRenderPipeline.RenderSingleCamera(context, canvasCam);
-            //#endif
-            //}
+//#if URP
+            UniversalRenderPipeline.RenderSingleCamera(context, canvasCam);
+//#endif
+            }
 
             //UniversalRenderPipeline.RenderSingleCamera(context, canvasCam);
 
@@ -4298,6 +4348,10 @@ public class Stereo3D : MonoBehaviour
             //Debug.Log(camera);
             //Debug.Log(oddFrame + " RenderQuad camera == canvasCam " + Time.time);
             //UniversalRenderPipeline.RenderSingleCamera(context, canvasCam);
+#elif HDRP
+            Graphics.Blit(leftCamCanvasRT, leftCamRT, S3DPanelMaterial);
+            Graphics.Blit(rightCamCanvasRT, rightCamRT, S3DPanelMaterial);
+#endif
         }
 
         if (camera == cam)
@@ -4317,7 +4371,7 @@ public class Stereo3D : MonoBehaviour
     }
 #endif
 
-                void Vertices() //set clip space vertices and texture coordinates for render fullscreen quad via shader buffer
+            void Vertices() //set clip space vertices and texture coordinates for render fullscreen quad via shader buffer
     {
         if (defaultRender)
         {
@@ -4841,19 +4895,40 @@ public class Stereo3D : MonoBehaviour
         }
     }
 
+    //void CamData_Change()
+    //{
+    //    camData.requiresColorOption = CameraOverrideOption.Off;
+    //}
+
     void SetCameraDataStruct()
     {
         cameraDataStruct = new CameraDataStruct(
 #if URP
-            camData.renderType,
-            camData.scriptableRenderer,
-            camData.renderPostProcessing,
-            camData.antialiasing,
-            camData.antialiasingQuality,
-            camData.stopNaN,
-            camData.dithering,
-            camData.renderShadows,
-            //camData.cameraStack,
+            //camData.renderType,
+            //camData.scriptableRenderer,
+            //camData.renderPostProcessing,
+            //camData.antialiasing,
+            //camData.antialiasingQuality,
+            //camData.stopNaN,
+            //camData.dithering,
+            //camData.renderShadows,
+            // //camData.cameraStack,
+
+             camData.requiresDepthTexture,
+             camData.stopNaN,
+             camData.antialiasingQuality,
+             camData.antialiasing,
+             camData.renderPostProcessing,
+             camData.volumeStack,
+             camData.volumeTrigger,
+             camData.volumeLayerMask,
+             camData.requiresColorTexture,
+             camData.allowXRRendering,
+             camData.renderType,
+             camData.requiresColorOption,
+             camData.requiresDepthOption,
+             camData.renderShadows,
+             camData.dithering,
 #elif HDRP
             camData.clearColorMode,
             camData.backgroundColorHDR,
@@ -4903,15 +4978,31 @@ public class Stereo3D : MonoBehaviour
     public struct CameraDataStruct
     {
 #if URP
-        public CameraRenderType cameraRenderType;
-        public ScriptableRenderer scriptableRenderer;
-        public bool renderPostProcessing;
-        public AntialiasingMode antialiasing;
-        public AntialiasingQuality antialiasingQuality;
+        //public CameraRenderType cameraRenderType;
+        //public ScriptableRenderer scriptableRenderer;
+        //public bool renderPostProcessing;
+        //public AntialiasingMode antialiasing;
+        //public AntialiasingQuality antialiasingQuality;
+        //public bool stopNaN;
+        //public bool dithering;
+        //public bool renderShadows;
+        ////public List<Camera> cameraStack; //compare not working
+
+        public bool requiresDepthTexture;
         public bool stopNaN;
-        public bool dithering;
+        public AntialiasingQuality antialiasingQuality;
+        public AntialiasingMode antialiasing;
+        public bool renderPostProcessing;
+        public VolumeStack volumeStack;
+        public Transform volumeTrigger;
+        public LayerMask volumeLayerMask;
+        public bool requiresColorTexture;
+        public bool allowXRRendering;
+        public CameraRenderType renderType;
+        public CameraOverrideOption requiresColorOption;
+        public CameraOverrideOption requiresDepthOption;
         public bool renderShadows;
-        //public List<Camera> cameraStack; //compare not working
+        public bool dithering;
 #elif HDRP
         HDAdditionalCameraData.ClearColorMode clearColorMode;
         Color backgroundColorHDR;
@@ -4957,15 +5048,31 @@ public class Stereo3D : MonoBehaviour
 
         public CameraDataStruct(
 #if URP
-            CameraRenderType cameraRenderType,
-            ScriptableRenderer scriptableRenderer,
-            bool renderPostProcessing,
-            AntialiasingMode antialiasing,
-            AntialiasingQuality antialiasingQuality,
+            //CameraRenderType cameraRenderType,
+            //ScriptableRenderer scriptableRenderer,
+            //bool renderPostProcessing,
+            //AntialiasingMode antialiasing,
+            //AntialiasingQuality antialiasingQuality,
+            //bool stopNaN,
+            //bool dithering,
+            //bool renderShadows,
+            ////List<Camera> cameraStack,
+
+            bool requiresDepthTexture,
             bool stopNaN,
-            bool dithering,
+            AntialiasingQuality antialiasingQuality,
+            AntialiasingMode antialiasing,
+            bool renderPostProcessing,
+            VolumeStack volumeStack,
+            Transform volumeTrigger,
+            LayerMask volumeLayerMask,
+            bool requiresColorTexture,
+            bool allowXRRendering,
+            CameraRenderType renderType,
+            CameraOverrideOption requiresColorOption,
+            CameraOverrideOption requiresDepthOption,
             bool renderShadows,
-            //List<Camera> cameraStack,
+            bool dithering,
 #elif HDRP
             HDAdditionalCameraData.ClearColorMode clearColorMode,
             Color backgroundColorHDR,
@@ -5011,15 +5118,31 @@ public class Stereo3D : MonoBehaviour
             )
         {
 #if URP
-            this.cameraRenderType = cameraRenderType;
-            this.scriptableRenderer = scriptableRenderer;
-            this.renderPostProcessing = renderPostProcessing;
-            this.antialiasing = antialiasing;
-            this.antialiasingQuality = antialiasingQuality;
-            this.stopNaN = stopNaN;
-            this.dithering = dithering;
-            this.renderShadows = renderShadows;
-            //this.cameraStack = cameraStack;
+            //this.cameraRenderType = cameraRenderType;
+            //this.scriptableRenderer = scriptableRenderer;
+            //this.renderPostProcessing = renderPostProcessing;
+            //this.antialiasing = antialiasing;
+            //this.antialiasingQuality = antialiasingQuality;
+            //this.stopNaN = stopNaN;
+            //this.dithering = dithering;
+            //this.renderShadows = renderShadows;
+            ////this.cameraStack = cameraStack;
+
+             this.requiresDepthTexture = requiresDepthTexture;
+             this.stopNaN = stopNaN;
+             this.antialiasingQuality = antialiasingQuality;
+             this.antialiasing = antialiasing;
+             this.renderPostProcessing = renderPostProcessing;
+             this.volumeStack = volumeStack;
+             this.volumeTrigger = volumeTrigger;
+             this.volumeLayerMask = volumeLayerMask;
+             this.requiresColorTexture = requiresColorTexture;
+             this.allowXRRendering = allowXRRendering;
+             this.renderType = renderType;
+             this.requiresColorOption = requiresColorOption;
+             this.requiresDepthOption = requiresDepthOption;
+             this.renderShadows = renderShadows;
+             this.dithering = dithering;
 #elif HDRP
             this.clearColorMode = clearColorMode;
             this.backgroundColorHDR = backgroundColorHDR;
