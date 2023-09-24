@@ -315,7 +315,8 @@ public class Stereo3D : MonoBehaviour
     Cinemachine.ICinemachineCamera vCam;
     Cinemachine.ICinemachineCamera defaultVCam;
     //Cinemachine.CinemachineBrain brain;
-    //bool vCamSceneClipSetInProcess;
+    bool vCamSceneClipSetInProcess;
+    bool vCamSceneClipRestoreInProcess;
     bool nearClipHackApplied;
 #endif
 
@@ -379,6 +380,7 @@ public class Stereo3D : MonoBehaviour
 
         if (!name.Contains("(Clone)"))
         {
+            Debug.Log("OnEnable");
             //Debug.Log("windowSize " + windowSize);
             //List<Type> types = GetAllTypesInAssembly(new string[] { "Assembly-CSharp" });
             //Debug.Log(types.Count);
@@ -436,13 +438,15 @@ public class Stereo3D : MonoBehaviour
         {
             //brain = GetComponent<Cinemachine.CinemachineBrain>();
             cineBrain = true;
-            //vCamSceneClipSetInProcess = true;
+            vCamSceneClipSetInProcess = true;
             Invoke("GetVCam", Time.deltaTime);
+            //GetVCam();
         }
         else
 #endif
             {
                 sceneNearClip = cam.nearClipPlane;
+                Debug.Log("sceneNearClip = " + sceneNearClip);
                 sceneFarClip = cam.farClipPlane;
             }
 
@@ -1587,6 +1591,7 @@ public class Stereo3D : MonoBehaviour
 
     void Update()
     {
+        //Debug.Log("Update " + Time.time);
         //Debug.Log(camData + " " + leftCamData);
         ////UnityEditor.Selection.activeGameObject = leftCam.gameObject;
         ////camData.CopyTo(leftCam.GetComponent<HDAdditionalCameraData>());
@@ -1763,8 +1768,9 @@ public class Stereo3D : MonoBehaviour
         //}
 
         if (cineBrain && Cinemachine.CinemachineBrain.SoloCamera != vCam)
+        //if (vCam != null && Cinemachine.CinemachineBrain.SoloCamera != vCam)
         {
-            //Debug.Log("Cinemachine.CinemachineBrain.SoloCamera != vCam " + Cinemachine.CinemachineBrain.SoloCamera);
+            Debug.Log("Cinemachine.CinemachineBrain.SoloCamera != vCam, Cinemachine.CinemachineBrain.SoloCamera = " + Cinemachine.CinemachineBrain.SoloCamera + ", vCam = " + vCam);
 
             //if (Cinemachine.CinemachineBrain.SoloCamera == null)
             if (Cinemachine.CinemachineBrain.SoloCamera == null || Cinemachine.CinemachineBrain.SoloCamera.ToString() == "null") //virtual camera lost
@@ -1799,7 +1805,7 @@ public class Stereo3D : MonoBehaviour
 
         if (nearClipHackApplied && cam.nearClipPlane != -1)
         {
-            //Debug.Log("nearClipHackApplied && cam.nearClipPlane != -1 cam.nearClipPlane " + cam.nearClipPlane);
+            Debug.Log("nearClipHackApplied && cam.nearClipPlane != -1 cam.nearClipPlane " + cam.nearClipPlane);
             VCamNearClipHack();
         }
 #endif
@@ -1808,6 +1814,7 @@ public class Stereo3D : MonoBehaviour
         if (!GUIVisible && cam.nearClipPlane >= 0 && sceneNearClip != cam.nearClipPlane)
         {
             sceneNearClip = cam.nearClipPlane;
+            Debug.Log("sceneNearClip = " + sceneNearClip);
             //Debug.Log("!GUIVisible && cam.nearClipPlane >= 0 && sceneNearClip != cam.nearClipPlane sceneNearClip= " + sceneNearClip);
             //RT_Set();
             ClipSet();
@@ -2098,6 +2105,120 @@ public class Stereo3D : MonoBehaviour
         //}
 #endif
 
+        SetCameraDataStruct();
+
+        //if (canvas.gameObject.activeSelf && caret == null)
+        //{
+        //    if (PPI_inputField.transform.Find("InputField (Legacy)_PPI Input Caret"))
+        //    {
+        //       //Debug.Log("PPI_inputField.transform.Find");
+        //        InputFieldCaretMaterial_Set(PPI_inputField);
+        //        InputFieldCaretMaterial_Set(userIPD_inputField);
+        //        InputFieldCaretMaterial_Set(virtualIPD_inputField);
+        //        InputFieldCaretMaterial_Set(FOV_inputField);
+        //        InputFieldCaretMaterial_Set(panelDepth_inputField);
+        //        InputFieldCaretMaterial_Set(screenDistance_inputField);
+        //        InputFieldCaretMaterial_Set(slotName_inputField);
+        //    }
+
+        //   //Debug.Log("caret == null");
+        //}
+
+        if (Screen.width != windowSize.x || Screen.height != windowSize.y)
+            Resize();
+
+        if (GUIOpened)
+        {
+            //Debug.Log(Input.mousePosition);
+            //cursorRectTransform.anchoredPosition = new Vector2(Input.mousePosition.x / windowSize.x * canvasSize.x - canvasSize.x * 0.5f, Input.mousePosition.y / windowSize.y * canvasSize.y - canvasSize.y);
+            //cursorLocalPos = new Vector2(Input.mousePosition.x / windowSize.x * canvasSize.x - canvasSize.x * 0.5f, Input.mousePosition.y / windowSize.y * canvasSize.y - canvasSize.y);
+            //cursorLocalPos = new Vector2((Input.mousePosition.x - cam.rect.x * windowSize.x) / cam.pixelWidth * canvasSize.x - canvasSize.x * 0.5f, (Input.mousePosition.y - cam.rect.y * windowSize.y) / cam.pixelHeight * canvasSize.y - canvasSize.y);
+            //cursorLocalPos.x = ((Input.mousePosition.x - cam.rect.x * windowSize.x) / cam.pixelWidth - .5f) * canvasSize.x * (1 + canvasEdgeOffset);
+            //cursorLocalPos.x = (Input.mousePosition.x / windowSize.x - .5f) * canvasSize.x * (1 + canvasEdgeOffset);
+            //cursorLocalPos.x = (Input.mousePosition.x / windowSize.x - .5f) * canvasWidthWithOffset;
+            //cursorLocalPos.x = ((Input.mousePosition.x - cam.rect.x * windowSize.x) / cam.pixelWidth - .5f) * canvasSize.x + virtualIPD * .0005f * ((int)eyePriority - 1) / canvas.GetComponent<RectTransform>().lossyScale.x;
+            //cursorLocalPos.y = ((Input.mousePosition.y - cam.rect.y * windowSize.y) / cam.pixelHeight - 1) * canvasSize.y;
+            //cursorLocalPos.y = (Input.mousePosition.y / windowSize.y - 1) * canvasSize.y;
+
+            Vector2 pointerPosition;
+
+#if ENABLE_INPUT_SYSTEM
+            //cursorLocalPos.x = (Pointer.current.position.value.x / windowSize.x - .5f) * canvasWidthWithOffset;
+            //cursorLocalPos.y = (Pointer.current.position.value.y / windowSize.y - 1) * canvasSize.y;
+            //pointerPosition.x = Pointer.current.position.value.x;
+            //pointerPosition.y = Pointer.current.position.value.y;
+            pointerPosition.x = UnityEngine.InputSystem.Pointer.current.position.value.x;
+            pointerPosition.y = UnityEngine.InputSystem.Pointer.current.position.value.y;
+#else
+            //cursorLocalPos.x = (Input.mousePosition.x / windowSize.x - .5f) * canvasWidthWithOffset;
+            //cursorLocalPos.y = (Input.mousePosition.y / windowSize.y - 1) * canvasSize.y;
+            pointerPosition.x = Input.mousePosition.x;
+            pointerPosition.y = Input.mousePosition.y;
+#endif
+
+            //cursorLocalPos.x = (pointerPosition.x / windowSize.x - .5f) * canvasWidthWithOffset;
+            //cursorLocalPos.y = (pointerPosition.y / windowSize.y - 1) * canvasSize.y;
+            //Debug.Log((pointerPosition.y / windowSize.y - cam.rect.y) / cam.rect.height - 1);
+            //Camera canvasWorldCam = canvas.worldCamera;
+            //cursorLocalPos.x = ((pointerPosition.x / windowSize.x - canvasWorldCam.rect.x) / canvasWorldCam.rect.width - .5f) * canvasWidthWithOffset;
+            //cursorLocalPos.y = ((pointerPosition.y / windowSize.y - canvasWorldCam.rect.y) / canvasWorldCam.rect.height - 1) * canvasSize.y;
+            //cursorLocalPos.x = ((pointerPosition.x / windowSize.x - canvas.worldCamera.rect.x) / canvas.worldCamera.rect.width - .5f) * canvasWidthWithOffset;
+            //cursorLocalPos.y = ((pointerPosition.y / windowSize.y - canvas.worldCamera.rect.y) / canvas.worldCamera.rect.height - 1) * canvasSize.y;
+
+            Vector2 viewportLeftBottomPos = new Vector2(Mathf.Clamp01(canvas.worldCamera.rect.x), Mathf.Clamp01(canvas.worldCamera.rect.y)); //viewport LeftBottom & RightTop corner coordinates inside render window
+            Vector2 viewportRightTopPos = new Vector2(Mathf.Clamp01(canvas.worldCamera.rect.xMax), Mathf.Clamp01(canvas.worldCamera.rect.yMax));
+            Rect viewportRect = new Rect(viewportLeftBottomPos.x, viewportLeftBottomPos.y, viewportRightTopPos.x - viewportLeftBottomPos.x, viewportRightTopPos.y - viewportLeftBottomPos.y);
+            //Debug.Log("viewportRect.x " + viewportRect.x + " viewportRect.width " + viewportRect.width);
+            //Debug.Log("canvas.worldCamera.rect.x " + canvas.worldCamera.rect.x + " canvas.worldCamera.rect.xMin " + canvas.worldCamera.rect.xMin);
+            cursorLocalPos.x = ((pointerPosition.x / windowSize.x - viewportRect.x) / viewportRect.width - .5f) * canvasWidthWithOffset;
+            cursorLocalPos.y = ((pointerPosition.y / windowSize.y - viewportRect.y) / viewportRect.height - 1) * canvasSize.y;
+
+            cursorRectTransform.anchoredPosition = cursorLocalPos;
+            //cursorTransform.localPosition = new Vector2(Input.mousePosition.x / windowSize.x * canvasSize.x - canvasSize.x * 0.5f, Input.mousePosition.y / windowSize.y * canvasSize.y - canvasSize.y * 0.5f);
+            //canvas.worldCamera.ViewportPointToRay(Vector3.zero);
+            //EventSystem eSys = EventSystem.current;
+            //eSys.
+
+            if (toolTipTimer < toolTipShowDelay)
+            {
+                toolTipTimer += Time.deltaTime;
+
+                if (tooltipShow && toolTipTimer >= toolTipShowDelay)
+                    tooltip.SetActive(true);
+
+                //Debug.Log("toolTipTimer");
+            }
+
+            //pointerEventData = new PointerEventData(eventSystem);
+            //pointerEventData.position = new Vector2(0, 0);
+            //RaycastResult rayRes = pointerEventData.pointerCurrentRaycast;
+            //rayRes.screenPosition = Vector2.zero;
+            //rayRes.worldPosition = Vector3.zero;
+            //pointerEventData.pointerCurrentRaycast = rayRes;
+            //pointerEventData.Reset();
+            //pointerEventData = new PointerEventData(eventSystem) { position = new Vector2(Input.mousePosition.x - 100, Input.mousePosition.y) };
+
+            //List<RaycastResult> results = new List<RaycastResult>();
+            //raycaster.Raycast(pointerEventData, results);
+
+            //eventSystem.RaycastAll(pointerEventData, results);
+            ////StandaloneInputModule iModule = eventSystem.GetComponent<StandaloneInputModule>();
+            ////BaseInput bInput = iModule.inputOverride;
+            //bInput.compositionCursorPos = Vector2.zero;
+            ////bInput.enabled = false;
+            //iModule.inputOverride = bInput;
+
+            //if (results.Count > 0)
+            //   //Debug.Log("Hit " + results[0].gameObject.name);
+
+            //EventSystem.current = eventSystem;
+
+            //Debug.Log(pointerEventData.position);
+            //Debug.Log(panelDepth_sliderIsDragging);
+            //Debug.Log(Input.mousePosition.x);
+        }
+        //Debug.Log("Update " + Time.time);
+
         //check variable changes after Keys pressed
         if (lastGUIOpened != GUIOpened)
         {
@@ -2136,19 +2257,19 @@ public class Stereo3D : MonoBehaviour
         }
         else
             if (autoshow)
+        {
+            autoshow = false;
+
+            if (!GUIOpened)
             {
-                autoshow = false;
-
-                if (!GUIOpened)
-                {
-                    canvas.gameObject.SetActive(false);
-                    GUIVisible = false;
-                    ClipSet();
-                    HDRPSettings_Set();
-                }
-
-                //Debug.Log("autoshow = false");
+                canvas.gameObject.SetActive(false);
+                GUIVisible = false;
+                ClipSet();
+                HDRPSettings_Set();
             }
+
+            //Debug.Log("autoshow = false");
+        }
 
         if (lastS3DEnabled != S3DEnabled)
         {
@@ -2284,6 +2405,113 @@ public class Stereo3D : MonoBehaviour
             PanelDepthMinMaxSet();
         }
 
+        //newList = new List<UniversalAdditionalCameraData>();
+        //newList.Add(camClone.GetComponent<UniversalAdditionalCameraData>());
+
+        //cameraDataStruct = new CameraDataStruct(cam.GetUniversalAdditionalCameraData().renderPostProcessing, cam.GetUniversalAdditionalCameraData().antialiasing);
+        //cameraDataStruct = new CameraDataStruct(camData.renderType, camData.renderPostProcessing, camData.antialiasing);
+        //SetCameraDataStruct();
+
+        //if (cloneCamera)
+        //{
+        //if (camData)
+        //SetCameraDataStruct();
+
+        //cameraDataStruct.renderPostProcessing = camData.renderPostProcessing;
+        //cameraDataStruct.antialiasing = camData.antialiasing;
+        //Debug.Log(camData.scriptableRenderer);
+        //Debug.Log("lastCameraDataStruct.Equals(cameraDataStruct) " + lastCameraDataStruct.Equals(cameraDataStruct));
+        //Debug.Log("lastCameraDataStruct " + lastCameraDataStruct.ToString() + " cameraDataStruct " + cameraDataStruct.ToString());
+
+        //Debug.Log(lastCameraDataStruct.cameraRenderType + " " + cameraDataStruct.cameraRenderType);
+        //Debug.Log(lastCameraDataStruct.scriptableRenderer + " " + cameraDataStruct.scriptableRenderer);
+        //Debug.Log(lastCameraDataStruct.renderPostProcessing + " " + cameraDataStruct.renderPostProcessing);
+        //Debug.Log(lastCameraDataStruct.antialiasing + " " + cameraDataStruct.antialiasing);
+        //Debug.Log(lastCameraDataStruct.antialiasingQuality + " " + cameraDataStruct.antialiasingQuality);
+        //Debug.Log(lastCameraDataStruct.stopNaN + " " + cameraDataStruct.stopNaN);
+        //Debug.Log(lastCameraDataStruct.dithering + " " + cameraDataStruct.dithering);
+        //Debug.Log(lastCameraDataStruct.renderShadows + " " + cameraDataStruct.renderShadows);
+        //Debug.Log(lastCameraDataStruct.depth + " " + cameraDataStruct.depth);
+        //Debug.Log(lastCameraDataStruct.useOcclusionCulling + " " + cameraDataStruct.useOcclusionCulling);
+
+        //Debug.Break();
+
+        //if (lastInterlaceType != interlaceType)
+        //{
+        //    lastInterlaceType = interlaceType;
+        //    RT_Set();
+        //}
+
+        //  if (lastAnaglyphLeftColor != anaglyphLeftColor)
+        //  {
+        //      lastAnaglyphLeftColor = anaglyphLeftColor;
+        //S3DMaterial.SetColor("_LeftCol", anaglyphLeftColor);
+        //  }
+
+        //  if (lastAnaglyphRightColor != anaglyphRightColor)
+        //  {
+        //      lastAnaglyphRightColor = anaglyphRightColor;
+        //S3DMaterial.SetColor("_RightCol", anaglyphRightColor);
+        //  }
+
+        if (lastSlotName != slotName)
+        {
+            slotName_inputField.text = slotName;
+            //DropdownSet();
+            lastSlotName = slotName;
+        }
+
+        if (lastCamRect != cam.rect)
+        {
+            lastCamRect = cam.rect;
+            //leftCam.rect = rightCam.rect = new Rect(0, 0, Mathf.Max(1 / cam.rect.width * (1 - cam.rect.x), 1), Mathf.Max(1 / cam.rect.height * (1 - cam.rect.y), 1));
+            CamRect_Set();
+            //Resize();
+            Aspect_Set();
+            //ViewSet();
+            //RT_Set();
+        }
+
+        if (lastNearClipHack != nearClipHack)
+        {
+            lastNearClipHack = nearClipHack;
+            //RT_Set();
+            ClipSet();
+        }
+
+        if (lastMatrixKillHack != matrixKillHack)
+        {
+            lastMatrixKillHack = matrixKillHack;
+            RT_Set();
+        }
+
+        if (!GUIAsOverlay && lastCanvasLocalPosZ != canvasLocalPosZ)
+        {
+            lastCanvasLocalPosZ = canvasLocalPosZ;
+            ClipSet();
+        }
+
+        ////if (lastAdditionalS3DCameras != additionalS3DCameras)
+        ////if (lastAdditionalS3DCameras.cameras != additionalS3DCameras.cameras)
+        //if (!lastAdditionalS3DCameras.Equals(additionalS3DCameras))
+        ////if (!lastAdditionalS3DCameras.cameras.Equals(additionalS3DCameras.cameras))
+        ////if (!ReferenceEquals(lastAdditionalS3DCameras, additionalS3DCameras.ToArray()))
+        //{
+        //    //lastAdditionalS3DCameras = new Camera[additionalS3DCameras.Count];
+        //    additionalS3DCameras.CopyTo(lastAdditionalS3DCameras);
+        //    //lastAdditionalS3DCameras = additionalS3DCameras;
+        //    //lastAdditionalS3DCameras = (Camera[])additionalS3DCameras.Clone();
+        //    //additionalS3DCameras.CopyTo(lastAdditionalS3DCameras);
+        //    //Debug.Log("lastAdditionalS3DCameras != additionalS3DCameras");
+        //    //Debug.Log("lastAdditionalS3DCameras != additionalS3DCameras " + lastAdditionalS3DCameras.Length + " " + additionalS3DCameras.Length);
+        //    //additionalS3DCameras.CopyTo(lastAdditionalS3DCameras);
+
+        //    for (int i = 0; i < additionalS3DCameras.Count; i++)
+        //    {
+        //        Debug.Log("component " + additionalS3DCameras[i].name + " " + lastAdditionalS3DCameras[i].name);
+        //    }
+        //}
+
         if (lastGUIAsOverlay != GUIAsOverlay)
         {
             //if (GUIAsOverlay)
@@ -2401,51 +2629,20 @@ public class Stereo3D : MonoBehaviour
         //    //Debug.Break();
         //}
 
-        //newList = new List<UniversalAdditionalCameraData>();
-        //newList.Add(camClone.GetComponent<UniversalAdditionalCameraData>());
-
-        //cameraDataStruct = new CameraDataStruct(cam.GetUniversalAdditionalCameraData().renderPostProcessing, cam.GetUniversalAdditionalCameraData().antialiasing);
-        //cameraDataStruct = new CameraDataStruct(camData.renderType, camData.renderPostProcessing, camData.antialiasing);
-        SetCameraDataStruct();
-
-        //if (cloneCamera)
-        //{
-            //if (camData)
-                //SetCameraDataStruct();
-
-            //cameraDataStruct.renderPostProcessing = camData.renderPostProcessing;
-            //cameraDataStruct.antialiasing = camData.antialiasing;
-            //Debug.Log(camData.scriptableRenderer);
-            //Debug.Log("lastCameraDataStruct.Equals(cameraDataStruct) " + lastCameraDataStruct.Equals(cameraDataStruct));
-            //Debug.Log("lastCameraDataStruct " + lastCameraDataStruct.ToString() + " cameraDataStruct " + cameraDataStruct.ToString());
-
-            //Debug.Log(lastCameraDataStruct.cameraRenderType + " " + cameraDataStruct.cameraRenderType);
-            //Debug.Log(lastCameraDataStruct.scriptableRenderer + " " + cameraDataStruct.scriptableRenderer);
-            //Debug.Log(lastCameraDataStruct.renderPostProcessing + " " + cameraDataStruct.renderPostProcessing);
-            //Debug.Log(lastCameraDataStruct.antialiasing + " " + cameraDataStruct.antialiasing);
-            //Debug.Log(lastCameraDataStruct.antialiasingQuality + " " + cameraDataStruct.antialiasingQuality);
-            //Debug.Log(lastCameraDataStruct.stopNaN + " " + cameraDataStruct.stopNaN);
-            //Debug.Log(lastCameraDataStruct.dithering + " " + cameraDataStruct.dithering);
-            //Debug.Log(lastCameraDataStruct.renderShadows + " " + cameraDataStruct.renderShadows);
-            //Debug.Log(lastCameraDataStruct.depth + " " + cameraDataStruct.depth);
-            //Debug.Log(lastCameraDataStruct.useOcclusionCulling + " " + cameraDataStruct.useOcclusionCulling);
-
+        //if (!Equals(lastCameraDataStruct, cameraDataStruct))
+        if (Time.time > setLastCameraDataStructTime && !lastCameraDataStruct.Equals(cameraDataStruct))
+        {
             //Debug.Break();
+            Debug.Log("!lastCameraDataStruct.Equals(cameraDataStruct)");
+            //universalAdditionalCameraData = cam.GetUniversalAdditionalCameraData();
+            lastCameraDataStruct = cameraDataStruct;
+            //cameraDataStruct = cam.GetUniversalAdditionalCameraData();
+            //lastUniversalAdditionalCameraData = universalAdditionalCameraData;
+            //universalAdditionalCameraData.renderPostProcessing = cam.GetUniversalAdditionalCameraData().renderPostProcessing;
+            OnOffToggle();
+        }
 
-            //if (!Equals(lastCameraDataStruct, cameraDataStruct))
-            if (Time.time > setLastCameraDataStructTime && !lastCameraDataStruct.Equals(cameraDataStruct))
-            {
-                //Debug.Break();
-                Debug.Log("!lastCameraDataStruct.Equals(cameraDataStruct)");
-                //universalAdditionalCameraData = cam.GetUniversalAdditionalCameraData();
-                lastCameraDataStruct = cameraDataStruct;
-                //cameraDataStruct = cam.GetUniversalAdditionalCameraData();
-                //lastUniversalAdditionalCameraData = universalAdditionalCameraData;
-                //universalAdditionalCameraData.renderPostProcessing = cam.GetUniversalAdditionalCameraData().renderPostProcessing;
-                OnOffToggle();
-            }
-
-            //Debug.Log(universalAdditionalCameraData.Equals(cam.GetUniversalAdditionalCameraData()));
+        //Debug.Log(universalAdditionalCameraData.Equals(cam.GetUniversalAdditionalCameraData()));
         //}
 
         void OnOffToggle()
@@ -2454,192 +2651,7 @@ public class Stereo3D : MonoBehaviour
             enabled = false;
             //enabled = true;
             Invoke("Enable", 0); //prevent additionalS3DCameras clone duplicates on reenable this script in same frame as previous clones can't be destroyed instantly before creating new ones
-        }
-
-        //if (lastInterlaceType != interlaceType)
-        //{
-        //    lastInterlaceType = interlaceType;
-        //    RT_Set();
-        //}
-
-        //  if (lastAnaglyphLeftColor != anaglyphLeftColor)
-        //  {
-        //      lastAnaglyphLeftColor = anaglyphLeftColor;
-        //S3DMaterial.SetColor("_LeftCol", anaglyphLeftColor);
-        //  }
-
-        //  if (lastAnaglyphRightColor != anaglyphRightColor)
-        //  {
-        //      lastAnaglyphRightColor = anaglyphRightColor;
-        //S3DMaterial.SetColor("_RightCol", anaglyphRightColor);
-        //  }
-
-        if (lastSlotName != slotName)
-        {
-            slotName_inputField.text = slotName;
-            //DropdownSet();
-            lastSlotName = slotName;
-        }
-
-        if (lastCamRect != cam.rect)
-        {
-            lastCamRect = cam.rect;
-            //leftCam.rect = rightCam.rect = new Rect(0, 0, Mathf.Max(1 / cam.rect.width * (1 - cam.rect.x), 1), Mathf.Max(1 / cam.rect.height * (1 - cam.rect.y), 1));
-            CamRect_Set();
-            //Resize();
-            Aspect_Set();
-            //ViewSet();
-            //RT_Set();
-        }
-
-        if (lastNearClipHack != nearClipHack)
-        {
-            lastNearClipHack = nearClipHack;
-            RT_Set();
-        }
-
-        if (lastMatrixKillHack != matrixKillHack)
-        {
-            lastMatrixKillHack = matrixKillHack;
-            RT_Set();
-        }
-
-        if (!GUIAsOverlay && lastCanvasLocalPosZ != canvasLocalPosZ)
-        {
-            lastCanvasLocalPosZ = canvasLocalPosZ;
-            ClipSet();
-        }
-
-        //if (canvas.gameObject.activeSelf && caret == null)
-        //{
-        //    if (PPI_inputField.transform.Find("InputField (Legacy)_PPI Input Caret"))
-        //    {
-        //       //Debug.Log("PPI_inputField.transform.Find");
-        //        InputFieldCaretMaterial_Set(PPI_inputField);
-        //        InputFieldCaretMaterial_Set(userIPD_inputField);
-        //        InputFieldCaretMaterial_Set(virtualIPD_inputField);
-        //        InputFieldCaretMaterial_Set(FOV_inputField);
-        //        InputFieldCaretMaterial_Set(panelDepth_inputField);
-        //        InputFieldCaretMaterial_Set(screenDistance_inputField);
-        //        InputFieldCaretMaterial_Set(slotName_inputField);
-        //    }
-
-        //   //Debug.Log("caret == null");
-        //}
-
-        ////if (lastAdditionalS3DCameras != additionalS3DCameras)
-        ////if (lastAdditionalS3DCameras.cameras != additionalS3DCameras.cameras)
-        //if (!lastAdditionalS3DCameras.Equals(additionalS3DCameras))
-        ////if (!lastAdditionalS3DCameras.cameras.Equals(additionalS3DCameras.cameras))
-        ////if (!ReferenceEquals(lastAdditionalS3DCameras, additionalS3DCameras.ToArray()))
-        //{
-        //    //lastAdditionalS3DCameras = new Camera[additionalS3DCameras.Count];
-        //    additionalS3DCameras.CopyTo(lastAdditionalS3DCameras);
-        //    //lastAdditionalS3DCameras = additionalS3DCameras;
-        //    //lastAdditionalS3DCameras = (Camera[])additionalS3DCameras.Clone();
-        //    //additionalS3DCameras.CopyTo(lastAdditionalS3DCameras);
-        //    //Debug.Log("lastAdditionalS3DCameras != additionalS3DCameras");
-        //    //Debug.Log("lastAdditionalS3DCameras != additionalS3DCameras " + lastAdditionalS3DCameras.Length + " " + additionalS3DCameras.Length);
-        //    //additionalS3DCameras.CopyTo(lastAdditionalS3DCameras);
-
-        //    for (int i = 0; i < additionalS3DCameras.Count; i++)
-        //    {
-        //        Debug.Log("component " + additionalS3DCameras[i].name + " " + lastAdditionalS3DCameras[i].name);
-        //    }
-        //}
-
-        if (Screen.width != windowSize.x || Screen.height != windowSize.y)
-            Resize();
-
-        if (GUIOpened)
-        {
-            //Debug.Log(Input.mousePosition);
-            //cursorRectTransform.anchoredPosition = new Vector2(Input.mousePosition.x / windowSize.x * canvasSize.x - canvasSize.x * 0.5f, Input.mousePosition.y / windowSize.y * canvasSize.y - canvasSize.y);
-            //cursorLocalPos = new Vector2(Input.mousePosition.x / windowSize.x * canvasSize.x - canvasSize.x * 0.5f, Input.mousePosition.y / windowSize.y * canvasSize.y - canvasSize.y);
-            //cursorLocalPos = new Vector2((Input.mousePosition.x - cam.rect.x * windowSize.x) / cam.pixelWidth * canvasSize.x - canvasSize.x * 0.5f, (Input.mousePosition.y - cam.rect.y * windowSize.y) / cam.pixelHeight * canvasSize.y - canvasSize.y);
-            //cursorLocalPos.x = ((Input.mousePosition.x - cam.rect.x * windowSize.x) / cam.pixelWidth - .5f) * canvasSize.x * (1 + canvasEdgeOffset);
-            //cursorLocalPos.x = (Input.mousePosition.x / windowSize.x - .5f) * canvasSize.x * (1 + canvasEdgeOffset);
-            //cursorLocalPos.x = (Input.mousePosition.x / windowSize.x - .5f) * canvasWidthWithOffset;
-            //cursorLocalPos.x = ((Input.mousePosition.x - cam.rect.x * windowSize.x) / cam.pixelWidth - .5f) * canvasSize.x + virtualIPD * .0005f * ((int)eyePriority - 1) / canvas.GetComponent<RectTransform>().lossyScale.x;
-            //cursorLocalPos.y = ((Input.mousePosition.y - cam.rect.y * windowSize.y) / cam.pixelHeight - 1) * canvasSize.y;
-            //cursorLocalPos.y = (Input.mousePosition.y / windowSize.y - 1) * canvasSize.y;
-
-            Vector2 pointerPosition;
-
-#if ENABLE_INPUT_SYSTEM
-            //cursorLocalPos.x = (Pointer.current.position.value.x / windowSize.x - .5f) * canvasWidthWithOffset;
-            //cursorLocalPos.y = (Pointer.current.position.value.y / windowSize.y - 1) * canvasSize.y;
-            //pointerPosition.x = Pointer.current.position.value.x;
-            //pointerPosition.y = Pointer.current.position.value.y;
-            pointerPosition.x = UnityEngine.InputSystem.Pointer.current.position.value.x;
-            pointerPosition.y = UnityEngine.InputSystem.Pointer.current.position.value.y;
-#else
-            //cursorLocalPos.x = (Input.mousePosition.x / windowSize.x - .5f) * canvasWidthWithOffset;
-            //cursorLocalPos.y = (Input.mousePosition.y / windowSize.y - 1) * canvasSize.y;
-            pointerPosition.x = Input.mousePosition.x;
-            pointerPosition.y = Input.mousePosition.y;
-#endif
-
-            //cursorLocalPos.x = (pointerPosition.x / windowSize.x - .5f) * canvasWidthWithOffset;
-            //cursorLocalPos.y = (pointerPosition.y / windowSize.y - 1) * canvasSize.y;
-            //Debug.Log((pointerPosition.y / windowSize.y - cam.rect.y) / cam.rect.height - 1);
-            //Camera canvasWorldCam = canvas.worldCamera;
-            //cursorLocalPos.x = ((pointerPosition.x / windowSize.x - canvasWorldCam.rect.x) / canvasWorldCam.rect.width - .5f) * canvasWidthWithOffset;
-            //cursorLocalPos.y = ((pointerPosition.y / windowSize.y - canvasWorldCam.rect.y) / canvasWorldCam.rect.height - 1) * canvasSize.y;
-            //cursorLocalPos.x = ((pointerPosition.x / windowSize.x - canvas.worldCamera.rect.x) / canvas.worldCamera.rect.width - .5f) * canvasWidthWithOffset;
-            //cursorLocalPos.y = ((pointerPosition.y / windowSize.y - canvas.worldCamera.rect.y) / canvas.worldCamera.rect.height - 1) * canvasSize.y;
-
-            Vector2 viewportLeftBottomPos = new Vector2(Mathf.Clamp01(canvas.worldCamera.rect.x), Mathf.Clamp01(canvas.worldCamera.rect.y)); //viewport LeftBottom & RightTop corner coordinates inside render window
-            Vector2 viewportRightTopPos = new Vector2(Mathf.Clamp01(canvas.worldCamera.rect.xMax), Mathf.Clamp01(canvas.worldCamera.rect.yMax));
-            Rect viewportRect = new Rect(viewportLeftBottomPos.x, viewportLeftBottomPos.y, viewportRightTopPos.x - viewportLeftBottomPos.x, viewportRightTopPos.y - viewportLeftBottomPos.y);
-            //Debug.Log("viewportRect.x " + viewportRect.x + " viewportRect.width " + viewportRect.width);
-            //Debug.Log("canvas.worldCamera.rect.x " + canvas.worldCamera.rect.x + " canvas.worldCamera.rect.xMin " + canvas.worldCamera.rect.xMin);
-            cursorLocalPos.x = ((pointerPosition.x / windowSize.x - viewportRect.x) / viewportRect.width - .5f) * canvasWidthWithOffset;
-            cursorLocalPos.y = ((pointerPosition.y / windowSize.y - viewportRect.y) / viewportRect.height - 1) * canvasSize.y;
-
-            cursorRectTransform.anchoredPosition = cursorLocalPos;
-            //cursorTransform.localPosition = new Vector2(Input.mousePosition.x / windowSize.x * canvasSize.x - canvasSize.x * 0.5f, Input.mousePosition.y / windowSize.y * canvasSize.y - canvasSize.y * 0.5f);
-            //canvas.worldCamera.ViewportPointToRay(Vector3.zero);
-            //EventSystem eSys = EventSystem.current;
-            //eSys.
-
-            if (toolTipTimer < toolTipShowDelay)
-            {
-                toolTipTimer += Time.deltaTime;
-
-                if (tooltipShow && toolTipTimer >= toolTipShowDelay)
-                    tooltip.SetActive(true);
-
-                //Debug.Log("toolTipTimer");
-            }
-
-            //pointerEventData = new PointerEventData(eventSystem);
-            //pointerEventData.position = new Vector2(0, 0);
-            //RaycastResult rayRes = pointerEventData.pointerCurrentRaycast;
-            //rayRes.screenPosition = Vector2.zero;
-            //rayRes.worldPosition = Vector3.zero;
-            //pointerEventData.pointerCurrentRaycast = rayRes;
-            //pointerEventData.Reset();
-            //pointerEventData = new PointerEventData(eventSystem) { position = new Vector2(Input.mousePosition.x - 100, Input.mousePosition.y) };
-
-            //List<RaycastResult> results = new List<RaycastResult>();
-            //raycaster.Raycast(pointerEventData, results);
-
-            //eventSystem.RaycastAll(pointerEventData, results);
-            ////StandaloneInputModule iModule = eventSystem.GetComponent<StandaloneInputModule>();
-            ////BaseInput bInput = iModule.inputOverride;
-            //bInput.compositionCursorPos = Vector2.zero;
-            ////bInput.enabled = false;
-            //iModule.inputOverride = bInput;
-
-            //if (results.Count > 0)
-            //   //Debug.Log("Hit " + results[0].gameObject.name);
-
-            //EventSystem.current = eventSystem;
-
-            //Debug.Log(pointerEventData.position);
-            //Debug.Log(panelDepth_sliderIsDragging);
-            //Debug.Log(Input.mousePosition.x);
+            //Invoke("Enable", Time.deltaTime * 4); //prevent additionalS3DCameras clone duplicates on reenable this script in same frame as previous clones can't be destroyed instantly before creating new ones
         }
     }
 
@@ -2833,6 +2845,7 @@ public class Stereo3D : MonoBehaviour
 #if CINEMACHINE
     void GetVCam()
     {
+        Debug.Log("GetVCam");
         defaultVCam = vCam = GetComponent<Cinemachine.CinemachineBrain>().ActiveVirtualCamera;
         //Debug.Log("GetVCam() " + vCam);
 
@@ -2872,14 +2885,22 @@ public class Stereo3D : MonoBehaviour
 
     void VCamSceneClipSet()
     {
-        sceneNearClip = ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane;
-        sceneFarClip = ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.FarClipPlane;
-        //vCamSceneClipSetInProcess = false;
+        Debug.Log("VCamSceneClipSet");
+
+        //if (!nearClipHackApplied && vCam != null)
+        //{
+            sceneNearClip = ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane;
+            Debug.Log("VCamSceneClipSet sceneNearClip " + sceneNearClip);
+            sceneFarClip = ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.FarClipPlane;
+            vCamSceneClipSetInProcess = false;
+        //}
+        //else
+        //    Invoke("VCamSceneClipSet", Time.deltaTime);
     }
 
     void VCamClipSet()
     {
-        //Debug.Log("VCamClipSet");
+        Debug.Log("VCamClipSet");
 
         //if (vCam != null)
         //    ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = nearClip;
@@ -2890,7 +2911,7 @@ public class Stereo3D : MonoBehaviour
         {
             ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = nearClip;
             ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.FarClipPlane = farClip;
-            //Debug.Log("VCamClipSet nearClip " + nearClip + " ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane);
+            Debug.Log("VCamClipSet nearClip " + nearClip + " ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane);
         }
         else
             Invoke("VCamClipSet", Time.deltaTime);
@@ -2898,7 +2919,7 @@ public class Stereo3D : MonoBehaviour
 
     void VCamFOVSet()
     {
-        //Debug.Log("VCamFOVSet");
+        Debug.Log("VCamFOVSet");
         FOVSetInProcess = true;
 
         if (vCam != null)
@@ -2913,7 +2934,7 @@ public class Stereo3D : MonoBehaviour
 
     void VCamCullingOff()
     {
-        //Debug.Log("VCamCullingOff");
+        Debug.Log("VCamCullingOff");
 
         if (vCam != null)
         {
@@ -2930,17 +2951,23 @@ public class Stereo3D : MonoBehaviour
 
     void VCamNearClipHack()
     {
-        //Debug.Log("VCamNearClipHack");
+        Debug.Log("VCamNearClipHack " + Time.time);
+        nearClipHackApplied = true;
 
-        if (vCam != null)
+        if (vCam != null && !vCamSceneClipSetInProcess && !vCamSceneClipRestoreInProcess)
+        {
             ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = -1;
+            Debug.Log("VCamNearClipHack ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane + " " + Time.time);
+        }
         else
             Invoke("VCamNearClipHack", Time.deltaTime);
     }
 
     void VCamClipRestore()
     {
-        //Debug.Log("VCamClipRestore sceneNearClip " + sceneNearClip);
+        Debug.Log("VCamClipRestore sceneNearClip " + sceneNearClip);
+        nearClipHackApplied = false;
+        vCamSceneClipRestoreInProcess = true;
 
         //if (vCam != null)
         //    ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = sceneNearClip; //restore vCam default NearClipPlane
@@ -2951,6 +2978,8 @@ public class Stereo3D : MonoBehaviour
         {
             ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = sceneNearClip; //restore vCam default NearClipPlane
             ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.FarClipPlane = sceneFarClip; //restore vCam default FarClipPlane
+            Debug.Log("VCamClipRestore ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane);
+            vCamSceneClipRestoreInProcess = false;
         }
         else
             Invoke("VCamClipRestore", Time.deltaTime);
@@ -3287,7 +3316,7 @@ public class Stereo3D : MonoBehaviour
 
     void GUI_Set()
     {
-        //Debug.Log("GUI_toggle");
+        Debug.Log("GUI_Set");
         //lastGUIOpened = GUIOpened;
         Cursor.visible = false;
         //CursorLockMode cursorLockMode = Cursor.lockState;
@@ -3439,7 +3468,28 @@ public class Stereo3D : MonoBehaviour
         //    else
         //        cam.nearClipPlane = nearClip;
 
-        if (!S3DEnabled)
+        if (S3DEnabled)
+        {
+            if (nearClipHack)
+            {
+#if CINEMACHINE
+                if (cineBrain)
+                    VCamNearClipHack();
+                else
+#endif
+                    cam.nearClipPlane = -1;
+            }
+            else
+            {
+#if CINEMACHINE
+                if (cineBrain)
+                    VCamClipRestore();
+                else
+#endif
+                    cam.nearClipPlane = sceneNearClip;
+            }
+        }
+        else
 #if CINEMACHINE
             if (cineBrain)
                 VCamClipSet();
@@ -3784,6 +3834,8 @@ public class Stereo3D : MonoBehaviour
 
     void CheckCamFOVSet()
     {
+        Debug.Log("CheckCamFOVSet");
+
         if (cam.fieldOfView == vFOV)
             FOVSetInProcess = false;
         else
@@ -4193,19 +4245,19 @@ public class Stereo3D : MonoBehaviour
             {
                 RenderPipelineManager.endCameraRendering += RenderQuad; //add render context
 
-                if (nearClipHack)
-#if CINEMACHINE
-                    if (cineBrain)
-                    {
-                        VCamNearClipHack();
-                        nearClipHackApplied = true;
-                    }
-                    else
-#endif
-                        cam.nearClipPlane = -1;
+//                if (nearClipHack)
+//#if CINEMACHINE
+//                    if (cineBrain)
+//                    {
+//                        VCamNearClipHack();
+//                        //nearClipHackApplied = true;
+//                    }
+//                    else
+//#endif
+//                        cam.nearClipPlane = -1;
 
-                //nearClipHackApplied = true;
-                //Invoke("VCamCullingOff", 10);
+//                //nearClipHackApplied = true;
+//                //Invoke("VCamCullingOff", 10);
             }
 #endif
 
@@ -4403,6 +4455,7 @@ public class Stereo3D : MonoBehaviour
 
         if (!name.Contains("(Clone)"))
         {
+            Debug.Log("OnDisable");
             GUIClose();
             ReleaseRT();
             Destroy(leftCam.gameObject);
@@ -4428,11 +4481,16 @@ public class Stereo3D : MonoBehaviour
                 Destroy(canvasCam.gameObject);
 
 #if CINEMACHINE
+            VCamClipRestore();
+
             if (cineBrain && defaultVCam != null && Cinemachine.CinemachineBrain.SoloCamera.ToString() != "null")
                 Cinemachine.CinemachineBrain.SoloCamera = defaultVCam;
 
             cineBrain = false;
             vCam = null;
+#else
+                    cam.nearClipPlane = sceneNearClip;
+                    cam.farClipPlane = sceneFarClip;
 #endif
 
             Destroy(S3DMaterial);
@@ -4494,13 +4552,13 @@ public class Stereo3D : MonoBehaviour
         //else
         //    cam.nearClipPlane = sceneNearClip;
 
-#if CINEMACHINE
-        VCamClipRestore();
-        nearClipHackApplied = false;
-#else
-        cam.nearClipPlane = sceneNearClip;
-        cam.farClipPlane = sceneFarClip;
-#endif
+//#if CINEMACHINE
+//        VCamClipRestore();
+//        //nearClipHackApplied = false;
+//#else
+//        cam.nearClipPlane = sceneNearClip;
+//        cam.farClipPlane = sceneFarClip;
+//#endif
 
         //nearClipHackApplied = false;
 
