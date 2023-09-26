@@ -1594,7 +1594,7 @@ public class Stereo3D : MonoBehaviour
 
     void Update()
     {
-        Debug.Log("sceneNearClip = " + sceneNearClip);
+        //Debug.Log("sceneNearClip = " + sceneNearClip);
         //Debug.Log("Update " + Time.time);
         //Debug.Log(camData + " " + leftCamData);
         ////UnityEditor.Selection.activeGameObject = leftCam.gameObject;
