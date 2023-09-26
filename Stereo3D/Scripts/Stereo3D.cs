@@ -315,8 +315,10 @@ public class Stereo3D : MonoBehaviour
     Cinemachine.ICinemachineCamera vCam;
     Cinemachine.ICinemachineCamera defaultVCam;
     //Cinemachine.CinemachineBrain brain;
-    bool vCamSceneClipSetInProcess;
-    bool vCamSceneClipRestoreInProcess;
+    //bool vCamSceneClipSetInProcess;
+    bool vCamSceneClipIsReady;
+    //bool vCamClipSetInProcess;
+    //bool vCamSceneClipRestoreInProcess;
     bool nearClipHackApplied;
 #endif
 
@@ -375,6 +377,7 @@ public class Stereo3D : MonoBehaviour
 
     void OnEnable()
     {
+        vCamSceneClipIsReady = false;
         //Debug.Log("OnEnable " + name);
         //Debug.Log("OnEnable panelDepth " + panelDepth);
 
@@ -438,7 +441,7 @@ public class Stereo3D : MonoBehaviour
         {
             //brain = GetComponent<Cinemachine.CinemachineBrain>();
             cineBrain = true;
-            vCamSceneClipSetInProcess = true;
+            //vCamSceneClipSetInProcess = true;
             Invoke("GetVCam", Time.deltaTime);
             //GetVCam();
         }
@@ -446,7 +449,7 @@ public class Stereo3D : MonoBehaviour
 #endif
             {
                 sceneNearClip = cam.nearClipPlane;
-                Debug.Log("sceneNearClip = " + sceneNearClip);
+                Debug.Log("********************************************************************************************************************sceneNearClip = " + sceneNearClip);
                 sceneFarClip = cam.farClipPlane;
             }
 
@@ -1591,6 +1594,7 @@ public class Stereo3D : MonoBehaviour
 
     void Update()
     {
+        Debug.Log("sceneNearClip = " + sceneNearClip);
         //Debug.Log("Update " + Time.time);
         //Debug.Log(camData + " " + leftCamData);
         ////UnityEditor.Selection.activeGameObject = leftCam.gameObject;
@@ -1776,25 +1780,26 @@ public class Stereo3D : MonoBehaviour
             if (Cinemachine.CinemachineBrain.SoloCamera == null || Cinemachine.CinemachineBrain.SoloCamera.ToString() == "null") //virtual camera lost
                 Cinemachine.CinemachineBrain.SoloCamera = vCam;
             else //virtual camera changed
-            {
-                //((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = sceneNearClip; //restore vCam default NearClipPlane
-                VCamClipRestore();
+                if (vCamSceneClipIsReady)
+                {
+                    //((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = sceneNearClip; //restore vCam default NearClipPlane
+                    VCamClipRestore();
 
-                vCam = Cinemachine.CinemachineBrain.SoloCamera;
+                    vCam = Cinemachine.CinemachineBrain.SoloCamera;
 
-                //if (!GUIVisible && cam.nearClipPlane >= 0 && sceneNearClip != cam.nearClipPlane)
-                //{
-                //    sceneNearClip = cam.nearClipPlane;
-                //    //Debug.Log("!S3DEnabled && !GUIVisible && sceneNearClip != cam.nearClipPlane sceneNearClip= " + cam.nearClipPlane);
-                //    ClipSet();
-                //}
+                    //if (!GUIVisible && cam.nearClipPlane >= 0 && sceneNearClip != cam.nearClipPlane)
+                    //{
+                    //    sceneNearClip = cam.nearClipPlane;
+                    //    //Debug.Log("!S3DEnabled && !GUIVisible && sceneNearClip != cam.nearClipPlane sceneNearClip= " + cam.nearClipPlane);
+                    //    ClipSet();
+                    //}
 
-                VCamSceneClipSet();
-                //Debug.Log("Cinemachine.CinemachineBrain.SoloCamera != null sceneNearClip " + sceneNearClip);
-                FOV_Set();
-                RT_Set();
-                ClipSet();
-            }
+                    VCamSceneClipSet();
+                    //Debug.Log("Cinemachine.CinemachineBrain.SoloCamera != null sceneNearClip " + sceneNearClip);
+                    FOV_Set();
+                    RT_Set();
+                    ClipSet();
+                }
         }
         //else
         //    if (Cinemachine.CinemachineBrain.SoloCamera != vCam)
@@ -1804,21 +1809,22 @@ public class Stereo3D : MonoBehaviour
         //}
 
         if (nearClipHackApplied && cam.nearClipPlane != -1)
+        //if (nearClipHackApplied && ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane != -1)
         {
             Debug.Log("nearClipHackApplied && cam.nearClipPlane != -1 cam.nearClipPlane " + cam.nearClipPlane);
             VCamNearClipHack();
         }
 #endif
 
-        //if (!S3DEnabled && !GUIVisible && sceneNearClip != cam.nearClipPlane)
-        if (!GUIVisible && cam.nearClipPlane >= 0 && sceneNearClip != cam.nearClipPlane)
-        {
-            sceneNearClip = cam.nearClipPlane;
-            Debug.Log("sceneNearClip = " + sceneNearClip);
-            //Debug.Log("!GUIVisible && cam.nearClipPlane >= 0 && sceneNearClip != cam.nearClipPlane sceneNearClip= " + sceneNearClip);
-            //RT_Set();
-            ClipSet();
-        }
+        ////if (!S3DEnabled && !GUIVisible && sceneNearClip != cam.nearClipPlane)
+        //if (!GUIVisible && cam.nearClipPlane >= 0 && sceneNearClip != cam.nearClipPlane)
+        //{
+        //    sceneNearClip = cam.nearClipPlane;
+        //    Debug.Log("********************************************************************************************************************sceneNearClip = " + sceneNearClip);
+        //    //Debug.Log("!GUIVisible && cam.nearClipPlane >= 0 && sceneNearClip != cam.nearClipPlane sceneNearClip= " + sceneNearClip);
+        //    //RT_Set();
+        //    ClipSet();
+        //}
 
         if (!GUIVisible && cam.farClipPlane >= 0 && sceneFarClip != cam.farClipPlane)
         {
@@ -2883,55 +2889,6 @@ public class Stereo3D : MonoBehaviour
     //    //Cinemachine.CinemachineBrain.SoloCamera = vCam;
     //}
 
-    void VCamSceneClipSet()
-    {
-        Debug.Log("VCamSceneClipSet");
-
-        //if (!nearClipHackApplied && vCam != null)
-        //{
-            sceneNearClip = ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane;
-            Debug.Log("VCamSceneClipSet sceneNearClip " + sceneNearClip);
-            sceneFarClip = ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.FarClipPlane;
-            vCamSceneClipSetInProcess = false;
-        //}
-        //else
-        //    Invoke("VCamSceneClipSet", Time.deltaTime);
-    }
-
-    void VCamClipSet()
-    {
-        Debug.Log("VCamClipSet");
-
-        //if (vCam != null)
-        //    ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = nearClip;
-        //else
-        //    Invoke("VCamClipSet", Time.deltaTime);
-
-        if (vCam != null)
-        {
-            ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = nearClip;
-            ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.FarClipPlane = farClip;
-            Debug.Log("VCamClipSet nearClip " + nearClip + " ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane);
-        }
-        else
-            Invoke("VCamClipSet", Time.deltaTime);
-    }
-
-    void VCamFOVSet()
-    {
-        Debug.Log("VCamFOVSet");
-        FOVSetInProcess = true;
-
-        if (vCam != null)
-        {
-            ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.FieldOfView = vFOV;
-            //FOVSetInProcess = false;
-            CheckCamFOVSet();
-        }
-        else
-            Invoke("VCamFOVSet", Time.deltaTime);
-    }
-
     void VCamCullingOff()
     {
         Debug.Log("VCamCullingOff");
@@ -2949,15 +2906,82 @@ public class Stereo3D : MonoBehaviour
             Invoke("VCamCullingOff", Time.deltaTime);
     }
 
+    void VCamFOVSet()
+    {
+        Debug.Log("VCamFOVSet");
+        FOVSetInProcess = true;
+
+        if (vCam != null)
+        {
+            ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.FieldOfView = vFOV;
+            //FOVSetInProcess = false;
+            CheckCamFOVSet();
+        }
+        else
+            Invoke("VCamFOVSet", Time.deltaTime);
+    }
+
+    void VCamSceneClipSet()
+    {
+        Debug.Log("VCamSceneClipSet cam.nearClipPlane " + cam.nearClipPlane);
+        //vCamSceneClipSetInProcess = true;
+        //vCamSceneClipIsReady = false;
+
+        ////if (!nearClipHackApplied && vCam != null)
+        //if (vCam != null && !nearClipHackApplied && !vCamSceneClipRestoreInProcess)
+        //{
+            sceneNearClip = ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane;
+            Debug.Log("VCamSceneClipSet sceneNearClip " + sceneNearClip);
+            sceneFarClip = ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.FarClipPlane;
+            //vCamSceneClipSetInProcess = false;
+            vCamSceneClipIsReady = true;
+        //}
+        //else
+        //{
+        //    if (nearClipHackApplied)
+        //        VCamClipRestore();
+
+        //    Invoke("VCamSceneClipSet", Time.deltaTime);
+        //}
+    }
+
+    void VCamClipSet()
+    {
+        Debug.Log("VCamClipSet");
+        //vCamClipSetInProcess = true;
+        nearClipHackApplied = false;
+
+        //if (vCam != null)
+        //    ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = nearClip;
+        //else
+        //    Invoke("VCamClipSet", Time.deltaTime);
+
+        //if (vCam != null && !vCamSceneClipSetInProcess)
+        if (vCamSceneClipIsReady)
+        {
+            ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = nearClip;
+            ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.FarClipPlane = farClip;
+            Debug.Log("VCamClipSet nearClip " + nearClip + " ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane);
+            //vCamClipSetInProcess = false;
+        }
+        else
+            //if (!vCamSceneClipRestoreInProcess)
+                Invoke("VCamClipSet", Time.deltaTime);
+            //else
+            //    vCamClipSetInProcess = false;
+    }
+
     void VCamNearClipHack()
     {
-        Debug.Log("VCamNearClipHack " + Time.time);
-        nearClipHackApplied = true;
+        Debug.Log("VCamNearClipHack " + nearClipHackApplied);
+        //nearClipHackApplied = true;
 
-        if (vCam != null && !vCamSceneClipSetInProcess && !vCamSceneClipRestoreInProcess)
+        //if (vCam != null && !vCamSceneClipSetInProcess && !vCamSceneClipRestoreInProcess)
+        if (vCamSceneClipIsReady)
         {
             ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = -1;
             Debug.Log("VCamNearClipHack ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane + " " + Time.time);
+            nearClipHackApplied = true;
         }
         else
             Invoke("VCamNearClipHack", Time.deltaTime);
@@ -2966,20 +2990,21 @@ public class Stereo3D : MonoBehaviour
     void VCamClipRestore()
     {
         Debug.Log("VCamClipRestore sceneNearClip " + sceneNearClip);
+        //vCamSceneClipRestoreInProcess = true;
         nearClipHackApplied = false;
-        vCamSceneClipRestoreInProcess = true;
 
         //if (vCam != null)
         //    ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = sceneNearClip; //restore vCam default NearClipPlane
         //else
         //    Invoke("VCamClipRestore", Time.deltaTime);
 
-        if (vCam != null)
+        //if (vCam != null && !vCamClipSetInProcess)
+        if (vCamSceneClipIsReady)
         {
             ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = sceneNearClip; //restore vCam default NearClipPlane
             ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.FarClipPlane = sceneFarClip; //restore vCam default FarClipPlane
             Debug.Log("VCamClipRestore ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane);
-            vCamSceneClipRestoreInProcess = false;
+            //vCamSceneClipRestoreInProcess = false;
         }
         else
             Invoke("VCamClipRestore", Time.deltaTime);
@@ -3490,6 +3515,10 @@ public class Stereo3D : MonoBehaviour
             }
         }
         else
+        {
+            //nearClipHackApplied = false;
+            //VCamClipRestore();
+
 #if CINEMACHINE
             if (cineBrain)
                 VCamClipSet();
@@ -3499,6 +3528,7 @@ public class Stereo3D : MonoBehaviour
                 cam.nearClipPlane = nearClip;
                 cam.farClipPlane = farClip;
             }
+        }
 
         ViewSet();
     }
@@ -4483,8 +4513,8 @@ public class Stereo3D : MonoBehaviour
 #if CINEMACHINE
             VCamClipRestore();
 
-            if (cineBrain && defaultVCam != null && Cinemachine.CinemachineBrain.SoloCamera.ToString() != "null")
-                Cinemachine.CinemachineBrain.SoloCamera = defaultVCam;
+            //if (cineBrain && defaultVCam != null && Cinemachine.CinemachineBrain.SoloCamera.ToString() != "null")
+            //    Cinemachine.CinemachineBrain.SoloCamera = defaultVCam;
 
             cineBrain = false;
             vCam = null;
