@@ -377,7 +377,6 @@ public class Stereo3D : MonoBehaviour
 
     void OnEnable()
     {
-        vCamSceneClipIsReady = false;
         //Debug.Log("OnEnable " + name);
         //Debug.Log("OnEnable panelDepth " + panelDepth);
 
@@ -442,6 +441,7 @@ public class Stereo3D : MonoBehaviour
             //brain = GetComponent<Cinemachine.CinemachineBrain>();
             cineBrain = true;
             //vCamSceneClipSetInProcess = true;
+            vCamSceneClipIsReady = false;
             Invoke("GetVCam", Time.deltaTime);
             //GetVCam();
         }
