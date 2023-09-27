@@ -199,7 +199,7 @@ public class Stereo3D : MonoBehaviour
     float lastPanelDepth;
     Vector2 lastPanelDepthMinMax;
     bool lastGUIAsOverlay;
-    bool lastCanvasSizeKeep;
+    bool lastGUISizeKeep;
     GameObject lastCameraPrefab;
     RenderTextureFormat lastRTFormat;
     bool lastSetMatrixDirectly;
@@ -776,6 +776,8 @@ public class Stereo3D : MonoBehaviour
                 canvasCam.clearFlags = CameraClearFlags.Nothing;
                 //canvasCamMatrix = canvasCam.projectionMatrix;
                 //CameraStackSet();
+                //canvasCam.depth = cam.depth - 1;
+                //canvasCam.enabled = false;
 
 #if HDRP
                 //HDCamData = cam.gameObject.GetComponent<HDAdditionalCameraData>();
@@ -1155,7 +1157,7 @@ public class Stereo3D : MonoBehaviour
             lastPanelDepth = panelDepth;
             //lastPanelDepthMinMax = panelDepthMinMax;
             lastGUIAsOverlay = GUIAsOverlay;
-            lastCanvasSizeKeep = GUISizeKeep;
+            lastGUISizeKeep = GUISizeKeep;
             lastCameraPrefab = cameraPrefab;
             lastRTFormat = RTFormat;
             lastSetMatrixDirectly = setMatrixDirectly;
@@ -2548,9 +2550,9 @@ public class Stereo3D : MonoBehaviour
             //Invoke("DelayedPanelDepthSet", Time.deltaTime);
         }
 
-        if (lastCanvasSizeKeep != GUISizeKeep)
+        if (lastGUISizeKeep != GUISizeKeep)
         {
-            lastCanvasSizeKeep = GUISizeKeep;
+            lastGUISizeKeep = GUISizeKeep;
             Aspect_Set();
         }
 
@@ -3117,6 +3119,7 @@ public class Stereo3D : MonoBehaviour
                 canvas.renderMode = RenderMode.WorldSpace;
                 canvas.worldCamera = canvasRayCam;
                 //canvas.transform.localRotation = Quaternion.identity;
+                canvasCam.targetTexture = leftCamRT; //required to clear the screen window when the main camera viewport rectangle is not fully occupied
                 canvasCam.enabled = true;
                 canvasCam.orthographicSize = canvasHalfSizeY;
                 //canvasCamMatrix = Matrix4x4.Ortho(-canvasHalfSizeX - canvasHalfSizeX * -shift, canvasHalfSizeX - canvasHalfSizeX * -shift, -canvasHalfSizeY, canvasHalfSizeY, -1, 1);
@@ -3933,10 +3936,22 @@ public class Stereo3D : MonoBehaviour
         ViewSet();
     }
 
+    //Camera clearCamera;
+
     void CamRect_Set()
     {
         leftCam.rect = rightCam.rect = new Rect(0, 0, Mathf.Max(1 / cam.rect.width * (1 - cam.rect.x), 1), Mathf.Max(1 / cam.rect.height * (1 - cam.rect.y), 1));
        //Debug.Log("CamRect_Set");
+
+        //if (cam.rect.x > 0 || cam.rect.xMax > 1 || cam.rect.y > 0 || cam.rect.yMax > 1)
+        //{
+
+        //    if (!clearCamera)
+        //    {
+        //        clearCamera = new GameObject("clearCamera").AddComponent<Camera>();
+        //        clearCamera.CopyFrom(canvasRayCam);
+        //    }
+        //}
     }
 
     float shift;
