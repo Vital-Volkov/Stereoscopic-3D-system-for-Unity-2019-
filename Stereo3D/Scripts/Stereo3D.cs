@@ -665,6 +665,7 @@ public class Stereo3D : MonoBehaviour
             canvasRayCam.cullingMask = 0;
             canvasRayCam.useOcclusionCulling = false;
             canvas.worldCamera = canvasRayCam;
+            canvas.pixelPerfect = true;
 
 #if URP
             camData = cam.GetUniversalAdditionalCameraData();
@@ -895,7 +896,7 @@ public class Stereo3D : MonoBehaviour
             //    camera.cullingMask = 0;
             //    camera.useOcclusionCulling = false;
             //    camera.GetUniversalAdditionalCameraData().renderShadows = false;
-            Invoke("HDRPSettings_Restore", GUI_Set_delay);
+                Invoke("HDRPSettings_Restore", GUI_Set_delay);
             }
 
             CameraStackSet();
@@ -3148,6 +3149,10 @@ public class Stereo3D : MonoBehaviour
                 //canvas.renderMode = RenderMode.ScreenSpaceOverlay;
                 canvas.renderMode = RenderMode.ScreenSpaceCamera;
                 canvas.worldCamera = cam;
+                canvas.GetComponent<CanvasScaler>().scaleFactor = windowSize.y / canvasSize.y;
+                //canvas.GetComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+                //canvas.GetComponent<CanvasScaler>().referenceResolution = canvasSize;
+                //Debug.Log("canvasSize " + canvasSize + " windowSize " + windowSize);
             }
         }
         else
