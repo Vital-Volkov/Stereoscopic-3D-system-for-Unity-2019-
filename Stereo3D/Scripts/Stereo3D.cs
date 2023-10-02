@@ -4679,7 +4679,7 @@ public class Stereo3D : MonoBehaviour
         //if (defaultRender) //commented till SRP don't go here
         if (S3DEnabled)
         {
-            if (canvasCam)
+            if (canvasCam.isActiveAndEnabled)
             {
                 CanvasCamS3DRender_Set();
 
