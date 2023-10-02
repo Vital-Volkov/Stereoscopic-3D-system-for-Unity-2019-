@@ -758,6 +758,10 @@ public class Stereo3D : MonoBehaviour
                 canvasCam.CopyFrom(canvasRayCam);
 #if URP
                 canvasCam.GetUniversalAdditionalCameraData().renderShadows = false; //not copied
+                canvasCam.clearFlags = CameraClearFlags.Nothing;
+#else
+                canvasCam.clearFlags = CameraClearFlags.Color;
+                canvasCam.backgroundColor = Color.clear;
 #endif
                 //canvasCam.transform.parent = canvas.transform;
                 canvasCam.transform.SetParent(canvas.transform);
@@ -772,12 +776,12 @@ public class Stereo3D : MonoBehaviour
                 //if (!cameraStack.Contains(canvasCam))
                 //    cameraStack.Add(canvasCam);
 
-                //Invoke("CameraStackSet", Time.deltaTime * 8);
-                canvasCam.clearFlags = CameraClearFlags.Nothing;
-                //canvasCamMatrix = canvasCam.projectionMatrix;
-                //CameraStackSet();
-                //canvasCam.depth = cam.depth - 1;
-                //canvasCam.enabled = false;
+                ////Invoke("CameraStackSet", Time.deltaTime * 8);
+                //canvasCam.clearFlags = CameraClearFlags.Nothing;
+                ////canvasCamMatrix = canvasCam.projectionMatrix;
+                ////CameraStackSet();
+                ////canvasCam.depth = cam.depth - 1;
+                ////canvasCam.enabled = false;
 
 #if HDRP
                 //HDCamData = cam.gameObject.GetComponent<HDAdditionalCameraData>();
@@ -1876,32 +1880,34 @@ public class Stereo3D : MonoBehaviour
 
         if (canvasCam && S3DEnabled)
         {
-            if (oddFrame)
-            {
-                if (method == Method.SideBySide_HMD)
-                    canvasCamMatrix[0, 3] = (1 - imageOffset * panelDepth) * (swapLR ? -1 : 1);
-                else
-                    canvasCamMatrix[0, 3] = -imageOffset * (swapLR ? -1 : 1) * panelDepth;
+            //if (oddFrame)
+            //{
+            //    if (method == Method.SideBySide_HMD)
+            //        canvasCamMatrix[0, 3] = (1 - imageOffset * panelDepth) * (swapLR ? -1 : 1);
+            //    else
+            //        canvasCamMatrix[0, 3] = -imageOffset * (swapLR ? -1 : 1) * panelDepth;
 
-                if (method == Method.Interlace_Horizontal)
-                    canvasCamMatrix[1, 3] = -oneRowShift;
+            //    if (method == Method.Interlace_Horizontal)
+            //        canvasCamMatrix[1, 3] = -oneRowShift;
 
-                canvasCam.projectionMatrix = canvasCamMatrix;
-                canvasCam.targetTexture = leftCamCanvasRT;
-            }
-            else
-            {
-                if (method == Method.SideBySide_HMD)
-                    canvasCamMatrix[0, 3] = (-1 + imageOffset * panelDepth) * (swapLR ? -1 : 1);
-                else
-                    canvasCamMatrix[0, 3] = imageOffset * (swapLR ? -1 : 1) * panelDepth;
+            //    canvasCam.projectionMatrix = canvasCamMatrix;
+            //    canvasCam.targetTexture = leftCamCanvasRT;
+            //}
+            //else
+            //{
+            //    if (method == Method.SideBySide_HMD)
+            //        canvasCamMatrix[0, 3] = (-1 + imageOffset * panelDepth) * (swapLR ? -1 : 1);
+            //    else
+            //        canvasCamMatrix[0, 3] = imageOffset * (swapLR ? -1 : 1) * panelDepth;
 
-                if (method == Method.Interlace_Horizontal)
-                    canvasCamMatrix[1, 3] = 0;
+            //    if (method == Method.Interlace_Horizontal)
+            //        canvasCamMatrix[1, 3] = 0;
 
-                canvasCam.projectionMatrix = canvasCamMatrix;
-                canvasCam.targetTexture = rightCamCanvasRT;
-            }
+            //    canvasCam.projectionMatrix = canvasCamMatrix;
+            //    canvasCam.targetTexture = rightCamCanvasRT;
+            //}
+
+            CanvasCamS3DRender_Set();
         }
 #endif
 
@@ -3119,7 +3125,14 @@ public class Stereo3D : MonoBehaviour
                 canvas.renderMode = RenderMode.WorldSpace;
                 canvas.worldCamera = canvasRayCam;
                 //canvas.transform.localRotation = Quaternion.identity;
-                canvasCam.targetTexture = leftCamRT; //required to clear the screen window when the main camera viewport rectangle is not fully occupied
+                //canvasCam.targetTexture = leftCamRT; //required to clear the screen window when the main camera viewport rectangle is not fully occupied
+
+                if (canvasCam.targetTexture == null)
+                {
+                    Debug.Log("canvasCam.targetTexture == null");
+                    canvasCam.targetTexture = leftCamRT; //required to clear the screen window when the main camera viewport rectangle is not fully occupied
+                }
+
                 canvasCam.enabled = true;
                 canvasCam.orthographicSize = canvasHalfSizeY;
                 //canvasCamMatrix = Matrix4x4.Ortho(-canvasHalfSizeX - canvasHalfSizeX * -shift, canvasHalfSizeX - canvasHalfSizeX * -shift, -canvasHalfSizeY, canvasHalfSizeY, -1, 1);
@@ -4662,11 +4675,52 @@ public class Stereo3D : MonoBehaviour
     //ignored in SRP(URP or HDRP) but in default render via cam buffer even empty function give fps gain from 294 to 308
     void OnRenderImage(RenderTexture source, RenderTexture destination)
     {
+        //Debug.Log("OnRenderImage");
         //if (defaultRender) //commented till SRP don't go here
         if (S3DEnabled)
+        {
+            if (canvasCam)
+            {
+                CanvasCamS3DRender_Set();
+
+                Graphics.Blit(leftCamCanvasRT, leftCamRT, S3DPanelMaterial);
+                Graphics.Blit(rightCamCanvasRT, rightCamRT, S3DPanelMaterial);
+            }
+            //else
             Graphics.Blit(null, destination, S3DMaterial, pass);
+        }
         else
             Graphics.Blit(source, destination);
+    }
+
+    void CanvasCamS3DRender_Set()
+    {
+        if (oddFrame)
+        {
+            if (method == Method.SideBySide_HMD)
+                canvasCamMatrix[0, 3] = (1 - imageOffset * panelDepth) * (swapLR ? -1 : 1);
+            else
+                canvasCamMatrix[0, 3] = -imageOffset * (swapLR ? -1 : 1) * panelDepth;
+
+            if (method == Method.Interlace_Horizontal)
+                canvasCamMatrix[1, 3] = -oneRowShift;
+
+            canvasCam.projectionMatrix = canvasCamMatrix;
+            canvasCam.targetTexture = leftCamCanvasRT;
+        }
+        else
+        {
+            if (method == Method.SideBySide_HMD)
+                canvasCamMatrix[0, 3] = (-1 + imageOffset * panelDepth) * (swapLR ? -1 : 1);
+            else
+                canvasCamMatrix[0, 3] = imageOffset * (swapLR ? -1 : 1) * panelDepth;
+
+            if (method == Method.Interlace_Horizontal)
+                canvasCamMatrix[1, 3] = 0;
+
+            canvasCam.projectionMatrix = canvasCamMatrix;
+            canvasCam.targetTexture = rightCamCanvasRT;
+        }
     }
 
     ////Immediate GUI Stereo3D settings panel (remove next three functions to delete IMGUI)
@@ -4674,186 +4728,186 @@ public class Stereo3D : MonoBehaviour
 
     //void OnGUI()
     //{
-   	//    if (GUIOpened)
+    //    if (GUIOpened)
     //    {
-   	//	    Cursor.lockState = CursorLockMode.None;
+    //	    Cursor.lockState = CursorLockMode.None;
     //        Cursor.visible = true;
 
     //	    guiWindow = GUILayout.Window(0, guiWindow, GuiWindowContent, "Stereo3D Settings");
 
-		  //  if (!guiWindow.Contains(Event.current.mousePosition) && !Input.GetMouseButton(0))
-			 //   GUI.UnfocusWindow();
-	   // }
+    //  if (!guiWindow.Contains(Event.current.mousePosition) && !Input.GetMouseButton(0))
+    //   GUI.UnfocusWindow();
+    // }
     //    else
     //    {
-   	//	    Cursor.lockState = CursorLockMode.Locked;
+    //	    Cursor.lockState = CursorLockMode.Locked;
     //        Cursor.visible = false;
-	   // }
+    // }
     //}
 
     //void GuiWindowContent (int windowID)
     //{
-	   // GUILayout.BeginHorizontal();
-		  //  GUILayout.BeginVertical();
-			 //   GUILayout.BeginHorizontal();
-			 //   GUILayout.EndHorizontal();
+    // GUILayout.BeginHorizontal();
+    //  GUILayout.BeginVertical();
+    //   GUILayout.BeginHorizontal();
+    //   GUILayout.EndHorizontal();
 
-		  //          S3DEnabled = GUILayout.Toggle(S3DEnabled, " Enable S3D");
+    //          S3DEnabled = GUILayout.Toggle(S3DEnabled, " Enable S3D");
 
     //                string[] methodStrings = { "Interlace", "Side By Side", "Over Under", "Anaglyph" };
-				//    method = (Method)GUILayout.SelectionGrid((int)method, methodStrings, 1, GUILayout.Width(100));
+    //    method = (Method)GUILayout.SelectionGrid((int)method, methodStrings, 1, GUILayout.Width(100));
 
     //        GUILayout.EndVertical();
-		  //  GUILayout.BeginVertical();
-			 //   GUILayout.BeginHorizontal();
+    //  GUILayout.BeginVertical();
+    //   GUILayout.BeginHorizontal();
 
-		  //          swapLR = GUILayout.Toggle(swapLR, " Swap Left-Right Cameras");
+    //          swapLR = GUILayout.Toggle(swapLR, " Swap Left-Right Cameras");
 
-			 //   GUILayout.EndHorizontal();
-			 //   GUILayout.BeginHorizontal();
+    //   GUILayout.EndHorizontal();
+    //   GUILayout.BeginHorizontal();
 
     //                string[] interlaceTypeStrings = { "Horizontal", "Vertical", "Checkerboard" };
-				//    //interlaceType = (InterlaceType)GUILayout.Toolbar((int)interlaceType, interlaceTypeStrings, GUILayout.Width(298));
+    //    //interlaceType = (InterlaceType)GUILayout.Toolbar((int)interlaceType, interlaceTypeStrings, GUILayout.Width(298));
 
-				//    GUILayout.FlexibleSpace();
-				//    GUILayout.Label ("PPI", GUILayout.Width(30));
-				
-				//    if (GUILayout.Button("-", GUILayout.Width(20)))
-				//	    PPI -= 1;
+    //    GUILayout.FlexibleSpace();
+    //    GUILayout.Label ("PPI", GUILayout.Width(30));
+
+    //    if (GUILayout.Button("-", GUILayout.Width(20)))
+    //	    PPI -= 1;
 
     //                string PPIString = StringCheck(PPI.ToString());
     //                string fieldString = GUILayout.TextField(PPIString, 5, GUILayout.Width(40));
 
-				//    if (fieldString != PPIString)
+    //    if (fieldString != PPIString)
     //                    PPI = Convert.ToSingle(fieldString);
 
-				//    if (GUILayout.Button("+", GUILayout.Width(20)))
-				//	    PPI += 1;
+    //    if (GUILayout.Button("+", GUILayout.Width(20)))
+    //	    PPI += 1;
 
-				//    GUILayout.Label (" pix");
-				//    GUILayout.Space(20);
+    //    GUILayout.Label (" pix");
+    //    GUILayout.Space(20);
 
-			 //   GUILayout.EndHorizontal();
-			 //   //GUILayout.BeginHorizontal();
+    //   GUILayout.EndHorizontal();
+    //   //GUILayout.BeginHorizontal();
 
-				//   // GUILayout.FlexibleSpace();
-				//   // GUILayout.Label ("Pixel pitch", GUILayout.Width(70));
+    //   // GUILayout.FlexibleSpace();
+    //   // GUILayout.Label ("Pixel pitch", GUILayout.Width(70));
 
-				//   // if (GUILayout.Button("-", GUILayout.Width(20)))
-				//	  //  pixelPitch -= .001f;
+    //   // if (GUILayout.Button("-", GUILayout.Width(20)))
+    //	  //  pixelPitch -= .001f;
 
     //   //             string pixelPitchString = StringCheck(pixelPitch.ToString());
-				//   // fieldString = GUILayout.TextField(pixelPitchString, 5, GUILayout.Width(40));
+    //   // fieldString = GUILayout.TextField(pixelPitchString, 5, GUILayout.Width(40));
 
-				//   // if (fieldString != pixelPitchString)
-				//	  //  pixelPitch = Convert.ToSingle(fieldString);
+    //   // if (fieldString != pixelPitchString)
+    //	  //  pixelPitch = Convert.ToSingle(fieldString);
 
 
-				//   // if (GUILayout.Button("+", GUILayout.Width(20)))
-				//	  //  pixelPitch += .001f;
+    //   // if (GUILayout.Button("+", GUILayout.Width(20)))
+    //	  //  pixelPitch += .001f;
 
-				//   // GUILayout.Label (" mm");
-				//   // GUILayout.Space(15);
+    //   // GUILayout.Label (" mm");
+    //   // GUILayout.Space(15);
 
-			 //   //GUILayout.EndHorizontal();
-		  //  GUILayout.EndVertical();
-	   // GUILayout.EndHorizontal();
-	   // GUILayout.BeginHorizontal();
-		  //  GUILayout.Space(4);
-		  //  GUILayout.BeginVertical();
+    //   //GUILayout.EndHorizontal();
+    //  GUILayout.EndVertical();
+    // GUILayout.EndHorizontal();
+    // GUILayout.BeginHorizontal();
+    //  GUILayout.Space(4);
+    //  GUILayout.BeginVertical();
 
-			 //   GUILayout.Label ("          User IPD", GUILayout.Width(100));
-			 //   GUILayout.Label ("        Virtual IPD", GUILayout.Width(100));
-			 //   GUILayout.Label ("  Horizontal FOV", GUILayout.Width(100));
-			 //   GUILayout.Label ("     Vertical FOV", GUILayout.Width(100));
-			 //   GUILayout.Label ("Screen distance", GUILayout.Width(100));
+    //   GUILayout.Label ("          User IPD", GUILayout.Width(100));
+    //   GUILayout.Label ("        Virtual IPD", GUILayout.Width(100));
+    //   GUILayout.Label ("  Horizontal FOV", GUILayout.Width(100));
+    //   GUILayout.Label ("     Vertical FOV", GUILayout.Width(100));
+    //   GUILayout.Label ("Screen distance", GUILayout.Width(100));
 
-		  //  GUILayout.EndVertical();
-		  //  GUILayout.Space(4);
-		  //  GUILayout.BeginVertical();
+    //  GUILayout.EndVertical();
+    //  GUILayout.Space(4);
+    //  GUILayout.BeginVertical();
 
-			 //   GUILayout.Space(10);
+    //   GUILayout.Space(10);
     //            userIPD = GUILayout.HorizontalSlider(userIPD, 0, 100, GUILayout.Width(300));
 
-			 //   GUILayout.Space(9);
-			 //   virtualIPD = GUILayout.HorizontalSlider(virtualIPD, 0, 1000, GUILayout.Width(300));
+    //   GUILayout.Space(9);
+    //   virtualIPD = GUILayout.HorizontalSlider(virtualIPD, 0, 1000, GUILayout.Width(300));
 
-			 //   GUILayout.Space(9);
-			 //   //FOV = GUILayout.HorizontalSlider(FOV, .1f, 179.9f, GUILayout.Width(300)); //179.9f will cause the slider stuck in the standalone player but OK in the editor
-			 //   FOV = GUILayout.HorizontalSlider(FOV, 1, 179, GUILayout.Width(300));
+    //   GUILayout.Space(9);
+    //   //FOV = GUILayout.HorizontalSlider(FOV, .1f, 179.9f, GUILayout.Width(300)); //179.9f will cause the slider stuck in the standalone player but OK in the editor
+    //   FOV = GUILayout.HorizontalSlider(FOV, 1, 179, GUILayout.Width(300));
 
-		  //  GUILayout.EndVertical();
-		  //  GUILayout.BeginVertical();
-			 //   GUILayout.BeginHorizontal();
+    //  GUILayout.EndVertical();
+    //  GUILayout.BeginVertical();
+    //   GUILayout.BeginHorizontal();
 
-				//    if (GUILayout.Button("-", GUILayout.Width(20)))
-				//	    userIPD -= .1f;
+    //    if (GUILayout.Button("-", GUILayout.Width(20)))
+    //	    userIPD -= .1f;
 
-		  //          string userIPDString = StringCheck(userIPD.ToString());
-				//    fieldString = GUILayout.TextField(userIPDString, 5, GUILayout.Width(40));
+    //          string userIPDString = StringCheck(userIPD.ToString());
+    //    fieldString = GUILayout.TextField(userIPDString, 5, GUILayout.Width(40));
 
     //                if (fieldString != userIPDString)
-				//        userIPD = Convert.ToSingle(fieldString);
+    //        userIPD = Convert.ToSingle(fieldString);
 
-				//    if (GUILayout.Button("+", GUILayout.Width(20)))
-				//	    userIPD += .1f;
+    //    if (GUILayout.Button("+", GUILayout.Width(20)))
+    //	    userIPD += .1f;
 
-				//    GUILayout.Label (" mm");
+    //    GUILayout.Label (" mm");
 
-			 //   GUILayout.EndHorizontal();
-			 //   GUILayout.BeginHorizontal();
+    //   GUILayout.EndHorizontal();
+    //   GUILayout.BeginHorizontal();
 
-				//    if (GUILayout.Button("-", GUILayout.Width(20)))
-				//	    virtualIPD -= 1f;
+    //    if (GUILayout.Button("-", GUILayout.Width(20)))
+    //	    virtualIPD -= 1f;
 
-		  //          string virtualIPDString = StringCheck(virtualIPD.ToString());
-				//    fieldString = GUILayout.TextField(virtualIPDString, 5, GUILayout.Width(40));
+    //          string virtualIPDString = StringCheck(virtualIPD.ToString());
+    //    fieldString = GUILayout.TextField(virtualIPDString, 5, GUILayout.Width(40));
 
     //                if (fieldString != virtualIPDString)
-				//        virtualIPD = Convert.ToSingle(fieldString);
+    //        virtualIPD = Convert.ToSingle(fieldString);
 
-				//    if (GUILayout.Button("+", GUILayout.Width(20)))
-				//	    virtualIPD += 1f;
+    //    if (GUILayout.Button("+", GUILayout.Width(20)))
+    //	    virtualIPD += 1f;
 
-				//    GUILayout.Label (" mm");
+    //    GUILayout.Label (" mm");
 
-		  //          matchUserIPD = GUILayout.Toggle(matchUserIPD, " Match User IPD");
+    //          matchUserIPD = GUILayout.Toggle(matchUserIPD, " Match User IPD");
 
-			 //   GUILayout.EndHorizontal();
-			 //   GUILayout.BeginHorizontal();
+    //   GUILayout.EndHorizontal();
+    //   GUILayout.BeginHorizontal();
 
-				//    if (GUILayout.Button("-", GUILayout.Width(20)))
-				//	    FOV -= .1f;
+    //    if (GUILayout.Button("-", GUILayout.Width(20)))
+    //	    FOV -= .1f;
 
     //                string hFOVString = StringCheck(FOV.ToString());
-				//    fieldString = GUILayout.TextField(hFOVString, 5, GUILayout.Width(40));
+    //    fieldString = GUILayout.TextField(hFOVString, 5, GUILayout.Width(40));
 
     //                if (fieldString != hFOVString)
-				//        FOV = Convert.ToSingle(fieldString);
+    //        FOV = Convert.ToSingle(fieldString);
 
-				//    if (GUILayout.Button("+", GUILayout.Width(20)))
-				//	    FOV += .1f;
+    //    if (GUILayout.Button("+", GUILayout.Width(20)))
+    //	    FOV += .1f;
 
-				//    GUILayout.Label (" deg");
+    //    GUILayout.Label (" deg");
 
-			 //   GUILayout.EndHorizontal();
-			 //   GUILayout.BeginHorizontal();
+    //   GUILayout.EndHorizontal();
+    //   GUILayout.BeginHorizontal();
 
-			 //       GUILayout.Space(28);
-				//    GUILayout.TextField(vFOV.ToString(), 5, GUILayout.Width(40));
+    //       GUILayout.Space(28);
+    //    GUILayout.TextField(vFOV.ToString(), 5, GUILayout.Width(40));
 
-				//    GUILayout.Label (" deg");
+    //    GUILayout.Label (" deg");
 
-			 //   GUILayout.EndHorizontal();
-			 //   GUILayout.BeginHorizontal();
+    //   GUILayout.EndHorizontal();
+    //   GUILayout.BeginHorizontal();
 
-			 //       GUILayout.Space(28);
-				//    GUILayout.TextField(screenDistance.ToString(), 5, GUILayout.Width(40));
+    //       GUILayout.Space(28);
+    //    GUILayout.TextField(screenDistance.ToString(), 5, GUILayout.Width(40));
 
-				//    GUILayout.Label (" mm");
+    //    GUILayout.Label (" mm");
 
-			 //   GUILayout.EndHorizontal();
-		  //  GUILayout.EndVertical();
+    //   GUILayout.EndHorizontal();
+    //  GUILayout.EndVertical();
     //    GUILayout.EndHorizontal();
 
     //    GUI.DragWindow(new Rect(0, 0, 640, 20)); //make GUI window draggable by top
@@ -5421,13 +5475,23 @@ public class Stereo3D : MonoBehaviour
             //if (GraphicsSettings.defaultRenderPipeline.name.Contains("Universal"))
             //    AddDefine("URP");
 
-            if (GraphicsSettings.defaultRenderPipeline.GetType().ToString().Contains("UniversalRenderPipelineAsset"))
-                AddDefine("URP");
+            //if (GraphicsSettings.defaultRenderPipeline.GetType().ToString().Contains("UniversalRenderPipelineAsset"))
+            //    AddDefine("URP");
 
-            if (GraphicsSettings.defaultRenderPipeline.GetType().ToString().Contains("HDRenderPipelineAsset"))
-                AddDefine("HDRP");
+            //if (GraphicsSettings.defaultRenderPipeline.GetType().ToString().Contains("HDRenderPipelineAsset"))
+            //    AddDefine("HDRP");
+
+            if (GraphicsSettings.defaultRenderPipeline)
+            {
+                if (GraphicsSettings.defaultRenderPipeline.GetType().ToString().Contains("UniversalRenderPipelineAsset"))
+                    AddDefine("URP");
+                else
+                    if (GraphicsSettings.defaultRenderPipeline.GetType().ToString().Contains("HDRenderPipelineAsset"))
+                        AddDefine("HDRP");
+            }
 
             //Debug.Log(GraphicsSettings.defaultRenderPipeline.GetType().ToString());
+            //Debug.Log(GraphicsSettings.defaultRenderPipeline);
         }
     }
 
