@@ -666,6 +666,7 @@ public class Stereo3D : MonoBehaviour
             canvasRayCam.useOcclusionCulling = false;
             canvas.worldCamera = canvasRayCam;
             canvas.pixelPerfect = true;
+            additionalS3DCamerasStruct = new AdditionalS3DCamera[additionalS3DCameras.Count];
 
 #if URP
             camData = cam.GetUniversalAdditionalCameraData();
@@ -683,7 +684,7 @@ public class Stereo3D : MonoBehaviour
             //foreach (var cam in cameraStack)
             //    Debug.Log(cam);
 
-            additionalS3DCamerasStruct = new AdditionalS3DCamera[additionalS3DCameras.Count];
+            //additionalS3DCamerasStruct = new AdditionalS3DCamera[additionalS3DCameras.Count];
             //int i = 0;
 
             //foreach (var c in additionalS3DCameras)
@@ -741,7 +742,34 @@ public class Stereo3D : MonoBehaviour
             ////lastURPAsset = new UniversalRenderPipelineAsset();
             //lastURPAsset = ScriptableObject.CreateInstance<UniversalRenderPipelineAsset>();
             ////lastURPAsset = URPAsset;
-#elif HDRP
+#else
+            //additionalS3DCamerasStruct = new AdditionalS3DCamera[additionalS3DCameras.Count];
+
+            foreach (var c in additionalS3DCameras)
+            {
+                if (c && !c.transform.Find(c.name + "(Clone)_leftCam"))
+                {
+                    Camera cloneLeft = Instantiate(c, c.transform.position, c.transform.rotation);
+                    cloneLeft.tag = "Untagged";
+                    cloneLeft.name += "_leftCam";
+                    cloneLeft.stereoTargetEye = StereoTargetEyeMask.Left;
+                    Camera cloneRight = Instantiate(c, c.transform.position, c.transform.rotation);
+                    cloneRight.tag = "Untagged";
+                    cloneRight.name += "_rightCam";
+                    cloneRight.stereoTargetEye = StereoTargetEyeMask.Right;
+
+                    cloneLeft.transform.parent = cloneRight.transform.parent = c.transform;
+
+                    int index = additionalS3DCameras.IndexOf(c);
+                    additionalS3DCamerasStruct[index].camera = c;
+                    additionalS3DCamerasStruct[index].cameraLeft = cloneLeft;
+                    additionalS3DCamerasStruct[index].cameraRight = cloneRight;
+                }
+            }
+#endif
+
+            //#elif HDRP
+#if HDRP
             camData = cam.GetComponent<HDAdditionalCameraData>();
             HDRPAsset = GraphicsSettings.currentRenderPipeline as HDRenderPipelineAsset;
             defaultHDRPSettings = HDRPSettings = HDRPAsset.currentPlatformRenderPipelineSettings;
@@ -3153,6 +3181,7 @@ public class Stereo3D : MonoBehaviour
                 //canvas.GetComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
                 //canvas.GetComponent<CanvasScaler>().referenceResolution = canvasSize;
                 //Debug.Log("canvasSize " + canvasSize + " windowSize " + windowSize);
+                canvas.planeDistance = cam.farClipPlane;
             }
         }
         else
