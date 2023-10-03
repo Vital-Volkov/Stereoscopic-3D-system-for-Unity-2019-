@@ -304,6 +304,8 @@ public class Stereo3D : MonoBehaviour
     //Vector2 panelOverlayDepthMinMax;
     AdditionalS3DCamera[] additionalS3DCamerasStruct;
     //bool loaded;
+    LayerMask volumeLayerMask;
+    LayerMask probeLayerMask;
 
 #if UNITY_POST_PROCESSING_STACK_V2
     PostProcessLayer PPLayer;
@@ -586,7 +588,7 @@ public class Stereo3D : MonoBehaviour
 //                    //camData.CopyTo(rightCamData);
 //#endif
                     //cameraDataStruct = new CameraDataStruct(camData.renderPostProcessing, camData.antialiasing);
-                    //SetCameraDataStruct();
+                    //CameraDataStruct_Set();
                     //cameraDataStruct = new CameraDataStruct();
                     //cameraDataStruct = cam.GetUniversalAdditionalCameraData() as CameraDataStruct;
                     //cameraDataStruct = new GameObject("camHelper").AddComponent<UniversalAdditionalCameraData>();
@@ -771,13 +773,15 @@ public class Stereo3D : MonoBehaviour
             //#elif HDRP
 #if HDRP
             camData = cam.GetComponent<HDAdditionalCameraData>();
+            volumeLayerMask = camData.volumeLayerMask;
+            probeLayerMask = camData.probeLayerMask;
             HDRPAsset = GraphicsSettings.currentRenderPipeline as HDRenderPipelineAsset;
             defaultHDRPSettings = HDRPSettings = HDRPAsset.currentPlatformRenderPipelineSettings;
             HDRPSettings.colorBufferFormat = RenderPipelineSettings.ColorBufferFormat.R16G16B16A16;
             typeof(HDRenderPipelineAsset).GetField("m_RenderPipelineSettings", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(GraphicsSettings.currentRenderPipeline, HDRPSettings);
             //Invoke("Test", 5);
 #endif
-            SetCameraDataStruct();
+            CameraDataStruct_Set();
 
             if (GUIAsOverlay)
             {
@@ -1595,7 +1599,7 @@ public class Stereo3D : MonoBehaviour
 
         //Invoke("AdditionalS3DCamerasListModify", 5);
         //camData = cam.GetUniversalAdditionalCameraData();
-        //SetCameraDataStruct();
+        //CameraDataStruct_Set();
         //lastCameraDataStruct = cameraDataStruct;
         //Debug.Log("Time.deltaTime " + Time.deltaTime);
         //Invoke("SetLastCameraDataStruct", Time.deltaTime * 8);
@@ -2148,7 +2152,7 @@ public class Stereo3D : MonoBehaviour
         //}
 #endif
 
-        SetCameraDataStruct();
+        CameraDataStruct_Set();
 
         //if (canvas.gameObject.activeSelf && caret == null)
         //{
@@ -2453,12 +2457,12 @@ public class Stereo3D : MonoBehaviour
 
         //cameraDataStruct = new CameraDataStruct(cam.GetUniversalAdditionalCameraData().renderPostProcessing, cam.GetUniversalAdditionalCameraData().antialiasing);
         //cameraDataStruct = new CameraDataStruct(camData.renderType, camData.renderPostProcessing, camData.antialiasing);
-        //SetCameraDataStruct();
+        //CameraDataStruct_Set();
 
         //if (cloneCamera)
         //{
         //if (camData)
-        //SetCameraDataStruct();
+        //CameraDataStruct_Set();
 
         //cameraDataStruct.renderPostProcessing = camData.renderPostProcessing;
         //cameraDataStruct.antialiasing = camData.antialiasing;
@@ -4153,9 +4157,16 @@ public class Stereo3D : MonoBehaviour
 #endif
                 cam.cullingMask = 0;
 
+#if HDRP
+            camData.volumeLayerMask = 0;
+            camData.probeLayerMask = 0;
+            CameraDataStruct_Set();
+            lastCameraDataStruct = cameraDataStruct;
+#endif
+
             //Invoke("VCamCullingOff", 10);
             //leftCam.enabled = true;
-		    //rightCam.enabled = true;
+            //rightCam.enabled = true;
             leftCam.enabled = rightCam.enabled = true;
 
             if (additionalS3DCamerasStruct != null)
@@ -4636,6 +4647,12 @@ public class Stereo3D : MonoBehaviour
                 }
 
         cam.cullingMask = cullingMask;
+#if HDRP
+        camData.volumeLayerMask = volumeLayerMask;
+        camData.probeLayerMask = probeLayerMask;
+        CameraDataStruct_Set();
+        lastCameraDataStruct = cameraDataStruct;
+#endif
         //cam.nearClipPlane = nearClip;
         //Debug.Log("ReleaseRT nearClip " + nearClip);
 
@@ -4644,13 +4661,13 @@ public class Stereo3D : MonoBehaviour
         //else
         //    cam.nearClipPlane = sceneNearClip;
 
-//#if CINEMACHINE
-//        VCamClipRestore();
-//        //nearClipHackApplied = false;
-//#else
-//        cam.nearClipPlane = sceneNearClip;
-//        cam.farClipPlane = sceneFarClip;
-//#endif
+        //#if CINEMACHINE
+        //        VCamClipRestore();
+        //        //nearClipHackApplied = false;
+        //#else
+        //        cam.nearClipPlane = sceneNearClip;
+        //        cam.farClipPlane = sceneFarClip;
+        //#endif
 
         //nearClipHackApplied = false;
 
@@ -5087,7 +5104,7 @@ public class Stereo3D : MonoBehaviour
     //    camData.requiresColorOption = CameraOverrideOption.Off;
     //}
 
-    void SetCameraDataStruct()
+    void CameraDataStruct_Set()
     {
         cameraDataStruct = new CameraDataStruct(
 #if URP
@@ -5191,44 +5208,44 @@ public class Stereo3D : MonoBehaviour
         public bool renderShadows;
         public bool dithering;
 #elif HDRP
-        HDAdditionalCameraData.ClearColorMode clearColorMode;
-        Color backgroundColorHDR;
-        bool clearDepth;
-        bool customRenderingSettings;
-        LayerMask volumeLayerMask;
-        Transform volumeAnchorOverride;
-        HDAdditionalCameraData.AntialiasingMode antialiasing;
-        bool dithering;
-        bool xrRendering;
-        HDAdditionalCameraData.SMAAQualityLevel SMAAQuality;
-        bool stopNaNs;
-        float taaSharpenStrength;
-        HDAdditionalCameraData.TAAQualityLevel TAAQuality;
-        float taaHistorySharpening;
-        float taaAntiFlicker;
-        float taaMotionVectorRejection;
-        bool taaAntiHistoryRinging;
-        float taaBaseBlendFactor;
-        float taaJitterScale;
-        HDAdditionalCameraData.FlipYMode flipYMode;
-        bool fullscreenPassthrough;
-        bool allowDynamicResolution;
-        bool invertFaceCulling;
-        LayerMask probeLayerMask;
-        bool hasPersistentHistory;
-        GameObject exposureTarget;
-        HDPhysicalCamera physicalParameters;
-        FrameSettings renderingPathCustomFrameSettings;
-        FrameSettingsOverrideMask renderingPathCustomFrameSettingsOverrideMask;
-        FrameSettingsRenderType defaultFrameSettings;
-        //object probeCustomFixedExposure;
+        public HDAdditionalCameraData.ClearColorMode clearColorMode;
+        public Color backgroundColorHDR;
+        public bool clearDepth;
+        public bool customRenderingSettings;
+        public LayerMask volumeLayerMask;
+        public Transform volumeAnchorOverride;
+        public HDAdditionalCameraData.AntialiasingMode antialiasing;
+        public bool dithering;
+        public bool xrRendering;
+        public HDAdditionalCameraData.SMAAQualityLevel SMAAQuality;
+        public bool stopNaNs;
+        public float taaSharpenStrength;
+        public HDAdditionalCameraData.TAAQualityLevel TAAQuality;
+        public float taaHistorySharpening;
+        public float taaAntiFlicker;
+        public float taaMotionVectorRejection;
+        public bool taaAntiHistoryRinging;
+        public float taaBaseBlendFactor;
+        public float taaJitterScale;
+        public HDAdditionalCameraData.FlipYMode flipYMode;
+        public bool fullscreenPassthrough;
+        public bool allowDynamicResolution;
+        public bool invertFaceCulling;
+        public LayerMask probeLayerMask;
+        public bool hasPersistentHistory;
+        public GameObject exposureTarget;
+        public HDPhysicalCamera physicalParameters;
+        public FrameSettings renderingPathCustomFrameSettings;
+        public FrameSettingsOverrideMask renderingPathCustomFrameSettingsOverrideMask;
+        public FrameSettingsRenderType defaultFrameSettings;
+        public //object probeCustomFixedExposure;
         bool allowDeepLearningSuperSampling;
-        bool deepLearningSuperSamplingUseCustomQualitySettings;
-        uint deepLearningSuperSamplingQuality;
-        bool deepLearningSuperSamplingUseCustomAttributes;
-        bool deepLearningSuperSamplingUseOptimalSettings;
-        float deepLearningSuperSamplingSharpening;
-        float materialMipBias;
+        public bool deepLearningSuperSamplingUseCustomQualitySettings;
+        public uint deepLearningSuperSamplingQuality;
+        public bool deepLearningSuperSamplingUseCustomAttributes;
+        public bool deepLearningSuperSamplingUseOptimalSettings;
+        public float deepLearningSuperSamplingSharpening;
+        public float materialMipBias;
 #endif
         public float depth;
         public bool useOcclusionCulling;
