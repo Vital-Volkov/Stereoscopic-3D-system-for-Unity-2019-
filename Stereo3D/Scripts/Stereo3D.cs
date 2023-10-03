@@ -3185,7 +3185,7 @@ public class Stereo3D : MonoBehaviour
                 //canvas.GetComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
                 //canvas.GetComponent<CanvasScaler>().referenceResolution = canvasSize;
                 //Debug.Log("canvasSize " + canvasSize + " windowSize " + windowSize);
-                canvas.planeDistance = cam.farClipPlane;
+                canvas.planeDistance = cam.farClipPlane * .5f;
             }
         }
         else
