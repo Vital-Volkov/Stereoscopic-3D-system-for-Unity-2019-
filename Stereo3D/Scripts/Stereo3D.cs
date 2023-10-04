@@ -31,6 +31,7 @@ using System.Reflection;
 
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
+using UnityEngine.InputSystem.Utilities;
 
 //using System.ComponentModel;
 //using UnityEngine.InputSystem.Composites;
@@ -147,6 +148,14 @@ public class Stereo3D : MonoBehaviour
     bool cursorInputForLookDefault;
     //InputActionAsset S3DInputActionAsset;
     PlayerInput playerInput;
+    string GuiActionPath;
+    string S3DActionPath;
+    string FOVActionPath1;
+    string FOVActionPath2;
+    string modifier1ActionPath;
+    string modifier2ActionPath;
+    string modifier3ActionPath;
+
 #else
     public KeyCode GUIKey = KeyCode.Tab; //GUI window show/hide Key
     public KeyCode S3DKey = KeyCode.KeypadMultiply; //S3D enable/disable shortcut Key and hold "LeftControl" Key to swap left-right cameras
@@ -333,6 +342,7 @@ public class Stereo3D : MonoBehaviour
 #endif
 
     float GUI_Set_delay;
+    ReadOnlyArray<InputBinding> GUIActionBindings;
 
     public void Awake()
     {
@@ -346,6 +356,8 @@ public class Stereo3D : MonoBehaviour
 
             if (GUIAction.bindings.Count == 0)
                 GUIAction.AddBinding("<Keyboard>/tab");
+
+            //GUIActionBindings = GUIAction.bindings;
 
             if (S3DAction.bindings.Count == 0)
                 S3DAction.AddBinding("<Keyboard>/numpadMultiply");
@@ -371,6 +383,14 @@ public class Stereo3D : MonoBehaviour
             //FOVAction.performed += context => { OnVirtualIPDAction(context); };
             //modifier1Action.performed += context => { OnModifier1Action(context); };
             //modifier2Action.performed += context => { OnModifier2Action(context); };
+
+            GuiActionPath = GUIAction.bindings[0].path;
+            S3DActionPath = S3DAction.bindings[0].path;
+            FOVActionPath1 = FOVAction.bindings[1].path;
+            FOVActionPath2 = FOVAction.bindings[2].path;
+            modifier1ActionPath = modifier1Action.bindings[0].path;
+            modifier2ActionPath = modifier2Action.bindings[0].path;
+            modifier3ActionPath = modifier3Action.bindings[0].path;
 #endif
         }
     }
@@ -1630,9 +1650,82 @@ public class Stereo3D : MonoBehaviour
     float averageTime;
     int frames;
     int averageFPS;
+    bool changed;
 
     void Update()
     {
+        //Debug.Log(GUIAction.bindings[0].path);
+        //Debug.Log(GUIAction.bindings.Count);
+
+        //if (!changed && GUIAction.bindings[0].path != "<Keyboard>/tab")
+        //    if (!changed && Time.time > 5)
+        //    {
+        //        Debug.Log("GUIAction.bindings[0].path != ' < Keyboard >/ tab'");
+        //        Debug.Log("!changed && Time.time > 5");
+        //        changed = true;
+        //        GUIAction.Disable();
+        //        GUIAction.Reset();
+        //        GUIAction.AddBinding("<Keyboard>/backspace");
+        //        GUIAction.ChangeBinding(0).WithPath("<Keyboard>/backspace");
+        //        Debug.Log("GUIAction.bindings[0].path " + GUIAction.bindings[0].path);
+        //        Debug.Log("GUIAction.bindings " + GUIAction.bindings[1]);
+        //        GUIAction.Enable();
+        //        Debug.Log(GUIAction.actionMap.actions);
+        //    }
+
+#if UNITY_EDITOR && ENABLE_INPUT_SYSTEM
+
+        if (GuiActionPath != GUIAction.bindings[0].path)
+        //if (!GUIActionBindings.Equals(GUIAction.bindings))
+        //if (!Equals(GUIActionBindings, GUIAction.bindings))
+        //if (GUIActionBindings.Count != GUIAction.bindings.Count)
+        {
+            Debug.Log("GuiActionPath != GUIAction.bindings[0].path");
+            //Debug.Log("!GUIActionBindings.Equals(GUIAction.bindings)");
+            GuiActionPath = GUIAction.bindings[0].path;
+            GUIAction.ChangeBinding(0).WithPath(GUIAction.bindings[0].path);
+            //GUIActionBindings = GUIAction.bindings;
+        }
+
+        if (S3DActionPath != S3DAction.bindings[0].path)
+        {
+            S3DActionPath = S3DAction.bindings[0].path;
+            S3DAction.ChangeBinding(0).WithPath(S3DAction.bindings[0].path);
+        }
+
+        if (FOVActionPath1 != FOVAction.bindings[1].path)
+        {
+            //Debug.Log("FOVActionPath1 != FOVAction.bindings[1].path");
+            FOVActionPath1 = FOVAction.bindings[1].path;
+            FOVAction.ChangeBinding(1).WithPath(FOVAction.bindings[1].path);
+        }
+
+        if (FOVActionPath2 != FOVAction.bindings[2].path)
+        {
+            //Debug.Log("FOVActionPath2 != FOVAction.bindings[2].path");
+            FOVActionPath2 = FOVAction.bindings[2].path;
+            FOVAction.ChangeBinding(2).WithPath(FOVAction.bindings[2].path);
+        }
+
+        if (modifier1ActionPath != modifier1Action.bindings[0].path)
+        {
+            modifier1ActionPath = modifier1Action.bindings[0].path;
+            modifier1Action.ChangeBinding(0).WithPath(modifier1Action.bindings[0].path);
+        }
+
+        if (modifier2ActionPath != modifier2Action.bindings[0].path)
+        {
+            modifier2ActionPath = modifier2Action.bindings[0].path;
+            modifier2Action.ChangeBinding(0).WithPath(modifier2Action.bindings[0].path);
+        }
+
+        if (modifier3ActionPath != modifier3Action.bindings[0].path)
+        {
+            modifier3ActionPath = modifier3Action.bindings[0].path;
+            modifier3Action.ChangeBinding(0).WithPath(modifier3Action.bindings[0].path);
+        }
+#endif
+
         //Debug.Log("sceneNearClip = " + sceneNearClip);
         //Debug.Log("Update " + Time.time);
         //Debug.Log(camData + " " + leftCamData);
