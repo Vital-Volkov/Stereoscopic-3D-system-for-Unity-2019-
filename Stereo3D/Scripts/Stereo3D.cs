@@ -155,7 +155,7 @@ public class Stereo3D : MonoBehaviour
     string modifier1ActionPath;
     string modifier2ActionPath;
     string modifier3ActionPath;
-
+    //ReadOnlyArray<InputBinding> GUIActionBindings;
 #else
     public KeyCode GUIKey = KeyCode.Tab; //GUI window show/hide Key
     public KeyCode S3DKey = KeyCode.KeypadMultiply; //S3D enable/disable shortcut Key and hold "LeftControl" Key to swap left-right cameras
@@ -342,7 +342,6 @@ public class Stereo3D : MonoBehaviour
 #endif
 
     float GUI_Set_delay;
-    ReadOnlyArray<InputBinding> GUIActionBindings;
 
     public void Awake()
     {
@@ -356,8 +355,6 @@ public class Stereo3D : MonoBehaviour
 
             if (GUIAction.bindings.Count == 0)
                 GUIAction.AddBinding("<Keyboard>/tab");
-
-            //GUIActionBindings = GUIAction.bindings;
 
             if (S3DAction.bindings.Count == 0)
                 S3DAction.AddBinding("<Keyboard>/numpadMultiply");
@@ -384,6 +381,7 @@ public class Stereo3D : MonoBehaviour
             //modifier1Action.performed += context => { OnModifier1Action(context); };
             //modifier2Action.performed += context => { OnModifier2Action(context); };
 
+            //GUIActionBindings = GUIAction.bindings;
             GuiActionPath = GUIAction.bindings[0].path;
             S3DActionPath = S3DAction.bindings[0].path;
             FOVActionPath1 = FOVAction.bindings[1].path;
@@ -1654,6 +1652,7 @@ public class Stereo3D : MonoBehaviour
 
     void Update()
     {
+#if UNITY_EDITOR && ENABLE_INPUT_SYSTEM
         //Debug.Log(GUIAction.bindings[0].path);
         //Debug.Log(GUIAction.bindings.Count);
 
@@ -1672,8 +1671,6 @@ public class Stereo3D : MonoBehaviour
         //        GUIAction.Enable();
         //        Debug.Log(GUIAction.actionMap.actions);
         //    }
-
-#if UNITY_EDITOR && ENABLE_INPUT_SYSTEM
 
         if (GuiActionPath != GUIAction.bindings[0].path)
         //if (!GUIActionBindings.Equals(GUIAction.bindings))
