@@ -128,7 +128,7 @@ public class Stereo3D : MonoBehaviour
     public bool cloneCamera = true;
     public GameObject cameraPrefab; //if empty, Stereo3D cameras are copies of the main cam. Set prefab if need custom settings &/or components
     public RenderTextureFormat RTFormat = RenderTextureFormat.DefaultHDR; //DefaultHDR(16bitFloat) be able to contain Post Process Effects and give fps gain from 328 to 343. In my case RGB111110Float is fastest - 346fps.
-    public bool setMatrixDirectly = true; //shift image Vanish points to User IPD directly via camera Matrix(gives fps boost) or via camera's "physically" settings "lensShift"(required for Post Processing Stack V2 pack as it resets matrix and yields incorrect aspect)
+    //public bool setMatrixDirectly = true; //shift image Vanish points to User IPD directly via camera Matrix(gives fps boost) or via camera's "physically" settings "lensShift"(required for Post Processing Stack V2 pack as it resets matrix and yields incorrect aspect)
     public string slotName = "User1";
     public bool loadSettingsFromFile = true; //autoload settings at start from last saved file
     public bool nearClipHack; //Hack for FPS gain in SRP(Scriptable Render Pipeline) and required for custom Viewport Rect but can cause terrain gaps(Test Track Demo in Unity 2021)
@@ -179,7 +179,7 @@ public class Stereo3D : MonoBehaviour
     //Camera camClone;
     Camera leftCam;
     Camera rightCam;
-    int cullingMask;
+    int sceneCullingMask;
     float nearClip;
     float sceneNearClip;
     float farClip;
@@ -211,7 +211,7 @@ public class Stereo3D : MonoBehaviour
     bool lastGUISizeKeep;
     GameObject lastCameraPrefab;
     RenderTextureFormat lastRTFormat;
-    bool lastSetMatrixDirectly;
+    //bool lastSetMatrixDirectly;
     //InterlaceType lastInterlaceType;
     //Color lastAnaglyphLeftColor;
     //Color lastAnaglyphRightColor;
@@ -300,6 +300,7 @@ public class Stereo3D : MonoBehaviour
     RenderPipelineSettings HDRPSettings;
     RenderPipelineSettings defaultHDRPSettings;
     //RenderPipelineSettings.ColorBufferFormat defaultColorBufferFormat;
+    HDAdditionalCameraData canvasCamData;
 #endif
     //UniversalAdditionalCameraData camCloneData;
     //List<UniversalAdditionalCameraData> oldList;
@@ -324,7 +325,7 @@ public class Stereo3D : MonoBehaviour
 #if CINEMACHINE
     bool cineBrain;
     Cinemachine.ICinemachineCamera vCam;
-    Cinemachine.ICinemachineCamera defaultVCam;
+    //Cinemachine.ICinemachineCamera defaultVCam;
     //Cinemachine.CinemachineBrain brain;
     //bool vCamSceneClipSetInProcess;
     bool vCamSceneClipIsReady;
@@ -342,6 +343,10 @@ public class Stereo3D : MonoBehaviour
 #endif
 
     float GUI_Set_delay;
+    //float setLastCameraDataStructTime;
+    bool cameraDataStructIsReady;
+    bool physicalCamera;
+    Vector2 camVanishPoint;
 
     public void Awake()
     {
@@ -402,7 +407,7 @@ public class Stereo3D : MonoBehaviour
 
         if (!name.Contains("(Clone)"))
         {
-            Debug.Log("OnEnable");
+            Debug.Log("OnEnable cameraDataStructIsReady " + cameraDataStructIsReady);
             //Debug.Log("windowSize " + windowSize);
             //List<Type> types = GetAllTypesInAssembly(new string[] { "Assembly-CSharp" });
             //Debug.Log(types.Count);
@@ -443,20 +448,25 @@ public class Stereo3D : MonoBehaviour
             S3DPanelMaterial = Resources.Load<Material>("3D_Panel");
 
             cam = GetComponent<Camera>();
+            cam.orthographic = false; //S3D is not possible in orthographic
             cam.stereoTargetEye = StereoTargetEyeMask.None;
-            cullingMask = cam.cullingMask;
+            sceneCullingMask = cam.cullingMask;
+            physicalCamera = cam.usePhysicalProperties;
+            camVanishPoint = new Vector2(cam.projectionMatrix[0, 2], cam.projectionMatrix[1, 2]);
+            nearClip = sceneNearClip = cam.nearClipPlane;
+            farClip = sceneFarClip = cam.farClipPlane;
 
 #if CINEMACHINE
-        //if (GetComponent<Cinemachine.CinemachineBrain>().enabled)
-        //{
-        //    //brain = GetComponent<Cinemachine.CinemachineBrain>();
-        //    cineBrain = true;
-        //    Invoke("GetVCam", Time.deltaTime);
-        //}
-        //else
-        //    sceneNearClip = cam.nearClipPlane;
+            //if (GetComponent<Cinemachine.CinemachineBrain>().enabled)
+            //{
+            //    //brain = GetComponent<Cinemachine.CinemachineBrain>();
+            //    cineBrain = true;
+            //    Invoke("GetVCam", Time.deltaTime);
+            //}
+            //else
+            //    sceneNearClip = cam.nearClipPlane;
 
-        if (GetComponent<Cinemachine.CinemachineBrain>() && GetComponent<Cinemachine.CinemachineBrain>().enabled)
+            if (GetComponent<Cinemachine.CinemachineBrain>() && GetComponent<Cinemachine.CinemachineBrain>().enabled)
         {
             //brain = GetComponent<Cinemachine.CinemachineBrain>();
             cineBrain = true;
@@ -465,13 +475,14 @@ public class Stereo3D : MonoBehaviour
             Invoke("GetVCam", Time.deltaTime);
             //GetVCam();
         }
-        else
+        //else
 #endif
-            {
-                sceneNearClip = cam.nearClipPlane;
-                Debug.Log("********************************************************************************************************************sceneNearClip = " + sceneNearClip);
-                sceneFarClip = cam.farClipPlane;
-            }
+            //{
+            //    //sceneNearClip = cam.nearClipPlane;
+            //    //sceneFarClip = cam.farClipPlane;
+            //    nearClip = sceneNearClip = cam.nearClipPlane;
+            //    farClip = sceneFarClip = cam.farClipPlane;
+            //}
 
             //Debug.Log("OnEnable sceneNearClip " + sceneNearClip);
 
@@ -482,7 +493,8 @@ public class Stereo3D : MonoBehaviour
             PPLayerEnabled = PPLayer.enabled;
 
             if (PPLayerEnabled)
-                setMatrixDirectly = false;
+                //setMatrixDirectly = false;
+                cam.usePhysicalProperties = true;
         }
 #endif
 
@@ -502,9 +514,9 @@ public class Stereo3D : MonoBehaviour
             if (cameraPrefab)
             {
                 leftCam = Instantiate(cameraPrefab, transform.position, transform.rotation).GetComponent<Camera>();
-                leftCam.name = "leftCam";
+                leftCam.name = "prefabCamera_left";
                 rightCam = Instantiate(cameraPrefab, transform.position, transform.rotation).GetComponent<Camera>();
-                rightCam.name = "rightCam";
+                rightCam.name = "prefabCamera_right";
             }
             else
             {
@@ -532,11 +544,11 @@ public class Stereo3D : MonoBehaviour
                     //leftCam = Instantiate(cam.gameObject, transform.position, transform.rotation).GetComponent<Camera>();
                     leftCam = Instantiate(cam, transform.position, transform.rotation);
                     leftCam.tag = "Untagged";
-                    leftCam.name += "_leftCam";
+                    leftCam.name += "_left";
                     //rightCam = Instantiate(cam.gameObject, transform.position, transform.rotation).GetComponent<Camera>();
                     rightCam = Instantiate(cam, transform.position, transform.rotation);
                     rightCam.tag = "Untagged";
-                    rightCam.name += "_rightCam";
+                    rightCam.name += "_right";
 
                     //for (int child = 0; child < leftCam.transform.childCount; child++)
                     //{
@@ -613,8 +625,8 @@ public class Stereo3D : MonoBehaviour
                 }
                 else
                 {
-                    leftCam = new GameObject("leftCam").AddComponent<Camera>();
-                    rightCam = new GameObject("rightCam").AddComponent<Camera>();
+                    leftCam = new GameObject("camera_left").AddComponent<Camera>();
+                    rightCam = new GameObject("camera_right").AddComponent<Camera>();
                     leftCam.CopyFrom(cam);
                     rightCam.CopyFrom(cam);
                     //GameObject lc = new GameObject("leftCam");
@@ -665,13 +677,16 @@ public class Stereo3D : MonoBehaviour
             //leftCam.rect = rightCam.rect = new Rect(0, 0, Mathf.Max(1 / cam.rect.width * (1 - cam.rect.x), 1), Mathf.Max(1 / cam.rect.height * (1 - cam.rect.y), 1));
             //leftCam.depth = rightCam.depth = cam.depth;
             leftCam.transform.parent = rightCam.transform.parent = transform;
+            leftCam.usePhysicalProperties = rightCam.usePhysicalProperties = cam.usePhysicalProperties;
             leftCam.stereoTargetEye = StereoTargetEyeMask.Left;
             rightCam.stereoTargetEye = StereoTargetEyeMask.Right;
+            //Debug.Log("sceneCullingMask " + sceneCullingMask);
 
             if (Screen.dpi != 0)
                 PPI = Screen.dpi;
 
             canvas = Instantiate(Resources.Load<Canvas>("Canvas"), transform.position, transform.rotation);
+            canvas.gameObject.SetActive(false);
             //canvas.transform.parent = transform;
             canvas.transform.SetParent(transform);
             canvasRayCam = canvas.gameObject.AddComponent<Camera>();
@@ -685,7 +700,7 @@ public class Stereo3D : MonoBehaviour
             canvasRayCam.cullingMask = 0;
             canvasRayCam.useOcclusionCulling = false;
             canvas.worldCamera = canvasRayCam;
-            canvas.pixelPerfect = true;
+            //canvas.pixelPerfect = true;
             additionalS3DCamerasStruct = new AdditionalS3DCamera[additionalS3DCameras.Count];
 
 #if URP
@@ -709,16 +724,16 @@ public class Stereo3D : MonoBehaviour
 
             //foreach (var c in additionalS3DCameras)
             //{
-            //    if (c && !c.transform.Find(c.name + "(Clone)_leftCam"))
+            //    if (c && !c.transform.Find(c.name + "(Clone)_left"))
             //    {
             //        Camera cloneLeft = Instantiate(c, c.transform.position, c.transform.rotation);
             //        cloneLeft.tag = "Untagged";
-            //        cloneLeft.name += "_leftCam";
+            //        cloneLeft.name += "_left";
             //        cloneLeft.stereoTargetEye = StereoTargetEyeMask.Left;
             //        //cloneLeft.targetTexture = leftCamRT;
             //        Camera cloneRight = Instantiate(c, c.transform.position, c.transform.rotation);
             //        cloneRight.tag = "Untagged";
-            //        cloneRight.name += "_rightCam";
+            //        cloneRight.name += "_right";
             //        cloneRight.stereoTargetEye = StereoTargetEyeMask.Right;
             //        //cloneRight.targetTexture = rightCamRT;
 
@@ -734,16 +749,16 @@ public class Stereo3D : MonoBehaviour
             //}
 
             foreach (var c in cameraStack)
-                if (additionalS3DCameras.Contains(c) && !c.transform.Find(c.name + "(Clone)_leftCam"))
+                if (additionalS3DCameras.Contains(c) && !c.transform.Find(c.name + "(Clone)_left"))
                 {
                     Camera cloneLeft = Instantiate(c, c.transform.position, c.transform.rotation);
                     cloneLeft.tag = "Untagged";
-                    cloneLeft.name += "_leftCam";
+                    cloneLeft.name += "_left";
                     cloneLeft.stereoTargetEye = StereoTargetEyeMask.Left;
                     //cloneLeft.targetTexture = leftCamRT;
                     Camera cloneRight = Instantiate(c, c.transform.position, c.transform.rotation);
                     cloneRight.tag = "Untagged";
-                    cloneRight.name += "_rightCam";
+                    cloneRight.name += "_right";
                     cloneRight.stereoTargetEye = StereoTargetEyeMask.Right;
                     //cloneRight.targetTexture = rightCamRT;
 
@@ -767,7 +782,7 @@ public class Stereo3D : MonoBehaviour
 
             foreach (var c in additionalS3DCameras)
             {
-                if (c && !c.transform.Find(c.name + "(Clone)_leftCam"))
+                if (c && !c.transform.Find(c.name + "(Clone)_left"))
                 {
 #if HDRP
                     HDAdditionalCameraData additionalCamData = c.gameObject.GetComponent<HDAdditionalCameraData>();
@@ -786,14 +801,17 @@ public class Stereo3D : MonoBehaviour
 
                     Camera cloneLeft = Instantiate(c, c.transform.position, c.transform.rotation);
                     cloneLeft.tag = "Untagged";
-                    cloneLeft.name += "_leftCam";
+                    cloneLeft.name += "_left";
                     cloneLeft.stereoTargetEye = StereoTargetEyeMask.Left;
+                    cloneLeft.rect = Rect.MinMaxRect(0, 0, 1, 1);
                     Camera cloneRight = Instantiate(c, c.transform.position, c.transform.rotation);
                     cloneRight.tag = "Untagged";
-                    cloneRight.name += "_rightCam";
+                    cloneRight.name += "_right";
                     cloneRight.stereoTargetEye = StereoTargetEyeMask.Right;
+                    cloneRight.rect = Rect.MinMaxRect(0, 0, 1, 1);
 
                     cloneLeft.transform.parent = cloneRight.transform.parent = c.transform;
+                    cloneLeft.usePhysicalProperties = cloneRight.usePhysicalProperties = c.usePhysicalProperties = cam.usePhysicalProperties;
 
                     int index = additionalS3DCameras.IndexOf(c);
                     additionalS3DCamerasStruct[index].camera = c;
@@ -814,7 +832,7 @@ public class Stereo3D : MonoBehaviour
             typeof(HDRenderPipelineAsset).GetField("m_RenderPipelineSettings", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(GraphicsSettings.currentRenderPipeline, HDRPSettings);
             //Invoke("Test", 5);
 #endif
-                    CameraDataStruct_Set();
+            CameraDataStruct_Set();
 
             if (GUIAsOverlay)
             {
@@ -824,16 +842,16 @@ public class Stereo3D : MonoBehaviour
                 canvasCam.CopyFrom(canvasRayCam);
 #if URP
                 canvasCam.GetUniversalAdditionalCameraData().renderShadows = false; //not copied
-                canvasCam.clearFlags = CameraClearFlags.Nothing;
+                //canvasCam.clearFlags = CameraClearFlags.Nothing;
 #else
-                canvasCam.clearFlags = CameraClearFlags.Color;
+                //canvasCam.clearFlags = CameraClearFlags.Color;
                 canvasCam.backgroundColor = Color.clear;
 #endif
                 //canvasCam.transform.parent = canvas.transform;
                 canvasCam.transform.SetParent(canvas.transform);
                 //orthoCamSet(canvasCam);
 
-                //leftCam.cullingMask = rightCam.cullingMask = cam.cullingMask = cullingMask & ~(1 << 5); //exclude UI layer
+                //leftCam.cullingMask = rightCam.cullingMask = cam.cullingMask = sceneCullingMask & ~(1 << 5); //exclude UI layer
                 canvasCam.cullingMask = canvasCam.cullingMask | (1 << 5); //add UI layer
                 //canvasCam.GetUniversalAdditionalCameraData().renderType = CameraRenderType.Overlay;
                 //canvasCam.enabled = false;
@@ -895,9 +913,10 @@ public class Stereo3D : MonoBehaviour
                 ////HDCamDataCopy_Get();
                 //selectedObject = UnityEditor.Selection.activeGameObject;
                 //CanvasCamHDRPData_Set(); //get HDRP HDAdditionalCameraData by select runtime created canvasCam object in the editor
-                HDAdditionalCameraData canvasCamData = canvasCam.gameObject.AddComponent<HDAdditionalCameraData>();
+                //HDAdditionalCameraData canvasCamData = canvasCam.gameObject.AddComponent<HDAdditionalCameraData>();
+                canvasCamData = canvasCam.gameObject.AddComponent<HDAdditionalCameraData>();
                 canvasCamData.volumeLayerMask = 0;
-                canvasCamData.clearColorMode = HDAdditionalCameraData.ClearColorMode.Color;
+                //canvasCamData.clearColorMode = HDAdditionalCameraData.ClearColorMode.Color;
                 canvasCamData.backgroundColorHDR = Color.clear;
                 //canvasCamData.clearDepth = true;
                 canvasCamData.probeLayerMask = 0;
@@ -1134,6 +1153,13 @@ public class Stereo3D : MonoBehaviour
             slotName_dropdown.onValueChanged.AddListener(SlotName_Dropdown);
             //slotName_dropdown.template.sizeDelta = new Vector2(362, 30);
             //DropdownClick(slotName_dropdown);
+
+            trigger = slotName_dropdown.gameObject.AddComponent<EventTrigger>();
+            entry = new EventTrigger.Entry();
+            entry.eventID = EventTriggerType.Select;
+            entry.callback.AddListener((eventData) => { SlotName_DropdownSelect(); });
+            trigger.triggers.Add(entry);
+
             save_button = panel.Find("Button (Legacy)_Save").GetComponent<Button>();
             save_button.onClick.AddListener(Save_Button);
             load_button = panel.Find("Button (Legacy)_Load").GetComponent<Button>();
@@ -1230,7 +1256,7 @@ public class Stereo3D : MonoBehaviour
             lastGUISizeKeep = GUISizeKeep;
             lastCameraPrefab = cameraPrefab;
             lastRTFormat = RTFormat;
-            lastSetMatrixDirectly = setMatrixDirectly;
+            //lastSetMatrixDirectly = setMatrixDirectly;
             //lastInterlaceType = interlaceType;
             //lastAnaglyphLeftColor = anaglyphLeftColor;
             //lastAnaglyphRightColor = anaglyphRightColor;
@@ -1240,7 +1266,20 @@ public class Stereo3D : MonoBehaviour
             lastMatrixKillHack = matrixKillHack;
             lastCanvasLocalPosZ = canvasLocalPosZ;
             lastCloneCamera = cloneCamera;
-            lastCameraDataStruct = cameraDataStruct;
+            //lastCameraDataStruct = cameraDataStruct;
+            //setLastCameraDataStructTime = Time.deltaTime * 32;
+            //float setLastCameraDataStructTime = Time.deltaTime * 32;
+            //float setLastCameraDataStructTime = 1f / Screen.currentResolution.refreshRate * 32;
+            //float setLastCameraDataStructTime = .021f;
+            //Debug.Log("OnEnable setLastCameraDataStructTime " + setLastCameraDataStructTime);
+            //Invoke("SetLastCameraDataStruct", setLastCameraDataStructTime);
+            //Debug.Log("OnEnable before Invoke('SetLastCameraDataStruct'', setLastCameraDataStructTime) " + setLastCameraDataStructTime);
+            //Invoke("SetLastCameraDataStruct", setLastCameraDataStructTime);
+            Invoke("SetLastCameraDataStruct", .021f);
+
+            //for (int i = 0; i < additionalS3DCamerasStruct.Length; i++)
+            //        additionalS3DCamerasStruct[i].lastCameraDataStruct = additionalS3DCamerasStruct[i].cameraDataStruct;
+
             lastLoadSettingsFromFile = loadSettingsFromFile;
             //lastAdditionalS3DCameras = additionalS3DCameras;
             //lastAdditionalS3DCameras = (Camera[])additionalS3DCameras.Clone();
@@ -1384,23 +1423,23 @@ public class Stereo3D : MonoBehaviour
 
         if (S3DEnabled)
         {
-            //if (GUIAsOverlay)
-            //{
-            //    //if (!leftCameraStack.Contains(canvasCam))
-            //    //{
-            //    //    leftCameraStack.Add(canvasCam);
-            //    //    rightCameraStack.Add(canvasCam);
-            //    //}
+            if (GUIAsOverlay)
+            {
+                //if (!leftCameraStack.Contains(canvasCam))
+                //{
+                //    leftCameraStack.Add(canvasCam);
+                //    rightCameraStack.Add(canvasCam);
+                //}
 
-            //    ////leftCameraStack.Remove(canvasCam);
-            //    ////rightCameraStack.Remove(canvasCam);
-            //    ////leftCameraStack.Add(canvasCam);
-            //    ////rightCameraStack.Add(canvasCam);
-            //    //canvasCam.targetTexture = leftCamRT;
+                ////leftCameraStack.Remove(canvasCam);
+                ////rightCameraStack.Remove(canvasCam);
+                ////leftCameraStack.Add(canvasCam);
+                ////rightCameraStack.Add(canvasCam);
+                //canvasCam.targetTexture = leftCamRT;
 
-            //    cameraStack.Remove(canvasCam);
-            //    canvasCam.GetUniversalAdditionalCameraData().renderType = CameraRenderType.Base;
-            //}
+                cameraStack.Remove(canvasCam);
+                canvasCam.GetUniversalAdditionalCameraData().renderType = CameraRenderType.Base;
+            }
 
             //additionalS3DCamerasStruct = new AdditionalS3DCamera[additionalS3DCameras.Count];
             //int i = 0;
@@ -1413,12 +1452,12 @@ public class Stereo3D : MonoBehaviour
                     Debug.Log("additionalS3DCameras.Contains(c) " + c);
                     //Camera cloneLeft = Instantiate(c, c.transform.position, c.transform.rotation);
                     //cloneLeft.tag = "Untagged";
-                    //cloneLeft.name += "_leftCam";
+                    //cloneLeft.name += "_left";
                     //cloneLeft.stereoTargetEye = StereoTargetEyeMask.Left;
                     ////cloneLeft.targetTexture = leftCamRT;
                     //Camera cloneRight = Instantiate(c, c.transform.position, c.transform.rotation);
                     //cloneRight.tag = "Untagged";
-                    //cloneRight.name += "_rightCam";
+                    //cloneRight.name += "_right";
                     //cloneRight.stereoTargetEye = StereoTargetEyeMask.Right;
                     ////cloneRight.targetTexture = rightCamRT;
 
@@ -1478,19 +1517,19 @@ public class Stereo3D : MonoBehaviour
             //    //rightCameraStack.Remove(c);
 
             //    //foreach (var d in additionalS3DCameras)
-            //    //Debug.Log("CameraStackSet c.name.Replace("_leftCam", "")" + c.name.Replace("_leftCam", ""));
+            //    //Debug.Log("CameraStackSet c.name.Replace("_left", "")" + c.name.Replace("_left", ""));
 
-            //    //string cameraName = c.name.Replace("(Clone)_leftCam", "");
+            //    //string cameraName = c.name.Replace("(Clone)_left", "");
             //    //Debug.Log("CameraStackSet cameraName " + cameraName);
             //    Debug.Log("******************CameraStackSet var c in leftCameraStack " + c);
 
             //    //Camera additionalS3DCamera = additionalS3DCameras.Find(t => t.name == cameraName);
-            //    Camera additionalS3DCamera = additionalS3DCameras.Find(t => t.name == c.name.Replace("(Clone)_leftCam", ""));
+            //    Camera additionalS3DCamera = additionalS3DCameras.Find(t => t.name == c.name.Replace("(Clone)_left", ""));
             //    //Camera additionalS3DCamera = additionalS3DCameras.Find(t => t.name.Contains(cameraName));
 
             //    //Debug.Log("CameraStackSet additionalS3DCamera " + additionalS3DCamera);
 
-            //    //if (additionalS3DCameras.Find(t => t.name.Contains(c.name.Replace("_leftCam", ""))))
+            //    //if (additionalS3DCameras.Find(t => t.name.Contains(c.name.Replace("_left", ""))))
             //    if (additionalS3DCamera)
             //    //{
             //    //    if (!cameraStack.Contains(additionalS3DCamera))
@@ -1514,22 +1553,22 @@ public class Stereo3D : MonoBehaviour
             leftCameraStack.RemoveAll(t => t);
             rightCameraStack.RemoveAll(t => t);
 
-            //if (GUIAsOverlay)
-            //{
-            //    canvasCam.ResetProjectionMatrix();
-            //    canvasCam.targetTexture = null;
-            //    canvasCam.GetUniversalAdditionalCameraData().renderType = CameraRenderType.Overlay;
+            if (GUIAsOverlay)
+            {
+                //canvasCam.ResetProjectionMatrix();
+                //canvasCam.targetTexture = null;
+                canvasCam.GetUniversalAdditionalCameraData().renderType = CameraRenderType.Overlay;
 
-            //    //if (!cameraStack.Contains(canvasCam))
-            //    cameraStack.Add(canvasCam);
+                //if (!cameraStack.Contains(canvasCam))
+                cameraStack.Add(canvasCam);
 
-            //    //cameraStack.Remove(canvasCam);
-            //    //cameraStack.Add(canvasCam);
-            //    //canvasCam.targetTexture = null;
+                //cameraStack.Remove(canvasCam);
+                //cameraStack.Add(canvasCam);
+                //canvasCam.targetTexture = null;
 
-            //    //leftCameraStack.Remove(canvasCam);
-            //    //rightCameraStack.Remove(canvasCam);
-            //}
+                //leftCameraStack.Remove(canvasCam);
+                //rightCameraStack.Remove(canvasCam);
+            }
         }
 
         lastCameraStack = cameraStack.ToArray();
@@ -1543,9 +1582,9 @@ public class Stereo3D : MonoBehaviour
 #if URP
         foreach (var c in leftCameraStack)
         {
-            ////Camera additionalS3DCamera = additionalS3DCameras.Find(t => t.name == c.name.Replace("(Clone)_leftCam", ""));
+            ////Camera additionalS3DCamera = additionalS3DCameras.Find(t => t.name == c.name.Replace("(Clone)_left", ""));
             //Camera additionalS3DCamera = null;
-            //string cameraName = c.name.Replace("(Clone)_leftCam", "");
+            //string cameraName = c.name.Replace("(Clone)_left", "");
 
             //foreach (var s in additionalS3DCamerasStruct)
             //    if (s.camera.name == cameraName)
@@ -1556,7 +1595,7 @@ public class Stereo3D : MonoBehaviour
             //else
             //    cameraStack.Add(c);
 
-            if (c.name.Contains("_leftCam"))
+            if (c.name.Contains("_left"))
                 cameraStack.Add(c.transform.parent.GetComponent<Camera>());
             else
                 cameraStack.Add(c);
@@ -1610,41 +1649,50 @@ public class Stereo3D : MonoBehaviour
     bool autoshow;
     float S3DKeyTimer;
     bool S3DKeyLoaded;
-    bool camFOVChanged;
+    bool camFOVChangedExternal;
     bool GUIVisible;
     bool S3DActionPressed;
-    bool FOVSetInProcess;
+    //bool FOVSetInProcess;
     //float canvasEdgeOffset;
     bool panelDepth_sliderIsDragging;
     //int time;
     bool oddFrame;
     //float canvasHalfSizeY;
     //float newPanelDepth;
-    float setLastCameraDataStructTime;
+    //float setLastCameraDataStructTime;
     Vector2 cursorLocalPos;
 
     void Start()
     {
         Debug.Log("Start");
+        lastLoadSettingsFromFile = loadSettingsFromFile = false; //prevent reload settings by OnOffToggle
 
         //if (loadSettingsFromFile)
         //    LoadLastSave();
 
-        //Invoke("AdditionalS3DCamerasListModify", 5);
-        //camData = cam.GetUniversalAdditionalCameraData();
-        //CameraDataStruct_Set();
-        //lastCameraDataStruct = cameraDataStruct;
-        //Debug.Log("Time.deltaTime " + Time.deltaTime);
-        //Invoke("SetLastCameraDataStruct", Time.deltaTime * 8);
-        setLastCameraDataStructTime = Time.deltaTime * 32;
-        Invoke("SetLastCameraDataStruct", setLastCameraDataStructTime);
-        //Debug.Log("Start cameraDataStruct " + cameraDataStruct);
-        //Invoke("CamData_Change", 5);
+        ////Invoke("AdditionalS3DCamerasListModify", 5);
+        ////camData = cam.GetUniversalAdditionalCameraData();
+        ////CameraDataStruct_Set();
+        ////lastCameraDataStruct = cameraDataStruct;
+        ////Debug.Log("Time.deltaTime " + Time.deltaTime);
+        ////Invoke("SetLastCameraDataStruct", Time.deltaTime * 8);
+        //setLastCameraDataStructTime = Time.deltaTime * 32;
+        //Invoke("SetLastCameraDataStruct", setLastCameraDataStructTime);
+        ////Debug.Log("Start cameraDataStruct " + cameraDataStruct);
+        ////Invoke("CamData_Change", 5);
     }
 
     void SetLastCameraDataStruct()
     {
+        //Debug.Log("SetLastCameraDataStruct " + Time.time);
         lastCameraDataStruct = cameraDataStruct;
+        //Debug.Log("SetLastCameraDataStruct after lastCameraDataStruct = cameraDataStruct " + Time.time);
+
+        for (int i = 0; i < additionalS3DCamerasStruct.Length; i++)
+            additionalS3DCamerasStruct[i].lastCameraDataStruct = additionalS3DCamerasStruct[i].cameraDataStruct;
+
+        //Debug.Log("SetLastCameraDataStruct after additionalS3DCamerasStruct[i].lastCameraDataStruct = additionalS3DCamerasStruct[i].cameraDataStruct " + Time.time);
+        cameraDataStructIsReady = true;
     }
 
     //void AdditionalS3DCamerasListModify()
@@ -1663,20 +1711,45 @@ public class Stereo3D : MonoBehaviour
     float averageTime;
     int frames;
     int averageFPS;
-    //bool changed;
+    bool done;
+    float lastCamNearClip;
 
     void Update()
     {
+        //Debug.Log(cullingMask);
+        CameraDataStruct_Set();
+
+        //if (!done && Time.time > 5)
+        //{
+        //    done = true;
+        //    //cam.cullingMask = 0;
+        //    //Debug.Log("cam.cullingMask " + cam.cullingMask);
+        //    Matrix4x4 m = cam.projectionMatrix;
+        //    m[0, 2] = .1f;
+        //    m[1, 2] = .1f;
+        //    cam.projectionMatrix = m;
+
+        //    foreach (var c in additionalS3DCamerasStruct)
+        //    {
+        //        Matrix4x4 m2 = c.camera.projectionMatrix;
+        //        m2[0, 2] = m[0, 2];
+        //        m2[1, 2] = m[1, 2];
+        //        c.camera.projectionMatrix = m2;
+        //    }
+
+        //    //cam.fieldOfView = 88;
+        //}
+
 #if UNITY_EDITOR && ENABLE_INPUT_SYSTEM
         //Debug.Log(GUIAction.bindings[0].path);
         //Debug.Log(GUIAction.bindings.Count);
 
-        //if (!changed && GUIAction.bindings[0].path != "<Keyboard>/tab")
-        //    if (!changed && Time.time > 5)
+        //if (!done && GUIAction.bindings[0].path != "<Keyboard>/tab")
+        //    if (!done && Time.time > 5)
         //    {
         //        Debug.Log("GUIAction.bindings[0].path != ' < Keyboard >/ tab'");
-        //        Debug.Log("!changed && Time.time > 5");
-        //        changed = true;
+        //        Debug.Log("!done && Time.time > 5");
+        //        done = true;
         //        GUIAction.Disable();
         //        GUIAction.Reset();
         //        GUIAction.AddBinding("<Keyboard>/backspace");
@@ -1877,12 +1950,12 @@ public class Stereo3D : MonoBehaviour
         //canvasCam.projectionMatrix = canvasCamMatrix;
         //canvasCam.ResetProjectionMatrix();
         //Debug.Log(canvasCam.projectionMatrix[0, 3] + " " + shift);
-        //canvasCam.projectionMatrix = MatrixSet(canvasCam.projectionMatrix, -shift, 0);
+        //canvasCam.projectionMatrix = Matrix_Set(canvasCam.projectionMatrix, -shift, 0);
 
         //if (oddFrame)
-        //    canvasCam.projectionMatrix = MatrixSet(canvasCam.projectionMatrix, -shift, 0);
+        //    canvasCam.projectionMatrix = Matrix_Set(canvasCam.projectionMatrix, -shift, 0);
         //else
-        //    canvasCam.projectionMatrix = MatrixSet(canvasCam.projectionMatrix, shift, 0);
+        //    canvasCam.projectionMatrix = Matrix_Set(canvasCam.projectionMatrix, shift, 0);
 
         //if ((int)Time.time != time)
         //{
@@ -1900,65 +1973,6 @@ public class Stereo3D : MonoBehaviour
         //canvasCam.Render();
         //Debug.Log(canvasCam.GetUniversalAdditionalCameraData().clearDepth);
         //Debug.Log("Update " + Time.time);
-#if CINEMACHINE
-        //if (S3DEnabled && nearClipHack && cam.nearClipPlane != -1)
-        //{
-        //    //Debug.Log("S3DEnabled && nearClipHack && cam.nearClipPlane != -1");
-        //    VCamNearClipHack();
-        //}
-
-        //Cinemachine.CinemachineBrain.SoloCamera = vCam;
-        //if (vCam == GetComponent<Cinemachine.CinemachineBrain>().ActiveVirtualCamera)
-        //if (Cinemachine.CinemachineBrain.SoloCamera != vCam)
-        //{
-        //    Cinemachine.CinemachineBrain.SoloCamera = vCam;
-        //    //Debug.Log("Cinemachine.CinemachineBrain.SoloCamera != vCam");
-        //}
-
-        if (cineBrain && Cinemachine.CinemachineBrain.SoloCamera != vCam)
-        //if (vCam != null && Cinemachine.CinemachineBrain.SoloCamera != vCam)
-        {
-            Debug.Log("Cinemachine.CinemachineBrain.SoloCamera != vCam, Cinemachine.CinemachineBrain.SoloCamera = " + Cinemachine.CinemachineBrain.SoloCamera + ", vCam = " + vCam);
-
-            //if (Cinemachine.CinemachineBrain.SoloCamera == null)
-            if (Cinemachine.CinemachineBrain.SoloCamera == null || Cinemachine.CinemachineBrain.SoloCamera.ToString() == "null") //virtual camera lost
-                Cinemachine.CinemachineBrain.SoloCamera = vCam;
-            else //virtual camera changed
-                if (vCamSceneClipIsReady)
-                {
-                    //((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = sceneNearClip; //restore vCam default NearClipPlane
-                    VCamClipRestore();
-
-                    vCam = Cinemachine.CinemachineBrain.SoloCamera;
-
-                    //if (!GUIVisible && cam.nearClipPlane >= 0 && sceneNearClip != cam.nearClipPlane)
-                    //{
-                    //    sceneNearClip = cam.nearClipPlane;
-                    //    //Debug.Log("!S3DEnabled && !GUIVisible && sceneNearClip != cam.nearClipPlane sceneNearClip= " + cam.nearClipPlane);
-                    //    ClipSet();
-                    //}
-
-                    VCamSceneClipSet();
-                    //Debug.Log("Cinemachine.CinemachineBrain.SoloCamera != null sceneNearClip " + sceneNearClip);
-                    FOV_Set();
-                    Render_Set();
-                    ClipSet();
-                }
-        }
-        //else
-        //    if (Cinemachine.CinemachineBrain.SoloCamera != vCam)
-        //{
-        //    vCam = Cinemachine.CinemachineBrain.SoloCamera;
-        //    //Debug.Log("Cinemachine.CinemachineBrain.SoloCamera != vCam " + vCam);
-        //}
-
-        if (nearClipHackApplied && cam.nearClipPlane != -1)
-        //if (nearClipHackApplied && ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane != -1)
-        {
-            Debug.Log("nearClipHackApplied && cam.nearClipPlane != -1 cam.nearClipPlane " + cam.nearClipPlane);
-            VCamNearClipHack();
-        }
-#endif
 
         ////if (!S3DEnabled && !GUIVisible && sceneNearClip != cam.nearClipPlane)
         //if (!GUIVisible && cam.nearClipPlane >= 0 && sceneNearClip != cam.nearClipPlane)
@@ -1970,84 +1984,20 @@ public class Stereo3D : MonoBehaviour
         //    ClipSet();
         //}
 
-        if (!GUIVisible && cam.farClipPlane >= 0 && sceneFarClip != cam.farClipPlane)
+        //if (Time.time > GUI_Set_delay && lastCamNearClip != cam.nearClipPlane)
+        //{
+        //    Debug.Log("Update cam.nearClipPlane external change");
+        //    sceneNearClip = cam.nearClipPlane;
+        //    ClipSet();
+        //}
+
+        //if (!GUIVisible && cam.farClipPlane >= 0 && sceneFarClip != cam.farClipPlane)
+        if (sceneFarClip != cam.farClipPlane)
         {
+            Debug.Log("Update sceneFarClip != cam.farClipPlane");
             sceneFarClip = cam.farClipPlane;
             ClipSet();
         }
-
-#if URP
-        ////if (!lastURPAsset.Equals(GraphicsSettings.currentRenderPipeline))
-        //if (lastURPAsset.supportsMainLightShadows != ((UniversalRenderPipelineAsset)GraphicsSettings.currentRenderPipeline).supportsMainLightShadows)
-        //{
-        //    Debug.Log("!lastURPAsset.Equals(URPAsset)");
-        //    //OnOffToggle();
-        //    //lastURPAsset = (UniversalRenderPipelineAsset)GraphicsSettings.currentRenderPipeline;
-        //    lastURPAsset = ScriptableObject.CreateInstance<UniversalRenderPipelineAsset>();
-        //}
-
-        //Debug.Log("((UniversalRenderPipelineAsset)GraphicsSettings.currentRenderPipeline).supportsMainLightShadows" + ((UniversalRenderPipelineAsset)GraphicsSettings.currentRenderPipeline).supportsMainLightShadows);
-#elif HDRP
-        //HDRPSettings = HDRPAsset.currentPlatformRenderPipelineSettings;
-
-        //if (!GUIOpened && !GUIVisible && HDRPSettings.colorBufferFormat != defaultColorBufferFormat)
-        //if (!GUIOpened && !GUIVisible && HDRPAsset.currentPlatformRenderPipelineSettings.colorBufferFormat != defaultColorBufferFormat)
-        //if (Time.time > GUI_Set_delay && !GUIVisible && HDRPAsset.currentPlatformRenderPipelineSettings.colorBufferFormat != defaultColorBufferFormat)
-        //if (Time.time > GUI_Set_delay && HDRPAsset.currentPlatformRenderPipelineSettings.colorBufferFormat != HDRPSettings.colorBufferFormat)
-        //{
-        //    ////defaultColorBufferFormat = HDRPSettings.colorBufferFormat;
-        //    //defaultColorBufferFormat = HDRPAsset.currentPlatformRenderPipelineSettings.colorBufferFormat;
-        //    //Debug.Log("!GUIVisible && HDRPSettings.colorBufferFormat != defaultColorBufferFormat " + defaultColorBufferFormat);
-        //    Debug.Log("HDRPAsset.currentPlatformRenderPipelineSettings.colorBufferFormat != defaultColorBufferFormat");
-
-        //    if (!GUIVisible)
-        //        defaultColorBufferFormat = HDRPAsset.currentPlatformRenderPipelineSettings.colorBufferFormat;
-
-        //    HDRPSettings_Set();
-        //}
-
-        //if (!Equals(HDRPSettings, HDRPAsset.currentPlatformRenderPipelineSettings))
-        if (!HDRPSettings.Equals(HDRPAsset.currentPlatformRenderPipelineSettings))
-        {
-            Debug.Log("!Equals(HDRPSettings, HDRPAsset.currentPlatformRenderPipelineSettings)");
-            //HDRPSettings = HDRPAsset.currentPlatformRenderPipelineSettings;
-            //defaultColorBufferFormat = HDRPAsset.currentPlatformRenderPipelineSettings.colorBufferFormat;
-            defaultHDRPSettings = HDRPAsset.currentPlatformRenderPipelineSettings;
-            OnOffToggle();
-        }
-
-        if (canvasCam && S3DEnabled)
-        {
-            //if (oddFrame)
-            //{
-            //    if (method == Method.SideBySide_HMD)
-            //        canvasCamMatrix[0, 3] = (1 - imageOffset * panelDepth) * (swapLR ? -1 : 1);
-            //    else
-            //        canvasCamMatrix[0, 3] = -imageOffset * (swapLR ? -1 : 1) * panelDepth;
-
-            //    if (method == Method.Interlace_Horizontal)
-            //        canvasCamMatrix[1, 3] = -oneRowShift;
-
-            //    canvasCam.projectionMatrix = canvasCamMatrix;
-            //    canvasCam.targetTexture = leftCamCanvasRT;
-            //}
-            //else
-            //{
-            //    if (method == Method.SideBySide_HMD)
-            //        canvasCamMatrix[0, 3] = (-1 + imageOffset * panelDepth) * (swapLR ? -1 : 1);
-            //    else
-            //        canvasCamMatrix[0, 3] = imageOffset * (swapLR ? -1 : 1) * panelDepth;
-
-            //    if (method == Method.Interlace_Horizontal)
-            //        canvasCamMatrix[1, 3] = 0;
-
-            //    canvasCam.projectionMatrix = canvasCamMatrix;
-            //    canvasCam.targetTexture = rightCamCanvasRT;
-            //}
-
-            CanvasCamS3DRender_Set();
-        }
-#endif
 
         //Debug.Log(vCam);
         //Debug.Log(Cinemachine.CinemachineCore.Instance.IsLive(vCam));
@@ -2257,7 +2207,7 @@ public class Stereo3D : MonoBehaviour
         //}
 #endif
 
-        CameraDataStruct_Set();
+        //CameraDataStruct_Set();
 
         //if (canvas.gameObject.activeSelf && caret == null)
         //{
@@ -2425,6 +2375,9 @@ public class Stereo3D : MonoBehaviour
 
         if (lastS3DEnabled != S3DEnabled)
         {
+            //if (cam.projectionMatrix == Matrix4x4.zero)
+            //    cam.projectionMatrix = camMatrix;
+
             lastS3DEnabled = S3DEnabled;
             enableS3D_toggle.isOn = S3DEnabled;
             Aspect_Set();
@@ -2521,19 +2474,35 @@ public class Stereo3D : MonoBehaviour
         //    PixelPitchSet();
         //}
 
-        if (!FOVSetInProcess && cam.fieldOfView != vFOV) //check camera FOV changes to set FOV from other scripts
-        {
-            //Debug.Log("cam.fieldOfView != vFOV");
-            //Debug.Log("camFOVChanged");
-            camFOVChanged = true;
-            FOV_Set();
-        }
+        //if (!FOVSetInProcess && cam.fieldOfView != vFOV) //check camera FOV changes to set FOV from other scripts
+        //{
+        //    //Debug.Log("cam.fieldOfView != vFOV");
+        //    //Debug.Log("camFOVChangedExternal");
+        //    camFOVChangedExternal = true;
+        //    FOV_Set();
+        //}
 
-        if (lastFOV != FOV)
-        {
-            //lastFOV = FOV;
-            FOV_Set();
-        }
+        //if (lastFOV != FOV)
+        //{
+        //    //lastFOV = FOV;
+        //    FOV_Set();
+        //}
+
+        //if (!FOVSetInProcess) //check camera FOV changes to set FOV from other scripts
+        //{
+            if (cam.fieldOfView != vFOV)
+            {
+                Debug.Log("camFOVChangedExternal");
+                camFOVChangedExternal = true;
+                FOV_Set();
+            }
+            else
+                if (lastFOV != FOV)
+                {
+                    Debug.Log("camFOVChanged Internal");
+                    FOV_Set();
+                }
+        //}
 
         if (lastMinMaxFOV != FOVMinMax)
         {
@@ -2633,8 +2602,15 @@ public class Stereo3D : MonoBehaviour
 
         if (lastMatrixKillHack != matrixKillHack)
         {
+            //if (lastMatrixKillHack)
+            //    cam.ResetProjectionMatrix();
+
+            //if (cam.projectionMatrix == Matrix4x4.zero)
+            //    cam.projectionMatrix = camMatrix;
+
             lastMatrixKillHack = matrixKillHack;
-            Render_Set();
+            //Render_Set();
+            ViewSet();
         }
 
         if (!GUIAsOverlay && lastCanvasLocalPosZ != canvasLocalPosZ)
@@ -2663,6 +2639,19 @@ public class Stereo3D : MonoBehaviour
         //        Debug.Log("component " + additionalS3DCameras[i].name + " " + lastAdditionalS3DCameras[i].name);
         //    }
         //}
+
+        if (lastGUISizeKeep != GUISizeKeep)
+        {
+            lastGUISizeKeep = GUISizeKeep;
+            Aspect_Set();
+        }
+
+        if (physicalCamera != cam.usePhysicalProperties)
+        {
+            Debug.Log("physicalCamera != cam.usePhysicalProperties");
+            physicalCamera = cam.usePhysicalProperties;
+            OnOffToggle();
+        }
 
         if (lastGUIAsOverlay != GUIAsOverlay)
         {
@@ -2694,12 +2683,6 @@ public class Stereo3D : MonoBehaviour
             //Invoke("DelayedPanelDepthSet", Time.deltaTime);
         }
 
-        if (lastGUISizeKeep != GUISizeKeep)
-        {
-            lastGUISizeKeep = GUISizeKeep;
-            Aspect_Set();
-        }
-
         if (lastCameraPrefab != cameraPrefab)
         {
             lastCameraPrefab = cameraPrefab;
@@ -2718,13 +2701,13 @@ public class Stereo3D : MonoBehaviour
             OnOffToggle();
         }
 
-        if (lastSetMatrixDirectly != setMatrixDirectly)
-        {
-            lastSetMatrixDirectly = setMatrixDirectly;
-            //this.enabled = false;
-            //this.enabled = true;
-            OnOffToggle();
-        }
+        //if (lastSetMatrixDirectly != setMatrixDirectly)
+        //{
+        //    lastSetMatrixDirectly = setMatrixDirectly;
+        //    //this.enabled = false;
+        //    //this.enabled = true;
+        //    OnOffToggle();
+        //}
 
         if (lastCloneCamera != cloneCamera)
         {
@@ -2737,22 +2720,6 @@ public class Stereo3D : MonoBehaviour
             lastLoadSettingsFromFile = loadSettingsFromFile;
             OnOffToggle();
         }
-
-#if URP
-        if (lastCameraStack.Length != cameraStack.Count)
-        {
-            Debug.Log("lastCameraStack.Length != cameraStack.Count " + lastCameraStack.Length + " " + cameraStack.Count);
-            OnOffToggle();
-        }
-        else
-            for (int i = 0; i < lastCameraStack.Length; i++)
-                if (lastCameraStack[i] != cameraStack[i])
-                {
-                    Debug.Log("lastCameraStack[i] != cameraStack[i] " + lastCameraStack[i] + " " + cameraStack[i]);
-                    OnOffToggle();
-                    break;
-                }
-#endif
 
         if (lastAdditionalS3DCameras.Length != additionalS3DCameras.Count)
         {
@@ -2781,30 +2748,219 @@ public class Stereo3D : MonoBehaviour
         //    //Debug.Break();
         //}
 
-        //if (!Equals(lastCameraDataStruct, cameraDataStruct))
-        if (Time.time > setLastCameraDataStructTime && !lastCameraDataStruct.Equals(cameraDataStruct))
+#if URP
+        if (lastCameraStack.Length != cameraStack.Count)
         {
-            //Debug.Break();
-            Debug.Log("!lastCameraDataStruct.Equals(cameraDataStruct)");
-            //universalAdditionalCameraData = cam.GetUniversalAdditionalCameraData();
-            lastCameraDataStruct = cameraDataStruct;
-            //cameraDataStruct = cam.GetUniversalAdditionalCameraData();
-            //lastUniversalAdditionalCameraData = universalAdditionalCameraData;
-            //universalAdditionalCameraData.renderPostProcessing = cam.GetUniversalAdditionalCameraData().renderPostProcessing;
+            Debug.Log("lastCameraStack.Length != cameraStack.Count " + lastCameraStack.Length + " " + cameraStack.Count);
+            OnOffToggle();
+        }
+        else
+            for (int i = 0; i < lastCameraStack.Length; i++)
+                if (lastCameraStack[i] != cameraStack[i])
+                {
+                    Debug.Log("lastCameraStack[i] != cameraStack[i] " + lastCameraStack[i] + " " + cameraStack[i]);
+                    OnOffToggle();
+                    break;
+                }
+
+        ////if (!lastURPAsset.Equals(GraphicsSettings.currentRenderPipeline))
+        //if (lastURPAsset.supportsMainLightShadows != ((UniversalRenderPipelineAsset)GraphicsSettings.currentRenderPipeline).supportsMainLightShadows)
+        //{
+        //    Debug.Log("!lastURPAsset.Equals(URPAsset)");
+        //    //OnOffToggle();
+        //    //lastURPAsset = (UniversalRenderPipelineAsset)GraphicsSettings.currentRenderPipeline;
+        //    lastURPAsset = ScriptableObject.CreateInstance<UniversalRenderPipelineAsset>();
+        //}
+
+        //Debug.Log("((UniversalRenderPipelineAsset)GraphicsSettings.currentRenderPipeline).supportsMainLightShadows" + ((UniversalRenderPipelineAsset)GraphicsSettings.currentRenderPipeline).supportsMainLightShadows);
+#elif HDRP
+        //HDRPSettings = HDRPAsset.currentPlatformRenderPipelineSettings;
+
+        //if (!GUIOpened && !GUIVisible && HDRPSettings.colorBufferFormat != defaultColorBufferFormat)
+        //if (!GUIOpened && !GUIVisible && HDRPAsset.currentPlatformRenderPipelineSettings.colorBufferFormat != defaultColorBufferFormat)
+        //if (Time.time > GUI_Set_delay && !GUIVisible && HDRPAsset.currentPlatformRenderPipelineSettings.colorBufferFormat != defaultColorBufferFormat)
+        //if (Time.time > GUI_Set_delay && HDRPAsset.currentPlatformRenderPipelineSettings.colorBufferFormat != HDRPSettings.colorBufferFormat)
+        //{
+        //    ////defaultColorBufferFormat = HDRPSettings.colorBufferFormat;
+        //    //defaultColorBufferFormat = HDRPAsset.currentPlatformRenderPipelineSettings.colorBufferFormat;
+        //    //Debug.Log("!GUIVisible && HDRPSettings.colorBufferFormat != defaultColorBufferFormat " + defaultColorBufferFormat);
+        //    Debug.Log("HDRPAsset.currentPlatformRenderPipelineSettings.colorBufferFormat != defaultColorBufferFormat");
+
+        //    if (!GUIVisible)
+        //        defaultColorBufferFormat = HDRPAsset.currentPlatformRenderPipelineSettings.colorBufferFormat;
+
+        //    HDRPSettings_Set();
+        //}
+
+        //if (!Equals(HDRPSettings, HDRPAsset.currentPlatformRenderPipelineSettings))
+        if (!HDRPSettings.Equals(HDRPAsset.currentPlatformRenderPipelineSettings))
+        {
+            Debug.Log("!Equals(HDRPSettings, HDRPAsset.currentPlatformRenderPipelineSettings)");
+            //HDRPSettings = HDRPAsset.currentPlatformRenderPipelineSettings;
+            //defaultColorBufferFormat = HDRPAsset.currentPlatformRenderPipelineSettings.colorBufferFormat;
+            defaultHDRPSettings = HDRPAsset.currentPlatformRenderPipelineSettings;
             OnOffToggle();
         }
 
-        //Debug.Log(universalAdditionalCameraData.Equals(cam.GetUniversalAdditionalCameraData()));
+        if (canvasCam && S3DEnabled)
+        {
+            //if (oddFrame)
+            //{
+            //    if (method == Method.SideBySide_HMD)
+            //        canvasCamMatrix[0, 3] = (1 - imageOffset * panelDepth) * (swapLR ? -1 : 1);
+            //    else
+            //        canvasCamMatrix[0, 3] = -imageOffset * (swapLR ? -1 : 1) * panelDepth;
+
+            //    if (method == Method.Interlace_Horizontal)
+            //        canvasCamMatrix[1, 3] = -oneRowShift;
+
+            //    canvasCam.projectionMatrix = canvasCamMatrix;
+            //    canvasCam.targetTexture = leftCamCanvasRT;
+            //}
+            //else
+            //{
+            //    if (method == Method.SideBySide_HMD)
+            //        canvasCamMatrix[0, 3] = (-1 + imageOffset * panelDepth) * (swapLR ? -1 : 1);
+            //    else
+            //        canvasCamMatrix[0, 3] = imageOffset * (swapLR ? -1 : 1) * panelDepth;
+
+            //    if (method == Method.Interlace_Horizontal)
+            //        canvasCamMatrix[1, 3] = 0;
+
+            //    canvasCam.projectionMatrix = canvasCamMatrix;
+            //    canvasCam.targetTexture = rightCamCanvasRT;
+            //}
+
+            CanvasCamS3DRender_Set();
+        }
+#endif
+
+#if CINEMACHINE
+        //if (S3DEnabled && nearClipHack && cam.nearClipPlane != -1)
+        //{
+        //    //Debug.Log("S3DEnabled && nearClipHack && cam.nearClipPlane != -1");
+        //    VCamNearClipHack();
         //}
+
+        //Cinemachine.CinemachineBrain.SoloCamera = vCam;
+        //if (vCam == GetComponent<Cinemachine.CinemachineBrain>().ActiveVirtualCamera)
+        //if (Cinemachine.CinemachineBrain.SoloCamera != vCam)
+        //{
+        //    Cinemachine.CinemachineBrain.SoloCamera = vCam;
+        //    //Debug.Log("Cinemachine.CinemachineBrain.SoloCamera != vCam");
+        //}
+
+        if (cineBrain && Cinemachine.CinemachineBrain.SoloCamera != vCam)
+        //if (vCam != null && Cinemachine.CinemachineBrain.SoloCamera != vCam)
+        {
+            Debug.Log("Cinemachine.CinemachineBrain.SoloCamera != vCam, Cinemachine.CinemachineBrain.SoloCamera = " + Cinemachine.CinemachineBrain.SoloCamera + ", vCam = " + vCam);
+
+            //if (Cinemachine.CinemachineBrain.SoloCamera == null)
+            if (Cinemachine.CinemachineBrain.SoloCamera == null || Cinemachine.CinemachineBrain.SoloCamera.ToString() == "null") //virtual camera lost
+                Cinemachine.CinemachineBrain.SoloCamera = vCam;
+            else //virtual camera changed
+                //if (vCamSceneClipIsReady)
+                //{
+                //    //((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = sceneNearClip; //restore vCam default NearClipPlane
+                //    VCamClipRestore();
+
+                //    vCam = Cinemachine.CinemachineBrain.SoloCamera;
+
+                //    //if (!GUIVisible && cam.nearClipPlane >= 0 && sceneNearClip != cam.nearClipPlane)
+                //    //{
+                //    //    sceneNearClip = cam.nearClipPlane;
+                //    //    //Debug.Log("!S3DEnabled && !GUIVisible && sceneNearClip != cam.nearClipPlane sceneNearClip= " + cam.nearClipPlane);
+                //    //    ClipSet();
+                //    //}
+
+                //    VCamSceneClipSet();
+                //    //Debug.Log("Cinemachine.CinemachineBrain.SoloCamera != null sceneNearClip " + sceneNearClip);
+                //    FOV_Set();
+                //    Render_Set();
+                //    ClipSet();
+                //}
+                OnOffToggle();
+        }
+        //else
+        //    if (Cinemachine.CinemachineBrain.SoloCamera != vCam)
+        //{
+        //    vCam = Cinemachine.CinemachineBrain.SoloCamera;
+        //    //Debug.Log("Cinemachine.CinemachineBrain.SoloCamera != vCam " + vCam);
+        //}
+
+        if (nearClipHackApplied && cam.nearClipPlane != -1)
+        //if (nearClipHackApplied && ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane != -1)
+        {
+            Debug.Log("nearClipHackApplied && cam.nearClipPlane != -1 cam.nearClipPlane " + cam.nearClipPlane);
+            VCamNearClipHack();
+        }
+#endif
+
+        //if (Time.time > setLastCameraDataStructTime)
+        //if (cameraDataStructIsReady)
+        if (cameraDataStructIsReady
+//#if CINEMACHINE
+//            && vCamSceneClipIsReady
+//#endif
+            )
+        {
+            //bool notEqual = false; //prevent multiple OnOffToggle() call
+
+            //if (!Equals(lastCameraDataStruct, cameraDataStruct))
+            //if (Time.time > setLastCameraDataStructTime && !lastCameraDataStruct.Equals(cameraDataStruct))
+            if (!lastCameraDataStruct.Equals(cameraDataStruct))
+            {
+                //Debug.Break();
+                Debug.Log("!lastCameraDataStruct.Equals(cameraDataStruct)");
+
+                if (lastCameraDataStruct.cullingMask != cameraDataStruct.cullingMask)
+                {
+                    //Debug.Log("lastCameraDataStruct.cullingMask != cameraDataStruct.cullingMask " + lastCameraDataStruct.cullingMask + " " + cameraDataStruct.cullingMask);
+                    sceneCullingMask = cameraDataStruct.cullingMask;
+                }
+
+                //universalAdditionalCameraData = cam.GetUniversalAdditionalCameraData();
+                lastCameraDataStruct = cameraDataStruct;
+                //cameraDataStruct = cam.GetUniversalAdditionalCameraData();
+                //lastUniversalAdditionalCameraData = universalAdditionalCameraData;
+                //universalAdditionalCameraData.renderPostProcessing = cam.GetUniversalAdditionalCameraData().renderPostProcessing;
+                OnOffToggle();
+                //notEqual = true;
+                //Invoke("OnOffToggle", 1);
+            }
+
+            for (int i = 0; i < additionalS3DCamerasStruct.Length; i++)
+            {
+                if (!additionalS3DCamerasStruct[i].lastCameraDataStruct.Equals(additionalS3DCamerasStruct[i].cameraDataStruct))
+                {
+                    Debug.Log("!additionalS3DCamerasStruct[i].lastCameraDataStruct.Equals(additionalS3DCamerasStruct[i].cameraDataStruct)");
+                    additionalS3DCamerasStruct[i].lastCameraDataStruct = additionalS3DCamerasStruct[i].cameraDataStruct;
+                    OnOffToggle();
+                    //notEqual = true;
+                }
+            }
+
+            //if (notEqual)
+            //    OnOffToggle();
+        }
 
         void OnOffToggle()
         {
+            if (!lastCameraDataStruct.Equals(cameraDataStruct))
+                Debug.Log("!lastCameraDataStruct.Equals(cameraDataStruct)**************************");
+
             Debug.Log("OnOffToggle");
             enabled = false;
+            //Invoke("Disable", 1);
             //enabled = true;
             Invoke("Enable", 0); //prevent additionalS3DCameras clone duplicates on reenable this script in same frame as previous clones can't be destroyed instantly before creating new ones
             //Invoke("Enable", Time.deltaTime * 4); //prevent additionalS3DCameras clone duplicates on reenable this script in same frame as previous clones can't be destroyed instantly before creating new ones
         }
+    }
+
+    void Disable()
+    {
+        enabled = false;
     }
 
     void Enable()
@@ -3000,7 +3156,8 @@ public class Stereo3D : MonoBehaviour
     void GetVCam()
     {
         Debug.Log("GetVCam");
-        defaultVCam = vCam = GetComponent<Cinemachine.CinemachineBrain>().ActiveVirtualCamera;
+        //defaultVCam = vCam = GetComponent<Cinemachine.CinemachineBrain>().ActiveVirtualCamera;
+        vCam = GetComponent<Cinemachine.CinemachineBrain>().ActiveVirtualCamera;
         //Debug.Log("GetVCam() " + vCam);
 
         //if (vCam == null)
@@ -3049,6 +3206,7 @@ public class Stereo3D : MonoBehaviour
             //cam.Reset();
             //cam.nearClipPlane = -1; //Hack for more fps in SRP(Scriptable Render Pipeline)
             //((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = -1;
+            CameraDataStruct_Change();
         }
         else
             Invoke("VCamCullingOff", Time.deltaTime);
@@ -3057,13 +3215,14 @@ public class Stereo3D : MonoBehaviour
     void VCamFOVSet()
     {
         Debug.Log("VCamFOVSet");
-        FOVSetInProcess = true;
+        //FOVSetInProcess = true;
 
         if (vCam != null)
         {
-            ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.FieldOfView = vFOV;
-            //FOVSetInProcess = false;
-            CheckCamFOVSet();
+            //((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.FieldOfView = vFOV;
+            ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.FieldOfView = cam.fieldOfView = vFOV;
+            ////FOVSetInProcess = false;
+            //CheckCamFOVSet();
         }
         else
             Invoke("VCamFOVSet", Time.deltaTime);
@@ -3107,10 +3266,11 @@ public class Stereo3D : MonoBehaviour
         //if (vCam != null && !vCamSceneClipSetInProcess)
         if (vCamSceneClipIsReady)
         {
-            ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = nearClip;
-            ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.FarClipPlane = farClip;
+            ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = cam.nearClipPlane = nearClip;
+            ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.FarClipPlane = cam.farClipPlane = farClip;
             Debug.Log("VCamClipSet nearClip " + nearClip + " ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane);
             //vCamClipSetInProcess = false;
+            ViewSet();
         }
         else
             //if (!vCamSceneClipRestoreInProcess)
@@ -3127,9 +3287,10 @@ public class Stereo3D : MonoBehaviour
         //if (vCam != null && !vCamSceneClipSetInProcess && !vCamSceneClipRestoreInProcess)
         if (vCamSceneClipIsReady)
         {
-            ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = -1;
+            ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = cam.nearClipPlane = -1;
             Debug.Log("VCamNearClipHack ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane + " " + Time.time);
             nearClipHackApplied = true;
+            ViewSet();
         }
         else
             Invoke("VCamNearClipHack", Time.deltaTime);
@@ -3149,10 +3310,11 @@ public class Stereo3D : MonoBehaviour
         //if (vCam != null && !vCamClipSetInProcess)
         if (vCamSceneClipIsReady)
         {
-            ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = sceneNearClip; //restore vCam default NearClipPlane
-            ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.FarClipPlane = sceneFarClip; //restore vCam default FarClipPlane
+            ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = cam.nearClipPlane = sceneNearClip; //restore vCam default NearClipPlane
+            ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.FarClipPlane = cam.farClipPlane = sceneFarClip; //restore vCam default FarClipPlane
             Debug.Log("VCamClipRestore ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane);
             //vCamSceneClipRestoreInProcess = false;
+            ViewSet();
         }
         else
             Invoke("VCamClipRestore", Time.deltaTime);
@@ -3229,6 +3391,18 @@ public class Stereo3D : MonoBehaviour
     //    trigger.triggers.Add(entry);
     //}
 
+    void SlotName_DropdownSelect()
+    {
+        //Debug.Log("SlotName_DropdownSelect");
+        //SlotName_Dropdown(0);
+        slotName = slotName_dropdown.captionText.text;
+
+        if (slotName == "")
+            slotName = "User1";
+
+        //slotName = slotName_dropdown.options[slotName_dropdown.value].text;
+    }
+
     void TooltipShow(string text)
     {
         tooltipShow = true;
@@ -3252,7 +3426,7 @@ public class Stereo3D : MonoBehaviour
         //float panelDepthAsScreenDistance = 1 / (1 - panelDepth);
         //canvasLocalPosZ = screenDistance * panelDepthAsScreenDistance * virtualIPD / userIPD * 0.001f;
 
-        if (GUIAsOverlay)
+        if (GUIAsOverlay && canvasCam)
         {
             //canvas.GetComponent<RectTransform>().localScale = Vector3.one;
 
@@ -3266,6 +3440,14 @@ public class Stereo3D : MonoBehaviour
                 canvas.worldCamera = canvasRayCam;
                 //canvas.transform.localRotation = Quaternion.identity;
                 //canvasCam.targetTexture = leftCamRT; //required to clear the screen window when the main camera viewport rectangle is not fully occupied
+#if HDRP
+                canvasCamData.clearColorMode = HDAdditionalCameraData.ClearColorMode.Color;
+#elif URP
+                canvasCam.clearFlags = CameraClearFlags.Nothing;
+#else
+                canvasCam.clearFlags = CameraClearFlags.Color;
+#endif
+                canvasCam.rect = Rect.MinMaxRect(0, 0, 1, 1);
 
                 if (canvasCam.targetTexture == null)
                 {
@@ -3283,16 +3465,28 @@ public class Stereo3D : MonoBehaviour
             }
             else
             {
-                //canvasCam.targetTexture = null;
-                canvasCam.enabled = false;
+                canvasCam.ResetProjectionMatrix();
+                canvasCam.targetTexture = null;
+#if HDRP
+                canvasCamData.clearColorMode = HDAdditionalCameraData.ClearColorMode.None;
+#elif !URP
+                //canvasCam.clearFlags = CameraClearFlags.Nothing;
+                //#else
+                canvasCam.clearFlags = CameraClearFlags.Depth;
+#endif
+                canvasCam.rect = cam.rect;
+                //canvasCam.enabled = false;
                 //canvas.renderMode = RenderMode.ScreenSpaceOverlay;
                 canvas.renderMode = RenderMode.ScreenSpaceCamera;
-                canvas.worldCamera = cam;
-                canvas.GetComponent<CanvasScaler>().scaleFactor = windowSize.y / canvasSize.y;
+                //canvas.worldCamera = cam;
+                canvas.worldCamera = canvasCam;
+                //canvas.GetComponent<CanvasScaler>().scaleFactor = windowSize.y / canvasSize.y;
+                canvas.GetComponent<CanvasScaler>().scaleFactor = windowSize.y / canvasSize.y * canvasCam.rect.height;
                 //canvas.GetComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
                 //canvas.GetComponent<CanvasScaler>().referenceResolution = canvasSize;
                 //Debug.Log("canvasSize " + canvasSize + " windowSize " + windowSize);
-                canvas.planeDistance = cam.farClipPlane * .5f;
+                //canvas.planeDistance = cam.farClipPlane * .5f;
+                canvas.planeDistance = canvasCam.farClipPlane;
             }
         }
         else
@@ -3306,7 +3500,8 @@ public class Stereo3D : MonoBehaviour
             float canvasScale = canvasLocalPosZ * Mathf.Tan(FOV * Mathf.PI / 360) * 2 / canvasSize.x;
             //Debug.Log("canvasScale " + canvasScale);
             //canvas.GetComponent<RectTransform>().localPosition = new Vector3(0, 0, canvasLocalPosZ);
-            canvas.GetComponent<RectTransform>().localPosition = new Vector3(virtualIPD * .0005f * -((int)eyePriority - 1) * (S3DEnabled ? 1 : 0), 0, canvasLocalPosZ);
+            //canvas.GetComponent<RectTransform>().localPosition = new Vector3(virtualIPD * .0005f * -((int)eyePriority - 1) * (S3DEnabled ? 1 : 0), 0, canvasLocalPosZ);
+            canvas.GetComponent<RectTransform>().localPosition = new Vector3(virtualIPD * .0005f * -((int)eyePriority - 1) * (S3DEnabled ? 1 : 0) + camVanishPoint.x * .5f * canvasSize.x * canvas.transform.lossyScale.x, camVanishPoint.y * .5f * canvasSize.y * canvas.transform.lossyScale.y, canvasLocalPosZ);
             canvas.GetComponent<RectTransform>().localScale = new Vector3(canvasScale, canvasScale, canvasScale);
 
             //canvasRayCam.orthographicSize = canvasSize.y * canvas.transform.lossyScale.y * .5f;
@@ -3399,7 +3594,7 @@ public class Stereo3D : MonoBehaviour
         //cam.aspect = aspect;
         leftCam.aspect = rightCam.aspect = cam.aspect = aspect;
 
-        if (additionalS3DCamerasStruct != null)
+        //if (additionalS3DCamerasStruct != null)
             foreach (var c in additionalS3DCamerasStruct)
                 if (c.camera)
                     c.cameraLeft.aspect = c.cameraRight.aspect = c.camera.aspect = aspect;
@@ -3415,7 +3610,7 @@ public class Stereo3D : MonoBehaviour
             canvasSize = new Vector2(canvasDefaultSize.y * aspect, canvasDefaultSize.y);
 
         //Debug.Log("Aspect_Set Resize cam.rect " + cam.rect);
-        //Debug.Log("Aspect_Set aspect " + aspect);
+        Debug.Log("Aspect_Set aspect " + aspect);
         //Debug.Log("Aspect_Set cam.pixelWidth " + cam.pixelWidth + " cam.pixelHeight " + cam.pixelHeight);
 
         //ViewSet();
@@ -3502,6 +3697,8 @@ public class Stereo3D : MonoBehaviour
 
     void GUI_Set()
     {
+        if (canvas)
+        {
         Debug.Log("GUI_Set");
         //lastGUIOpened = GUIOpened;
         Cursor.visible = false;
@@ -3583,6 +3780,7 @@ public class Stereo3D : MonoBehaviour
 
         ClipSet();
         HDRPSettings_Set();
+        }
     }
 
     void GUIClose()
@@ -3626,7 +3824,7 @@ public class Stereo3D : MonoBehaviour
         else
             farClip = sceneFarClip;
 
-        //Debug.Log("ClipSet sceneNearClip " + sceneNearClip);
+        Debug.Log("ClipSet sceneNearClip " + sceneNearClip);
         //Debug.Log("ClipSet sceneFarClip " + sceneFarClip);
 
         //if (S3DEnabled)
@@ -3645,8 +3843,14 @@ public class Stereo3D : MonoBehaviour
 
         leftCam.nearClipPlane = rightCam.nearClipPlane = nearClip;
         leftCam.farClipPlane = rightCam.farClipPlane = farClip;
-        leftCam.ResetProjectionMatrix();
-        rightCam.ResetProjectionMatrix();
+        //leftCam.ResetProjectionMatrix();
+        //rightCam.ResetProjectionMatrix();
+
+        //if (!cam.usePhysicalProperties)
+        //{
+        //    leftCam.ResetProjectionMatrix();
+        //    rightCam.ResetProjectionMatrix();
+        //}
 
         //if (!S3DEnabled)
         //    if (cineBrain)
@@ -3654,43 +3858,94 @@ public class Stereo3D : MonoBehaviour
         //    else
         //        cam.nearClipPlane = nearClip;
 
-        if (S3DEnabled)
-        {
-            if (nearClipHack)
-            {
+//        if (S3DEnabled)
+//        {
+//            if (nearClipHack)
+//            {
+//#if CINEMACHINE
+//                if (cineBrain)
+//                    VCamNearClipHack();
+//                else
+//#endif
+//                    cam.nearClipPlane = -1;
+//            }
+//            else
+//            {
+//#if CINEMACHINE
+//                if (cineBrain)
+//                    VCamClipRestore();
+//                else
+//#endif
+//                    cam.nearClipPlane = sceneNearClip;
+//            }
+//        }
+//        else
+//        {
+//            //nearClipHackApplied = false;
+//            //VCamClipRestore();
+
+//#if CINEMACHINE
+//            if (cineBrain)
+//                VCamClipSet();
+//            else
+//#endif
+//            {
+//                cam.nearClipPlane = nearClip;
+//                cam.farClipPlane = farClip;
+//            }
+//        }
+
 #if CINEMACHINE
+        if (S3DEnabled)
+            if (nearClipHack)
                 if (cineBrain)
                     VCamNearClipHack();
                 else
-#endif
                     cam.nearClipPlane = -1;
-            }
             else
-            {
-#if CINEMACHINE
                 if (cineBrain)
                     VCamClipRestore();
                 else
-#endif
                     cam.nearClipPlane = sceneNearClip;
-            }
-        }
         else
-        {
-            //nearClipHackApplied = false;
-            //VCamClipRestore();
-
-#if CINEMACHINE
             if (cineBrain)
                 VCamClipSet();
             else
-#endif
             {
                 cam.nearClipPlane = nearClip;
                 cam.farClipPlane = farClip;
             }
-        }
 
+        //if (S3DEnabled)
+        //    if (nearClipHack)
+        //        if (cineBrain)
+        //            Debug.Log("S3DEnabled nearClipHack cineBrain");
+        //        else
+        //            Debug.Log("S3DEnabled nearClipHack !cineBrain");
+        //    else
+        //        if (cineBrain)
+        //            Debug.Log("S3DEnabled !nearClipHack cineBrain");
+        //        else
+        //            Debug.Log("S3DEnabled !nearClipHack !cineBrain");
+        //else
+        //    if (cineBrain)
+        //        Debug.Log("!S3DEnabled cineBrain");
+        //    else
+        //        Debug.Log("!S3DEnabled !cineBrain");
+#else
+        if (S3DEnabled)
+            if (nearClipHack)
+                cam.nearClipPlane = -1;
+            else
+                cam.nearClipPlane = sceneNearClip;
+        else
+        {
+            cam.nearClipPlane = nearClip;
+            cam.farClipPlane = farClip;
+        }
+#endif
+
+        lastCamNearClip = cam.nearClipPlane;
         ViewSet();
     }
 
@@ -3787,14 +4042,19 @@ public class Stereo3D : MonoBehaviour
 
     void PPI_InputField(string fieldString)
     {
-        //float value = Convert.ToSingle(fieldString);
-        //value = Mathf.Clamp(value, 1, 1000);
-        //Debug.Log(value);
-        //PPI_inputField.text = value.ToString();
-        //PPI = Mathf.Clamp(Convert.ToSingle(fieldString), 1, 1000);
-        //PPI = Convert.ToSingle(fieldString);
-        PPI = float.Parse(fieldString);
-        //PPI_inputField.text = PPI.ToString();
+        ////float value = Convert.ToSingle(fieldString);
+        ////value = Mathf.Clamp(value, 1, 1000);
+        ////Debug.Log(value);
+        ////PPI_inputField.text = value.ToString();
+        ////PPI = Mathf.Clamp(Convert.ToSingle(fieldString), 1, 1000);
+        ////PPI = Convert.ToSingle(fieldString);
+        //PPI = float.Parse(fieldString);
+        ////PPI_inputField.text = PPI.ToString();
+
+        if (float.TryParse(fieldString, out float value))
+            PPI = value;
+        else
+            PPI_inputField.text = PPI.ToString();
 
         //ViewSet();
     }
@@ -3806,8 +4066,13 @@ public class Stereo3D : MonoBehaviour
 
     void UserIPD_InputField(string fieldString)
     {
-        //userIPD = Convert.ToSingle(fieldString);
-        userIPD = float.Parse(fieldString);
+        ////userIPD = Convert.ToSingle(fieldString);
+        //userIPD = float.Parse(fieldString);
+
+        if (float.TryParse(fieldString, out float value))
+            userIPD = value;
+        else
+            userIPD_inputField.text = userIPD.ToString();
     }
 
     void VirtualIPD_Slider(float value)
@@ -3817,8 +4082,13 @@ public class Stereo3D : MonoBehaviour
 
     void VirtualIPD_InputField(string fieldString)
     {
-        //virtualIPD = Convert.ToSingle(fieldString);
-        virtualIPD = float.Parse(fieldString);
+        ////virtualIPD = Convert.ToSingle(fieldString);
+        //virtualIPD = float.Parse(fieldString);
+
+        if (float.TryParse(fieldString, out float value))
+            virtualIPD = value;
+        else
+            virtualIPD_inputField.text = virtualIPD.ToString();
     }
 
     void MatchUserIPD_Toggle(bool isOn)
@@ -3833,8 +4103,13 @@ public class Stereo3D : MonoBehaviour
 
     void FOV_InputField(string fieldString)
     {
-        //FOV = Convert.ToSingle(fieldString);
-        FOV = float.Parse(fieldString);
+        ////FOV = Convert.ToSingle(fieldString);
+        //FOV = float.Parse(fieldString);
+
+        if (float.TryParse(fieldString, out float value))
+            FOV = value;
+        else
+            FOV_inputField.text = FOV.ToString();
     }
 
     void PanelDepth_Slider(float value)
@@ -3847,7 +4122,12 @@ public class Stereo3D : MonoBehaviour
     {
         //Debug.Log("PanelDepth_InputField " + fieldString);
         //panelDepth = Convert.ToSingle(fieldString);
-        panelDepth = float.Parse(fieldString);
+        //panelDepth = float.Parse(fieldString);
+
+        if (float.TryParse(fieldString, out float value))
+            panelDepth = value;
+        else
+            panelDepth_inputField.text = panelDepth.ToString();
     }
 
     void ScreenDistance_InputField(string fieldString)
@@ -3981,7 +4261,7 @@ public class Stereo3D : MonoBehaviour
         //FOV = Mathf.Clamp(FOV, 1, 179);
         //aspect = cam.aspect;
 
-        if (FOVControl && !camFOVChanged)
+        if (FOVControl && !camFOVChangedExternal)
         {
             FOV = Mathf.Clamp(FOV, FOVMinMax.x, FOVMinMax.y);
             scaleX = 1 / Mathf.Tan(FOV * Mathf.PI / 360);
@@ -3989,7 +4269,7 @@ public class Stereo3D : MonoBehaviour
             vFOV = 360 * Mathf.Atan(1 / scaleY) / Mathf.PI;
 
             //cam.fieldOfView = vFOV;
-            //Debug.Log("FOV_Set FOVControl && !camFOVChanged FOV " + FOV + " vFOV " + vFOV);
+            //Debug.Log("FOV_Set FOVControl && !camFOVChangedExternal FOV " + FOV + " vFOV " + vFOV);
 
 #if CINEMACHINE
             if (cineBrain)
@@ -3998,19 +4278,19 @@ public class Stereo3D : MonoBehaviour
 #endif
                 cam.fieldOfView = vFOV;
 
-            //Debug.Log("FOV_Set FOVControl && !camFOVChanged FOV " + FOV + " vFOV " + vFOV + " cineBrain " + cineBrain + " cam.fieldOfView " + cam.fieldOfView);
+            //Debug.Log("FOV_Set FOVControl && !camFOVChangedExternal FOV " + FOV + " vFOV " + vFOV + " cineBrain " + cineBrain + " cam.fieldOfView " + cam.fieldOfView);
         }
         else
         {
-            camFOVChanged = false;
+            camFOVChangedExternal = false;
             vFOV = cam.fieldOfView;
             FOV = Mathf.Atan(aspect * Mathf.Tan(vFOV * Mathf.PI / 360)) * 360 / Mathf.PI;
             scaleX = 1 / Mathf.Tan(FOV * Mathf.PI / 360);
             scaleY = scaleX * aspect;
-            //Debug.Log("!(FOV_Set FOVControl && !camFOVChanged) FOV " + FOV + " vFOV " + vFOV);
+            //Debug.Log("!(FOV_Set FOVControl && !camFOVChangedExternal) FOV " + FOV + " vFOV " + vFOV);
         }
 
-        //Debug.Log("FOV_Set " + FOV + " vFOV " + vFOV);
+        Debug.Log("FOV_Set " + FOV + " vFOV " + vFOV);
         //Debug.Break();
         //Debug.Log("FOV_Set cam.fieldOfView " + cam.fieldOfView + " vFOV " + vFOV);
         //leftCam.fieldOfView = rightCam.fieldOfView = vFOV;
@@ -4023,15 +4303,15 @@ public class Stereo3D : MonoBehaviour
         ViewSet();
     }
 
-    void CheckCamFOVSet()
-    {
-        Debug.Log("CheckCamFOVSet");
+    //void CheckCamFOVSet()
+    //{
+    //    Debug.Log("CheckCamFOVSet");
 
-        if (cam.fieldOfView == vFOV)
-            FOVSetInProcess = false;
-        else
-            Invoke("CheckCamFOVSet", Time.deltaTime);
-    }
+    //    if (cam.fieldOfView == vFOV)
+    //        FOVSetInProcess = false;
+    //    else
+    //        Invoke("CheckCamFOVSet", Time.deltaTime);
+    //}
 
     //void GetFOVFromCam()
     //{
@@ -4069,7 +4349,7 @@ public class Stereo3D : MonoBehaviour
             leftCam.transform.localPosition = rightCamPos;
             rightCam.transform.localPosition = leftCamPos;
 
-            if (additionalS3DCamerasStruct != null)
+            //if (additionalS3DCamerasStruct != null)
                 foreach (var c in additionalS3DCamerasStruct)
                     if (c.camera)
                     {
@@ -4082,7 +4362,7 @@ public class Stereo3D : MonoBehaviour
             leftCam.transform.localPosition = leftCamPos;
             rightCam.transform.localPosition = rightCamPos;
 
-            if (additionalS3DCamerasStruct != null)
+            //if (additionalS3DCamerasStruct != null)
                 foreach (var c in additionalS3DCamerasStruct)
                     if (c.camera)
                     {
@@ -4116,6 +4396,7 @@ public class Stereo3D : MonoBehaviour
     float screenDistance;
     float imageWidth;
     float oneRowShift;
+    Matrix4x4 camMatrix;
 
     void ViewSet()
     {
@@ -4143,44 +4424,108 @@ public class Stereo3D : MonoBehaviour
         screenDistance = scaleX * imageWidth * .5f; //calculated distance to screen from user eyes where real FOV will match to virtual for realistic view
         screenDistance_inputField.text = screenDistance.ToString();
 
-        if (setMatrixDirectly)
+        leftCam.fieldOfView = rightCam.fieldOfView = vFOV;
+
+        foreach (var c in additionalS3DCamerasStruct)
+            if (c.camera)
+                c.cameraLeft.fieldOfView = c.cameraRight.fieldOfView = c.camera.fieldOfView = vFOV;
+
+        //if (cam.projectionMatrix != Matrix4x4.zero)
+        //{
+        //    Debug.Log("cam.projectionMatrix != Matrix4x4.zero");
+        //    camMatrix = cam.projectionMatrix;
+
+        //    if (S3DEnabled && matrixKillHack)
+        //        cam.projectionMatrix = Matrix4x4.zero;
+        //}
+
+        //if (matrixKillHack && S3DEnabled && cam.projectionMatrix != Matrix4x4.zero)
+        //{
+        //    Debug.Log("cam.projectionMatrix != Matrix4x4.zero");
+        //    camMatrix = cam.projectionMatrix;
+        //    Debug.Log(camMatrix);
+        //    cam.projectionMatrix = Matrix4x4.zero;
+        //}
+
+        if (matrixKillHack && S3DEnabled)
         {
-            //set "shift" via matrix give fps gain from 304 to 308
-            if (swapLR)
+            //if (cam.projectionMatrix != Matrix4x4.zero)
+            if (cam.projectionMatrix[3, 2] != 0)
             {
-		        leftCam.projectionMatrix = MatrixSet(leftCam.projectionMatrix, -shift, oneRowShift);
-		        rightCam.projectionMatrix = MatrixSet(rightCam.projectionMatrix, shift, 0);
-
-            if (additionalS3DCamerasStruct != null)
-                    foreach (var c in additionalS3DCamerasStruct)
-                        if (c.camera)
-                        {
-                            c.cameraLeft.projectionMatrix = MatrixSet(c.cameraLeft.projectionMatrix, -shift, oneRowShift);
-                            c.cameraRight.projectionMatrix = MatrixSet(c.cameraRight.projectionMatrix, shift, 0);
-                        }
-            }
-            else
-            {
-		        leftCam.projectionMatrix = MatrixSet(leftCam.projectionMatrix, shift, oneRowShift);
-		        rightCam.projectionMatrix = MatrixSet(rightCam.projectionMatrix, -shift, 0);
-
-            if (additionalS3DCamerasStruct != null)
-                    foreach (var c in additionalS3DCamerasStruct)
-                        if (c.camera)
-                        {
-                            c.cameraLeft.projectionMatrix = MatrixSet(c.cameraLeft.projectionMatrix, shift, oneRowShift);
-                            c.cameraRight.projectionMatrix = MatrixSet(c.cameraRight.projectionMatrix, -shift, 0);
-                        }
+                //Debug.Log("cam.projectionMatrix != Matrix4x4.zero");
+                Debug.Log("cam.projectionMatrix[3, 2] != 0");
+                camMatrix = cam.projectionMatrix;
+                Debug.Log("camMatrix\n" + camMatrix);
+                cam.projectionMatrix = Matrix4x4.zero;
             }
         }
         else
-        {
-            //return matrix control to camera settings
-            leftCam.ResetProjectionMatrix();
-            rightCam.ResetProjectionMatrix();
+            //if (cam.projectionMatrix == Matrix4x4.zero)
+            if (cam.projectionMatrix[3, 2] == 0)
+                cam.projectionMatrix = camMatrix;
 
-            //set "shift" via cam "lensShift" required set "physical" cam
-            leftCam.usePhysicalProperties = rightCam.usePhysicalProperties = true; //need set again after ResetProjectionMatrix
+
+        //if (matrixKillHack)
+        //    cam.projectionMatrix = Matrix4x4.zero;
+
+        //if (setMatrixDirectly)
+        if (!cam.usePhysicalProperties)
+        {
+            //set "shift" via matrix give fps gain from 304 to 308
+            //if (swapLR)
+            //{
+            //    //leftCam.projectionMatrix = Matrix_Set(leftCam.projectionMatrix, -shift, oneRowShift);
+            //    //rightCam.projectionMatrix = Matrix_Set(rightCam.projectionMatrix, shift, 0);
+            //    Matrix_Set(leftCam, -shift, oneRowShift);
+            //    Matrix_Set(rightCam, shift, 0);
+
+            //    //if (additionalS3DCamerasStruct != null)
+            //    foreach (var c in additionalS3DCamerasStruct)
+            //            if (c.camera)
+            //            {
+            //                //c.cameraLeft.projectionMatrix = Matrix_Set(c.cameraLeft.projectionMatrix, -shift, oneRowShift);
+            //                //c.cameraRight.projectionMatrix = Matrix_Set(c.cameraRight.projectionMatrix, shift, 0);
+            //                Matrix_Set(c.cameraLeft, -shift, oneRowShift);
+            //                Matrix_Set(c.cameraRight, shift, 0);
+            //            }
+            //}
+            //else
+            //{
+                //leftCam.projectionMatrix = Matrix_Set(leftCam.projectionMatrix, shift, oneRowShift);
+                //rightCam.projectionMatrix = Matrix_Set(rightCam.projectionMatrix, -shift, 0);
+                Matrix_Set(cam, 0, 0);
+                Matrix_Set(leftCam, shift, oneRowShift);
+                //Matrix_Set(rightCam, -shift, 0);
+                Matrix_Set(rightCam, shift, 0);
+
+                //if (additionalS3DCamerasStruct != null)
+                foreach (var c in additionalS3DCamerasStruct)
+                        if (c.camera)
+                        {
+                            //c.camera.ResetProjectionMatrix();
+                            //Matrix4x4 m = c.camera.projectionMatrix;
+                            //m[0, 0] = cam.projectionMatrix[0, 0];
+                            //m[0, 2] = cam.projectionMatrix[0, 2];
+                            //m[1, 1] = cam.projectionMatrix[1, 1];
+                            //m[1, 2] = cam.projectionMatrix[1, 2];
+                            //c.camera.projectionMatrix = m;
+                            //c.cameraLeft.projectionMatrix = Matrix_Set(c.cameraLeft.projectionMatrix, shift, oneRowShift);
+                            //c.cameraRight.projectionMatrix = Matrix_Set(c.cameraRight.projectionMatrix, -shift, 0);
+                            Matrix_Set(c.camera, 0, 0);
+                            Matrix_Set(c.cameraLeft, shift, oneRowShift);
+                            //Matrix_Set(c.cameraRight, -shift, 0);
+                            Matrix_Set(c.cameraRight, shift, 0);
+                        }
+            //}
+        }
+        else
+        {
+            ////return matrix control to camera settings
+            //leftCam.ResetProjectionMatrix();
+            //rightCam.ResetProjectionMatrix();
+
+            ////set "shift" via cam "lensShift" required set "physical" cam
+            //leftCam.usePhysicalProperties = rightCam.usePhysicalProperties = true; //need set again after ResetProjectionMatrix
             leftCam.sensorSize = rightCam.sensorSize = cam.sensorSize = new Vector2(imageWidth, imageWidth / aspect);
             leftCam.gateFit = rightCam.gateFit = cam.gateFit = Camera.GateFitMode.None;
             //cam.focalLength = leftCam.focalLength = rightCam.focalLength = screenDistance;
@@ -4193,43 +4538,158 @@ public class Stereo3D : MonoBehaviour
             if (!optimize && method == Method.Interlace_Horizontal)
                 lensShift.y = -oneRowShift * .5f;
 
-            leftCam.lensShift = -lensShift;
-		    rightCam.lensShift = new Vector2(lensShift.x, 0);
+            //leftCam.lensShift = -lensShift;
+            //rightCam.lensShift = new Vector2(lensShift.x, 0);
+            leftCam.lensShift = cam.lensShift - lensShift;
+            rightCam.lensShift = cam.lensShift + new Vector2(lensShift.x, 0);
 
-            if (additionalS3DCamerasStruct != null)
-                foreach (var c in additionalS3DCamerasStruct)
+            //if (additionalS3DCamerasStruct != null)
+            foreach (var c in additionalS3DCamerasStruct)
                     if (c.camera)
                     {
-                        c.cameraLeft.ResetProjectionMatrix();
-                        c.cameraRight.ResetProjectionMatrix();
-                        c.cameraLeft.usePhysicalProperties = c.cameraRight.usePhysicalProperties = true;
+                        //c.cameraLeft.ResetProjectionMatrix();
+                        //c.cameraRight.ResetProjectionMatrix();
+                        //c.cameraLeft.usePhysicalProperties = c.cameraRight.usePhysicalProperties = true; //need set again after ResetProjectionMatrix
+                        //c.cameraLeft.usePhysicalProperties = c.cameraRight.usePhysicalProperties = c.camera.usePhysicalProperties = true; //need set again after ResetProjectionMatrix
                         c.cameraLeft.sensorSize = c.cameraRight.sensorSize = c.camera.sensorSize = new Vector2(imageWidth, imageWidth / aspect);
                         c.cameraLeft.gateFit = c.cameraRight.gateFit = c.camera.gateFit = Camera.GateFitMode.None;
-                        c.cameraLeft.lensShift = -lensShift;
-                        c.cameraRight.lensShift = new Vector2(lensShift.x, 0);
+                        //c.cameraLeft.lensShift = -lensShift;
+                        //c.cameraRight.lensShift = new Vector2(lensShift.x, 0);
+                        c.camera.lensShift = cam.lensShift;
+                        c.cameraLeft.lensShift = c.camera.lensShift - lensShift;
+                        c.cameraRight.lensShift = c.camera.lensShift + new Vector2(lensShift.x, 0);
                     }
         }
 
-        //Debug.Log("ViewSet vFOV " + vFOV);
-        //leftCam.fieldOfView = rightCam.fieldOfView = cam.fieldOfView = vFOV;
-        leftCam.fieldOfView = rightCam.fieldOfView = vFOV;
+        ////Debug.Log("ViewSet vFOV " + vFOV);
+        ////leftCam.fieldOfView = rightCam.fieldOfView = cam.fieldOfView = vFOV;
+        //leftCam.fieldOfView = rightCam.fieldOfView = vFOV;
 
-        if (additionalS3DCamerasStruct != null)
-            foreach (var c in additionalS3DCamerasStruct)
-                if (c.camera)
-                    c.cameraLeft.fieldOfView = c.cameraRight.fieldOfView = c.camera.fieldOfView = vFOV;
+        ////if (additionalS3DCamerasStruct != null)
+        //    foreach (var c in additionalS3DCamerasStruct)
+        //        if (c.camera)
+        //            c.cameraLeft.fieldOfView = c.cameraRight.fieldOfView = c.camera.fieldOfView = vFOV;
 
+        CameraDataStruct_Change();
         Canvas_Set();
+        Debug.Log("ViewSet cam.projectionMatrix\n" + cam.projectionMatrix);
     }
 
-    Matrix4x4 MatrixSet(Matrix4x4 matrix, float shiftX, float shiftY)
-    {	
-        matrix[0, 0] = scaleX; // 1/tangent of half horizontal FOV
-        matrix[0, 2] = shiftX; //shift whole image projection in X axis of screen clip space
-        matrix[1, 1] = scaleY; //1/tangent of half vertical FOV
-        matrix[1, 2] = shiftY;
+    //Matrix4x4 Matrix_Set(Matrix4x4 matrix, float shiftX, float shiftY)
+    //{	
+    //    matrix[0, 0] = scaleX; // 1/tangent of half horizontal FOV
+    //    //matrix[0, 2] = shiftX; //shift whole image projection in X axis of screen clip space
+    //    matrix[0, 2] = cam.projectionMatrix[0, 2] + shiftX; //shift whole image projection in X axis of screen clip space
+    //    matrix[1, 1] = scaleY; //1/tangent of half vertical FOV
+    //    //matrix[1, 2] = shiftY;
+    //    matrix[1, 2] = cam.projectionMatrix[1, 2] + shiftY;
 
-        return matrix;
+    //    return matrix;
+    //}
+
+    void Matrix_Set(Camera c, float shiftX, float shiftY)
+    {
+        Matrix4x4 matrix;
+
+        if (c.name.Contains("_left") || c.name.Contains("_right"))
+        {
+            //Matrix4x4 matrix = c.projectionMatrix;
+            Camera parent = c.transform.parent.GetComponent<Camera>();
+            //Matrix4x4 matrix = parent.projectionMatrix;
+            //matrix = parent.projectionMatrix;
+
+            if (parent == cam)
+            {
+                matrix = camMatrix;
+                ////if (matrixKillHack)
+                //if (cam.projectionMatrix == Matrix4x4.zero)
+                //{
+                //    //matrix[0, 0] = scaleX; // 1/tangent of half horizontal FOV
+                //    //matrix[1, 1] = scaleY; //1/tangent of half vertical FOV
+                //    //matrix[3, 2] = -1;
+                //}
+
+                matrix[2, 2] = -(farClip + nearClip) / (farClip - nearClip);
+                matrix[2, 3] = -(2 * farClip * nearClip) / (farClip - nearClip);
+                ////Debug.Log("nearClip " + nearClip + " farClip " + farClip);
+                //Debug.Log(c.name + " Matrix_Set " + matrix);
+            }
+            else
+            {
+                matrix = parent.projectionMatrix;
+                //matrix[2, 2] = -(parent.farClipPlane + parent.nearClipPlane) / (parent.farClipPlane - parent.nearClipPlane);
+                //matrix[2, 3] = -(2 * parent.farClipPlane * parent.nearClipPlane) / (parent.farClipPlane - parent.nearClipPlane);
+            }
+
+            //matrix[0, 2] = parent.projectionMatrix[0, 2] + shiftX; //shift whole image projection in X axis of screen clip space
+            //matrix[0, 2] += shiftX; //shift whole image projection in X axis of screen clip space
+            matrix[0, 2] += shiftX * (c.name.Contains("_left") ? 1 : -1) * (swapLR ? -1 : 1); //shift whole image projection in X axis of screen clip space
+            //matrix[1, 2] = parent.projectionMatrix[1, 2] + shiftY;
+            matrix[1, 2] += shiftY;
+            //matrix[3, 2] = -1;
+
+            //Debug.Log("Matrix_Set parent " + parent);
+            //Debug.Log("nearClip " + nearClip + " farClip " + farClip);
+            //Debug.Log(c.name + " Matrix_Set " + matrix);
+            //Debug.Log(matrix[0, 2] + " " + matrix[1, 2]);
+            c.projectionMatrix = matrix;
+        }
+        else
+        {
+            //matrix = c.projectionMatrix;
+
+            ////if (!(c == cam && matrixKillHack))
+            //if (!(c == cam && cam.projectionMatrix == Matrix4x4.zero))
+            //{
+            //    matrix[0, 0] = scaleX; // 1/tangent of half horizontal FOV
+            //    matrix[1, 1] = scaleY; //1/tangent of half vertical FOV
+            //    matrix[2, 2] = -(c.farClipPlane + c.nearClipPlane) / (c.farClipPlane - c.nearClipPlane);
+            //    matrix[2, 3] = -(2 * c.farClipPlane * c.nearClipPlane) / (c.farClipPlane - c.nearClipPlane);
+
+            //    if (c == cam)
+            //        camMatrix = matrix;
+
+            //}
+
+            if (c == cam)
+            {
+                //if (cam.projectionMatrix == Matrix4x4.zero)
+                if (cam.projectionMatrix[3, 2] == 0)
+                {
+                    matrix = camMatrix;
+                    matrix_Set();
+                }
+                else
+                {
+                    matrix = c.projectionMatrix;
+                    matrix_Set();
+                    c.projectionMatrix = matrix;
+                }
+
+                camMatrix = matrix;
+            }
+            else
+            {
+                matrix = c.projectionMatrix;
+                matrix_Set();
+                c.projectionMatrix = matrix;
+            }
+
+            void matrix_Set()
+            {
+                matrix[0, 0] = scaleX; // 1/tangent of half horizontal FOV
+                matrix[1, 1] = scaleY; //1/tangent of half vertical FOV
+                matrix[2, 2] = -(c.farClipPlane + c.nearClipPlane) / (c.farClipPlane - c.nearClipPlane);
+                matrix[2, 3] = -(2 * c.farClipPlane * c.nearClipPlane) / (c.farClipPlane - c.nearClipPlane);
+            }
+
+            //if (c == cam)
+            //    Debug.Log("Matrix_Set c == cam " + matrix);
+            //else
+            //    Debug.Log(c.name + " Matrix_Set c != cam " + matrix);
+        }
+
+        //c.projectionMatrix = matrix;
     }
 
     RenderTexture leftCamRT;   
@@ -4269,8 +4729,9 @@ public class Stereo3D : MonoBehaviour
 #if HDRP
             camData.volumeLayerMask = 0;
             camData.probeLayerMask = 0;
-            CameraDataStruct_Set();
-            lastCameraDataStruct = cameraDataStruct;
+            //CameraDataStruct_Set();
+            //lastCameraDataStruct = cameraDataStruct;
+            //CameraDataStruct_Change();
 #endif
 
             //Invoke("VCamCullingOff", 10);
@@ -4278,7 +4739,7 @@ public class Stereo3D : MonoBehaviour
             //rightCam.enabled = true;
             leftCam.enabled = rightCam.enabled = true;
 
-            if (additionalS3DCamerasStruct != null)
+            //if (additionalS3DCamerasStruct != null)
                 foreach (var c in additionalS3DCamerasStruct)
                     if (c.camera)
                     {
@@ -4440,7 +4901,7 @@ public class Stereo3D : MonoBehaviour
             leftCam.targetTexture = leftCamRT;
             rightCam.targetTexture = rightCamRT;
 
-            //if (additionalS3DCamerasStruct != null)
+            ////if (additionalS3DCamerasStruct != null)
             //    foreach (var c in additionalS3DCamerasStruct)
             //        if (c.camera)
             //        {
@@ -4450,22 +4911,22 @@ public class Stereo3D : MonoBehaviour
             //            //c.cameraLeft.targetTexture = leftCamAdditionalRT;
             //            //c.cameraRight.targetTexture = rightCamAdditionalRT;
 
-            //            c.RTLeft = new RenderTexture(rtWidth, rtHeight, 24, RTFormat);
-            //            c.cameraLeft.targetTexture = c.RTLeft;
-            //            c.cameraRight.targetTexture = c.RTRight;
+            //            c.leftCamRT = new RenderTexture(rtWidth, rtHeight, 24, RTFormat);
+            //            c.cameraLeft.targetTexture = c.leftCamRT;
+            //            c.cameraRight.targetTexture = c.rightCamRT;
             //        }
 
-            if (additionalS3DCamerasStruct != null)
+            //if (additionalS3DCamerasStruct != null)
                 for (int i = 0; i < additionalS3DCamerasStruct.Length; i++)
                     if (additionalS3DCamerasStruct[i].camera)
                     {
 #if HDRP
-                        //additionalS3DCamerasStruct[i].RTLeft = new RenderTexture(leftCamRT);
-                        //additionalS3DCamerasStruct[i].RTRight = new RenderTexture(rightCamRT);
-                        additionalS3DCamerasStruct[i].RTLeft = RT_Make();
-                        additionalS3DCamerasStruct[i].RTRight = RT_Make();
-                        additionalS3DCamerasStruct[i].cameraLeft.targetTexture = additionalS3DCamerasStruct[i].RTLeft;
-                        additionalS3DCamerasStruct[i].cameraRight.targetTexture = additionalS3DCamerasStruct[i].RTRight;
+                        //additionalS3DCamerasStruct[i].leftCamRT = new RenderTexture(leftCamRT);
+                        //additionalS3DCamerasStruct[i].rightCamRT = new RenderTexture(rightCamRT);
+                        additionalS3DCamerasStruct[i].leftCamRT = RT_Make();
+                        additionalS3DCamerasStruct[i].rightCamRT = RT_Make();
+                        additionalS3DCamerasStruct[i].cameraLeft.targetTexture = additionalS3DCamerasStruct[i].leftCamRT;
+                        additionalS3DCamerasStruct[i].cameraRight.targetTexture = additionalS3DCamerasStruct[i].rightCamRT;
 #else
                         additionalS3DCamerasStruct[i].cameraLeft.targetTexture = leftCamRT;
                         additionalS3DCamerasStruct[i].cameraRight.targetTexture = rightCamRT;
@@ -4514,9 +4975,11 @@ public class Stereo3D : MonoBehaviour
             }
 #endif
 
-            //if (!Application.isEditor)
-            if (matrixKillHack)
-                cam.projectionMatrix = Matrix4x4.zero;
+            ////if (!Application.isEditor)
+            //if (matrixKillHack)
+            //    cam.projectionMatrix = Matrix4x4.zero;
+
+            CameraDataStruct_Change();
         }
     }
 
@@ -4579,8 +5042,8 @@ public class Stereo3D : MonoBehaviour
 #if HDRP
             foreach (var c in additionalS3DCamerasStruct)
             {
-                commandBuffer.Blit(c.RTLeft, leftCamRT, S3DPanelMaterial);
-                commandBuffer.Blit(c.RTRight, rightCamRT, S3DPanelMaterial);
+                commandBuffer.Blit(c.leftCamRT, leftCamRT, S3DPanelMaterial);
+                commandBuffer.Blit(c.rightCamRT, rightCamRT, S3DPanelMaterial);
             }
 
             if (canvasCam && canvasCam.isActiveAndEnabled)
@@ -4789,27 +5252,27 @@ public class Stereo3D : MonoBehaviour
             Debug.Log("OnDisable");
             GUIClose();
             Render_Release();
-            Destroy(leftCam.gameObject);
-            Destroy(rightCam.gameObject);
+            //Destroy(leftCam.gameObject);
+            //Destroy(rightCam.gameObject);
 
-            //if (cameraStack != null)
-            //    cameraStack.Remove(canvasCam);
+            if (cameraStack != null)
+                cameraStack.Remove(canvasCam);
 
             //foreach (var c in leftCameraStack)
             //    cameraStack.Add(c);
 
             CameraStackRestore();
 
-            if (additionalS3DCamerasStruct != null)
-                foreach (var c in additionalS3DCamerasStruct)
-                    if (c.camera)
-                    {
-                        Destroy(c.cameraLeft.gameObject);
-                        Destroy(c.cameraRight.gameObject);
-                    }
+            ////if (additionalS3DCamerasStruct != null)
+            //    foreach (var c in additionalS3DCamerasStruct)
+            //        if (c.camera)
+            //        {
+            //            Destroy(c.cameraLeft.gameObject);
+            //            Destroy(c.cameraRight.gameObject);
+            //        }
 
-            if (canvasCam)
-                Destroy(canvasCam.gameObject);
+            //if (canvasCam)
+            //    Destroy(canvasCam.gameObject);
 
 //#if CINEMACHINE
 //            VCamClipRestore();
@@ -4839,13 +5302,13 @@ public class Stereo3D : MonoBehaviour
                 cam.farClipPlane = sceneFarClip;
             }
 
-            Destroy(S3DMaterial);
-            Destroy(canvas.gameObject);
-            Resources.UnloadUnusedAssets(); //free memory
             cam.ResetAspect();
             scaleX = 1 / Mathf.Tan(FOV * Mathf.PI / 360);
             scaleY = scaleX * cam.aspect;
             cam.fieldOfView = 360 * Mathf.Atan(1 / scaleY) / Mathf.PI;
+
+            HDRPSettings_Restore();
+            cameraDataStructIsReady = false;
 
 #if ENABLE_INPUT_SYSTEM
             GUIAction.Disable();
@@ -4856,12 +5319,39 @@ public class Stereo3D : MonoBehaviour
             modifier3Action.Disable();
 #endif
 
-//#if HDRP
-            //HDRPSettings.colorBufferFormat = defaultColorBufferFormat;
-            //HDRPSettings = defaultHDRPSettings;
-            //typeof(HDRenderPipelineAsset).GetField("m_RenderPipelineSettings", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(GraphicsSettings.currentRenderPipeline, HDRPSettings);
-            HDRPSettings_Restore();
+            Destroy(leftCam.gameObject);
+            Destroy(rightCam.gameObject);
+
+            foreach (var c in additionalS3DCamerasStruct)
+                if (c.camera)
+                {
+                    Destroy(c.cameraLeft.gameObject);
+                    Destroy(c.cameraRight.gameObject);
+                }
+
+            //if (canvasCam)
+            //    Destroy(canvasCam.gameObject);
+
+            Destroy(S3DMaterial);
+            Destroy(canvas.gameObject);
+            Resources.UnloadUnusedAssets(); //free memory
+
+//#if ENABLE_INPUT_SYSTEM
+//            GUIAction.Disable();
+//            S3DAction.Disable();
+//            FOVAction.Disable();
+//            modifier1Action.Disable();
+//            modifier2Action.Disable();
+//            modifier3Action.Disable();
 //#endif
+
+////#if HDRP
+//            //HDRPSettings.colorBufferFormat = defaultColorBufferFormat;
+//            //HDRPSettings = defaultHDRPSettings;
+//            //typeof(HDRenderPipelineAsset).GetField("m_RenderPipelineSettings", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(GraphicsSettings.currentRenderPipeline, HDRPSettings);
+//            HDRPSettings_Restore();
+//            //#endif
+//            cameraDataStructIsReady = false;
         }
     }
 
@@ -4880,21 +5370,23 @@ public class Stereo3D : MonoBehaviour
 		//rightCam.enabled = false;
         leftCam.enabled = rightCam.enabled = false;
 
-        if (additionalS3DCamerasStruct != null)
+        //if (additionalS3DCamerasStruct != null)
             foreach (var c in additionalS3DCamerasStruct)
                 if (c.camera)
                 {
                     c.cameraLeft.targetTexture = c.cameraRight.targetTexture = null;
                     c.cameraLeft.enabled = c.cameraRight.enabled = false;
                     c.camera.enabled = true;
+                    //c.camera.ResetProjectionMatrix();
                 }
 
-        cam.cullingMask = cullingMask;
+        cam.cullingMask = sceneCullingMask;
 #if HDRP
         camData.volumeLayerMask = volumeLayerMask;
         camData.probeLayerMask = probeLayerMask;
-        CameraDataStruct_Set();
-        lastCameraDataStruct = cameraDataStruct;
+        //CameraDataStruct_Set();
+        //lastCameraDataStruct = cameraDataStruct;
+        //CameraDataStruct_Change();
 #endif
         //cam.nearClipPlane = nearClip;
         //Debug.Log("Render_Release nearClip " + nearClip);
@@ -4956,6 +5448,15 @@ public class Stereo3D : MonoBehaviour
         if (PPLayer)
             PPLayer.enabled = PPLayerEnabled;
 #endif
+        CameraDataStruct_Change();
+    }
+
+    void CameraDataStruct_Change()
+    {
+        Debug.Log("CameraDataStruct_Change");
+        CameraDataStruct_Set();
+        //lastCameraDataStruct = cameraDataStruct;
+        SetLastCameraDataStruct();
     }
 
     //void VCamNearClipRestore()
@@ -5349,76 +5850,455 @@ public class Stereo3D : MonoBehaviour
 
     void CameraDataStruct_Set()
     {
-        cameraDataStruct = new CameraDataStruct(
-#if URP
-            //camData.renderType,
-            //camData.scriptableRenderer,
-            //camData.renderPostProcessing,
-            //camData.antialiasing,
-            //camData.antialiasingQuality,
-            //camData.stopNaN,
-            //camData.dithering,
-            //camData.renderShadows,
-            // //camData.cameraStack,
+//        cameraDataStruct = new CameraDataStruct(
+//#if URP
+//            //camData.renderType,
+//            //camData.scriptableRenderer,
+//            //camData.renderPostProcessing,
+//            //camData.antialiasing,
+//            //camData.antialiasingQuality,
+//            //camData.stopNaN,
+//            //camData.dithering,
+//            //camData.renderShadows,
+//            // //camData.cameraStack,
 
-             camData.requiresDepthTexture,
-             camData.stopNaN,
-             camData.antialiasingQuality,
-             camData.antialiasing,
-             camData.renderPostProcessing,
-             camData.volumeStack,
-             camData.volumeTrigger,
-             camData.volumeLayerMask,
-             camData.requiresColorTexture,
-             camData.allowXRRendering,
-             camData.renderType,
-             camData.requiresColorOption,
-             camData.requiresDepthOption,
-             camData.renderShadows,
-             camData.dithering,
+//             camData.requiresDepthTexture,
+//             camData.stopNaN,
+//             camData.antialiasingQuality,
+//             camData.antialiasing,
+//             camData.renderPostProcessing,
+//             camData.volumeStack,
+//             camData.volumeTrigger,
+//             camData.volumeLayerMask,
+//             camData.requiresColorTexture,
+//             camData.allowXRRendering,
+//             camData.renderType,
+//             camData.requiresColorOption,
+//             camData.requiresDepthOption,
+//             camData.renderShadows,
+//             camData.dithering,
+//#elif HDRP
+//            camData.clearColorMode,
+//            camData.backgroundColorHDR,
+//            camData.clearDepth,
+//            camData.customRenderingSettings,
+//            camData.volumeLayerMask,
+//            camData.volumeAnchorOverride,
+//            camData.antialiasing,
+//            camData.dithering,
+//            camData.xrRendering,
+//            camData.SMAAQuality,
+//            camData.stopNaNs,
+//            camData.taaSharpenStrength,
+//            camData.TAAQuality,
+//            camData.taaHistorySharpening,
+//            camData.taaAntiFlicker,
+//            camData.taaMotionVectorRejection,
+//            camData.taaAntiHistoryRinging,
+//            camData.taaBaseBlendFactor,
+//            camData.taaJitterScale,
+//            camData.flipYMode,
+//            camData.fullscreenPassthrough,
+//            camData.allowDynamicResolution,
+//            camData.invertFaceCulling,
+//            camData.probeLayerMask,
+//            camData.hasPersistentHistory,
+//            camData.exposureTarget,
+//            camData.physicalParameters,
+//            camData.renderingPathCustomFrameSettings,
+//            camData.renderingPathCustomFrameSettingsOverrideMask,
+//            camData.defaultFrameSettings,
+//            //camData.probeCustomFixedExposure,
+//            camData.allowDeepLearningSuperSampling,
+//            camData.deepLearningSuperSamplingUseCustomQualitySettings,
+//            camData.deepLearningSuperSamplingQuality,
+//            camData.deepLearningSuperSamplingUseCustomAttributes,
+//            camData.deepLearningSuperSamplingUseOptimalSettings,
+//            camData.deepLearningSuperSamplingSharpening,
+//            camData.materialMipBias,
+//#endif
+//            cam.depth,
+//            cam.useOcclusionCulling
+//            );
+
+        cameraDataStruct = CameraDataStruct_Make(cam);
+
+        //if (additionalS3DCamerasStruct != null)
+            for (int i = 0; i < additionalS3DCamerasStruct.Length; i++)
+                additionalS3DCamerasStruct[i].cameraDataStruct = CameraDataStruct_Make(additionalS3DCamerasStruct[i].camera);
+    }
+
+    CameraDataStruct CameraDataStruct_Make(Camera c)
+    {
+#if URP
+        UniversalAdditionalCameraData cd = c.GetUniversalAdditionalCameraData();
 #elif HDRP
-            camData.clearColorMode,
-            camData.backgroundColorHDR,
-            camData.clearDepth,
-            camData.customRenderingSettings,
-            camData.volumeLayerMask,
-            camData.volumeAnchorOverride,
-            camData.antialiasing,
-            camData.dithering,
-            camData.xrRendering,
-            camData.SMAAQuality,
-            camData.stopNaNs,
-            camData.taaSharpenStrength,
-            camData.TAAQuality,
-            camData.taaHistorySharpening,
-            camData.taaAntiFlicker,
-            camData.taaMotionVectorRejection,
-            camData.taaAntiHistoryRinging,
-            camData.taaBaseBlendFactor,
-            camData.taaJitterScale,
-            camData.flipYMode,
-            camData.fullscreenPassthrough,
-            camData.allowDynamicResolution,
-            camData.invertFaceCulling,
-            camData.probeLayerMask,
-            camData.hasPersistentHistory,
-            camData.exposureTarget,
-            camData.physicalParameters,
-            camData.renderingPathCustomFrameSettings,
-            camData.renderingPathCustomFrameSettingsOverrideMask,
-            camData.defaultFrameSettings,
-            //camData.probeCustomFixedExposure,
-            camData.allowDeepLearningSuperSampling,
-            camData.deepLearningSuperSamplingUseCustomQualitySettings,
-            camData.deepLearningSuperSamplingQuality,
-            camData.deepLearningSuperSamplingUseCustomAttributes,
-            camData.deepLearningSuperSamplingUseOptimalSettings,
-            camData.deepLearningSuperSamplingSharpening,
-            camData.materialMipBias,
+        HDAdditionalCameraData cd = c.GetComponent<HDAdditionalCameraData>();
 #endif
-            cam.depth,
-            cam.useOcclusionCulling
+
+        CameraDataStruct cds = new CameraDataStruct(
+#if URP
+             cd.requiresDepthTexture,
+             cd.stopNaN,
+             cd.antialiasingQuality,
+             cd.antialiasing,
+             cd.renderPostProcessing,
+             cd.volumeStack,
+             cd.volumeTrigger,
+             cd.volumeLayerMask,
+             cd.requiresColorTexture,
+             cd.allowXRRendering,
+             cd.renderType,
+             cd.requiresColorOption,
+             cd.requiresDepthOption,
+             cd.renderShadows,
+             cd.dithering,
+#elif HDRP
+            cd.clearColorMode,
+            cd.backgroundColorHDR,
+            cd.clearDepth,
+            cd.customRenderingSettings,
+            cd.volumeLayerMask,
+            cd.volumeAnchorOverride,
+            cd.antialiasing,
+            cd.dithering,
+            cd.xrRendering,
+            cd.SMAAQuality,
+            cd.stopNaNs,
+            cd.taaSharpenStrength,
+            cd.TAAQuality,
+            cd.taaHistorySharpening,
+            cd.taaAntiFlicker,
+            cd.taaMotionVectorRejection,
+            cd.taaAntiHistoryRinging,
+            cd.taaBaseBlendFactor,
+            cd.taaJitterScale,
+            cd.flipYMode,
+            cd.fullscreenPassthrough,
+            //cd.allowDynamicResolution,
+            cd.invertFaceCulling,
+            cd.probeLayerMask,
+            cd.hasPersistentHistory,
+            cd.exposureTarget,
+            cd.physicalParameters,
+            cd.renderingPathCustomFrameSettings,
+            cd.renderingPathCustomFrameSettingsOverrideMask,
+            cd.defaultFrameSettings,
+            //cd.probeCustomFixedExposure,
+            cd.allowDeepLearningSuperSampling,
+            cd.deepLearningSuperSamplingUseCustomQualitySettings,
+            cd.deepLearningSuperSamplingQuality,
+            cd.deepLearningSuperSamplingUseCustomAttributes,
+            cd.deepLearningSuperSamplingUseOptimalSettings,
+            cd.deepLearningSuperSamplingSharpening,
+            cd.materialMipBias,
+#endif
+            //c.depth,
+            //c.useOcclusionCulling
+
+        ////
+        //// Summary:
+        ////     The number of cameras in the current Scene.
+        //c.allCamerasCount, // { get; }
+        ////
+        //// Summary:
+        ////     Returns all enabled cameras in the Scene.
+        //c.allCameras, // { get; }
+        ////
+        //// Summary:
+        ////     The first enabled Camera component that is tagged "MainCamera" (Read Only).
+        //c.main, // { get; }
+        ////[EditorBrowsable(EditorBrowsableState.Never)]
+        ////[Obsolete("Property mainCamera has been deprecated. Use Camera.main instead (UnityUpgradable) -> main", true)]
+        //c.mainCamera, // { get; }
+        ////
+        //// Summary:
+        ////     The camera we are currently rendering with, for low-level render control only
+        ////     (Read Only).
+        //c.current, // { get; }
+        //
+        // Summary:
+        //     How and if camera generates a depth texture.
+        c.depthTextureMode, // { get; set; }
+        //
+        // Summary:
+        //     Should the camera clear the stencil buffer after the deferred light pass?
+        c.clearStencilAfterLightingPass, // { get; set; }
+        //
+        // Summary:
+        //     Sets a custom matrix for the camera to use for all culling queries.
+        //c.cullingMatrix, // { get; set; }
+        //
+        // Summary:
+        //     Whether or not the Camera will use occlusion culling during rendering.
+        c.useOcclusionCulling, // { get; set; }
+        //
+        // Summary:
+        //     Enable usePhysicalProperties to use physical camera properties to compute the
+        //     field of view and the frustum.
+        c.usePhysicalProperties, // { get; set; }
+        //
+        // Summary:
+        //     The size of the camera sensor, expressed in millimeters.
+        c.sensorSize, // { get; set; }
+        //
+        // Summary:
+        //     Per-layer culling distances.
+        //c.layerCullDistances, // { get; set; }
+        //
+        // Summary:
+        //     Sets the culling mask used to determine which objects from which Scenes to draw.
+        //     See EditorSceneManager.SetSceneCullingMask.
+        //[NativeConditional("UNITY_EDITOR")]
+        c.overrideSceneCullingMask, // { get; set; }
+        //
+        // Summary:
+        //     Identifies what kind of camera this is, using the CameraType enum.
+        c.cameraType, // { get; set; }
+        //
+        // Summary:
+        //     How to perform per-layer culling for a Camera.
+        c.layerCullSpherical, // { get; set; }
+        //
+        // Summary:
+        //     Mask to select which layers can trigger events on the camera.
+        c.eventMask, // { get; set; }
+        //
+        // Summary:
+        //     How the camera clears the background.
+        c.clearFlags, // { get; set; }
+        //
+        // Summary:
+        //     The color with which the screen will be cleared.
+        c.backgroundColor, // { get; set; }
+        //
+        // Summary:
+        //     The aspect ratio (width divided by height).
+        c.aspect, // { get; set; }
+        //
+        // Summary:
+        //     Get the world-space speed of the camera (Read Only).
+        //c.velocity, // { get; }
+        //
+        // Summary:
+        //     The lens offset of the camera. The lens shift is relative to the sensor size.
+        //     For example, a lens shift of 0.5 offsets the sensor by half its horizontal size.
+        c.lensShift, // { get; set; }
+        //
+        // Summary:
+        //     Camera's depth in the camera rendering order.
+        c.depth, // { get; set; }
+        //
+        // Summary:
+        //     An axis that describes the direction along which the distances of objects are
+        //     measured for the purpose of sorting.
+        c.transparencySortAxis, // { get; set; }
+        //
+        // Summary:
+        //     Transparent object sorting mode.
+        c.transparencySortMode, // { get; set; }
+        //
+        // Summary:
+        //     Opaque object sorting mode.
+        c.opaqueSortMode, // { get; set; }
+        //
+        // Summary:
+        //     Is the camera orthographic (true) or perspective (false)?
+        c.orthographic, // { get; set; }
+        //
+        // Summary:
+        //     Camera's half-size when in orthographic mode.
+        c.orthographicSize, // { get; set; }
+        //
+        // Summary:
+        //     Should camera rendering be forced into a RenderTexture.
+        //[NativeProperty("ForceIntoRT")]
+        c.forceIntoRenderTexture, // { get; set; }
+        //
+        // Summary:
+        //     Dynamic Resolution Scaling.
+        c.allowDynamicResolution, // { get; set; }
+        //
+        // Summary:
+        //     MSAA rendering.
+        c.allowMSAA, // { get; set; }
+        //
+        // Summary:
+        //     High dynamic range rendering.
+        c.allowHDR, // { get; set; }
+        //
+        // Summary:
+        //     The rendering path that is currently being used (Read Only).
+        c.actualRenderingPath, // { get; }
+        //
+        // Summary:
+        //     The rendering path that should be used, if possible.
+        c.renderingPath, // { get; set; }
+        //
+        // Summary:
+        //     This is used to render parts of the Scene selectively.
+        c.cullingMask, // { get; set; }
+        //
+        // Summary:
+        //     The camera focal length, expressed in millimeters. To use this property, enable
+        //     UsePhysicalProperties.
+        c.focalLength, // { get; set; }
+        //
+        // Summary:
+        //     How tall is the camera in pixels (not accounting for dynamic resolution scaling)
+        //     (Read Only).
+        c.pixelHeight, // { get; }
+        //
+        // Summary:
+        //     Where on the screen is the camera rendered in normalized coordinates.
+        //[NativeProperty("NormalizedViewportRect")]
+        c.rect, // { get; set; }
+        //
+        // Summary:
+        //     Render only once and use resulting image for both eyes.
+        //[EditorBrowsable(EditorBrowsableState.Never)]
+        //[Obsolete("Property stereoMirrorMode is no longer supported. Please use single pass stereo rendering instead.", true)]
+        //c.stereoMirrorMode, // { get; set; }
+        //
+        // Summary:
+        //     High dynamic range rendering.
+        //[EditorBrowsable(EditorBrowsableState.Never)]
+        ////[Obsolete("Property hdr has been deprecated. Use Camera.allowHDR instead (UnityUpgradable) -> UnityEngine.Camera.allowHDR", false)]
+        //c.hdr, // { get; set; }
+        ////[EditorBrowsable(EditorBrowsableState.Never)]
+        ////[Obsolete("Property fov has been deprecated. Use Camera.fieldOfView instead (UnityUpgradable) -> UnityEngine.Camera.fieldOfView", false)]
+        //c.fov, // { get; set; }
+        ////[EditorBrowsable(EditorBrowsableState.Never)]
+        ////[Obsolete("Property far has been deprecated. Use Camera.farClipPlane instead (UnityUpgradable) -> UnityEngine.Camera.farClipPlane", false)]
+        //c.far, // { get; set; }
+        ////[EditorBrowsable(EditorBrowsableState.Never)]
+        ////[Obsolete("Property near has been deprecated. Use Camera.nearClipPlane instead (UnityUpgradable) -> UnityEngine.Camera.nearClipPlane", false)]
+        //c.near, // { get; set; }
+        ////[EditorBrowsable(EditorBrowsableState.Never)]
+        ////[Obsolete("Property isOrthoGraphic has been deprecated. Use orthographic (UnityUpgradable) -> orthographic", true)]
+        //c.isOrthoGraphic, // { get; set; }
+        //
+        // Summary:
+        //     Number of command buffers set up on this camera (Read Only).
+        c.commandBufferCount, // { get; }
+        //[NativeConditional("UNITY_EDITOR")]
+        c.sceneViewFilterMode, // { get; }
+        //
+        // Summary:
+        //     Returns the eye that is currently rendering. If called when stereo is not enabled
+        //     it will return Camera.MonoOrStereoscopicEye.Mono. If called during a camera rendering
+        //     callback such as OnRenderImage it will return the currently rendering eye. If
+        //     called outside of a rendering callback and stereo is enabled, it will return
+        //     the default eye which is Camera.MonoOrStereoscopicEye.Left.
+        c.stereoActiveEye, // { get; }
+        //
+        // Summary:
+        //     Defines which eye of a VR display the Camera renders into.
+        c.stereoTargetEye, // { get; set; }
+        //
+        // Summary:
+        //     Determines whether the stereo view matrices are suitable to allow for a single
+        //     pass cull.
+        c.areVRStereoViewMatricesWithinSingleCullTolerance, // { get; }
+        //
+        // Summary:
+        //     Distance to a point where virtual eyes converge.
+        c.stereoConvergence, // { get; set; }
+        //
+        // Summary:
+        //     The distance between the virtual eyes. Use this to query or set the current eye
+        //     separation. Note that most VR devices provide this value, in which case setting
+        //     the value will have no effect.
+        c.stereoSeparation, // { get; set; }
+        //
+        // Summary:
+        //     Stereoscopic rendering.
+        c.stereoEnabled, // { get; }
+        //
+        // Summary:
+        //     If not null, the camera will only render the contents of the specified Scene.
+        c.scene, // { get; set; }
+        //
+        // Summary:
+        //     Get the view projection matrix used on the last frame.
+        c.previousViewProjectionMatrix, // { get; }
+        //
+        // Summary:
+        //     Should the jittered matrix be used for transparency rendering?
+        //[NativeProperty("UseJitteredProjectionMatrixForTransparent")]
+        c.useJitteredProjectionMatrixForTransparentRendering, // { get; set; }
+        //
+        // Summary:
+        //     Get or set the raw projection matrix with no camera offset (no jittering).
+        c.nonJitteredProjectionMatrix, // { get; set; }
+        //
+        // Summary:
+        //     Set a custom projection matrix.
+        c.projectionMatrix, // { get; set; }
+        //
+        // Summary:
+        //     Matrix that transforms from world to camera space.
+        //c.worldToCameraMatrix, // { get; set; }
+        //
+        // Summary:
+        //     Matrix that transforms from camera space to world space (Read Only).
+        //c.cameraToWorldMatrix, // { get; }
+        //
+        // Summary:
+        //     Set the target display for this Camera.
+        c.targetDisplay, // { get; set; }
+        //
+        // Summary:
+        //     Gets the temporary RenderTexture target for this Camera.
+        c.activeTexture, // { get; }
+        //
+        // Summary:
+        //     Destination render texture.
+        c.targetTexture, // { get; set; }
+        //
+        // Summary:
+        //     How tall is the camera in pixels (accounting for dynamic resolution scaling)
+        //     (Read Only).
+        c.scaledPixelHeight, // { get; }
+        //
+        // Summary:
+        //     How wide is the camera in pixels (accounting for dynamic resolution scaling)
+        //     (Read Only).
+        c.scaledPixelWidth, // { get; }
+        //
+        // Summary:
+        //     The distance of the far clipping plane from the Camera, in world units.
+        //[NativeProperty("Far")]
+        c.farClipPlane, // { get; set; }
+        //
+        // Summary:
+        //     How wide is the camera in pixels (not accounting for dynamic resolution scaling)
+        //     (Read Only).
+        c.pixelWidth, // { get; }
+        //
+        // Summary:
+        //     Where on the screen is the camera rendered in pixel coordinates.
+        //[NativeProperty("ScreenViewportRect")]
+        c.pixelRect, // { get; set; }
+        //
+        // Summary:
+        //     There are two gates for a camera, the sensor gate and the resolution gate. The
+        //     physical camera sensor gate is defined by the sensorSize property, the resolution
+        //     gate is defined by the render target area.
+        c.gateFit, // { get; set; }
+        //
+        // Summary:
+        //     The distance of the near clipping plane from the the Camera, in world units.
+        //[NativeProperty("Near")]
+        c.nearClipPlane, // { get; set; }
+        //
+        // Summary:
+        //     The vertical field of view of the Camera, in degrees.
+        //[NativeProperty("VerticalFieldOfView")]
+        c.fieldOfView // { get; set; }
             );
+
+        return cds;
     }
 
     [Serializable]
@@ -5472,7 +6352,7 @@ public class Stereo3D : MonoBehaviour
         public float taaJitterScale;
         public HDAdditionalCameraData.FlipYMode flipYMode;
         public bool fullscreenPassthrough;
-        public bool allowDynamicResolution;
+        //public bool allowDynamicResolution;
         public bool invertFaceCulling;
         public LayerMask probeLayerMask;
         public bool hasPersistentHistory;
@@ -5490,8 +6370,68 @@ public class Stereo3D : MonoBehaviour
         public float deepLearningSuperSamplingSharpening;
         public float materialMipBias;
 #endif
-        public float depth;
+        //public float depth;
+        //public bool useOcclusionCulling;
+
+        public DepthTextureMode depthTextureMode;
+        public bool clearStencilAfterLightingPass;
+        //public Matrix4x4 cullingMatrix;
         public bool useOcclusionCulling;
+        public bool usePhysicalProperties;
+        public Vector2 sensorSize;
+        //public float[] layerCullDistances;
+        public ulong overrideSceneCullingMask;
+        public CameraType cameraType;
+        public bool layerCullSpherical;
+        public int eventMask;
+        public CameraClearFlags clearFlags;
+        public Color backgroundColor;
+        public float aspect;
+        //public Vector3 velocity;
+        public Vector2 lensShift;
+        public float depth;
+        public Vector3 transparencySortAxis;
+        public TransparencySortMode transparencySortMode;
+        public OpaqueSortMode opaqueSortMode;
+        public bool orthographic;
+        public float orthographicSize;
+        public bool forceIntoRenderTexture;
+        public bool allowDynamicResolution;
+        public bool allowMSAA;
+        public bool allowHDR;
+        public RenderingPath actualRenderingPath;
+        public RenderingPath renderingPath;
+        public int cullingMask;
+        public float focalLength;
+        public int pixelHeight;
+        public Rect rect;
+        //public bool stereoMirrorMode;
+        public int commandBufferCount;
+        public Camera.SceneViewFilterMode sceneViewFilterMode;
+        public Camera.MonoOrStereoscopicEye stereoActiveEye;
+        public StereoTargetEyeMask stereoTargetEye;
+        public bool areVRStereoViewMatricesWithinSingleCullTolerance;
+        public float stereoConvergence;
+        public float stereoSeparation;
+        public bool stereoEnabled;
+        public UnityEngine.SceneManagement.Scene scene;
+        public Matrix4x4 previousViewProjectionMatrix;
+        public bool useJitteredProjectionMatrixForTransparentRendering;
+        public Matrix4x4 nonJitteredProjectionMatrix;
+        public Matrix4x4 projectionMatrix;
+        //public Matrix4x4 worldToCameraMatrix;
+        //public Matrix4x4 cameraToWorldMatrix;
+        public int targetDisplay;
+        public RenderTexture activeTexture;
+        public RenderTexture targetTexture;
+        public int scaledPixelHeight;
+        public int scaledPixelWidth;
+        public float farClipPlane;
+        public int pixelWidth;
+        public Rect pixelRect;
+        public Camera.GateFitMode gateFit;
+        public float nearClipPlane;
+        public float fieldOfView;
 
         public CameraDataStruct(
 #if URP
@@ -5542,7 +6482,7 @@ public class Stereo3D : MonoBehaviour
             float taaJitterScale,
             HDAdditionalCameraData.FlipYMode flipYMode,
             bool fullscreenPassthrough,
-            bool allowDynamicResolution,
+            //bool allowDynamicResolution,
             bool invertFaceCulling,
             LayerMask probeLayerMask,
             bool hasPersistentHistory,
@@ -5560,8 +6500,68 @@ public class Stereo3D : MonoBehaviour
             float deepLearningSuperSamplingSharpening,
             float materialMipBias,
 #endif
+            //float depth,
+            //bool useOcclusionCulling
+
+            DepthTextureMode depthTextureMode,
+            bool clearStencilAfterLightingPass,
+            //Matrix4x4 cullingMatrix,
+            bool useOcclusionCulling,
+            bool usePhysicalProperties,
+            Vector2 sensorSize,
+            //float[] layerCullDistances,
+            ulong overrideSceneCullingMask,
+            CameraType cameraType,
+            bool layerCullSpherical,
+            int eventMask,
+            CameraClearFlags clearFlags,
+            Color backgroundColor,
+            float aspect,
+            //Vector3 velocity,
+            Vector2 lensShift,
             float depth,
-            bool useOcclusionCulling
+            Vector3 transparencySortAxis,
+            TransparencySortMode transparencySortMode,
+            OpaqueSortMode opaqueSortMode,
+            bool orthographic,
+            float orthographicSize,
+            bool forceIntoRenderTexture,
+            bool allowDynamicResolution,
+            bool allowMSAA,
+            bool allowHDR,
+            RenderingPath actualRenderingPath,
+            RenderingPath renderingPath,
+            int cullingMask,
+            float focalLength,
+            int pixelHeight,
+            Rect rect,
+            //bool stereoMirrorMode,
+            int commandBufferCount,
+            Camera.SceneViewFilterMode sceneViewFilterMode,
+            Camera.MonoOrStereoscopicEye stereoActiveEye,
+            StereoTargetEyeMask stereoTargetEye,
+            bool areVRStereoViewMatricesWithinSingleCullTolerance,
+            float stereoConvergence,
+            float stereoSeparation,
+            bool stereoEnabled,
+            UnityEngine.SceneManagement.Scene scene,
+            Matrix4x4 previousViewProjectionMatrix,
+            bool useJitteredProjectionMatrixForTransparentRendering,
+            Matrix4x4 nonJitteredProjectionMatrix,
+            Matrix4x4 projectionMatrix,
+            //Matrix4x4 worldToCameraMatrix,
+            //Matrix4x4 cameraToWorldMatrix,
+            int targetDisplay,
+            RenderTexture activeTexture,
+            RenderTexture targetTexture,
+            int scaledPixelHeight,
+            int scaledPixelWidth,
+            float farClipPlane,
+            int pixelWidth,
+            Rect pixelRect,
+            Camera.GateFitMode gateFit,
+            float nearClipPlane,
+            float fieldOfView
             )
         {
 #if URP
@@ -5612,7 +6612,7 @@ public class Stereo3D : MonoBehaviour
             this.taaJitterScale = taaJitterScale;
             this.flipYMode = flipYMode;
             this.fullscreenPassthrough = fullscreenPassthrough;
-            this.allowDynamicResolution = allowDynamicResolution;
+            //this.allowDynamicResolution = allowDynamicResolution;
             this.invertFaceCulling = invertFaceCulling;
             this.probeLayerMask = probeLayerMask;
             this.hasPersistentHistory = hasPersistentHistory;
@@ -5630,8 +6630,68 @@ public class Stereo3D : MonoBehaviour
             this.deepLearningSuperSamplingSharpening = deepLearningSuperSamplingSharpening;
             this.materialMipBias = materialMipBias;
 #endif
-            this.depth = depth;
+            //this.depth = depth;
+            //this.useOcclusionCulling = useOcclusionCulling;
+
+            this.depthTextureMode = depthTextureMode;
+            this.clearStencilAfterLightingPass = clearStencilAfterLightingPass;
+            //this.cullingMatrix = cullingMatrix;
             this.useOcclusionCulling = useOcclusionCulling;
+            this.usePhysicalProperties = usePhysicalProperties;
+            this.sensorSize = sensorSize;
+            //this.layerCullDistances = layerCullDistances;
+            this.overrideSceneCullingMask = overrideSceneCullingMask;
+            this.cameraType = cameraType;
+            this.layerCullSpherical = layerCullSpherical;
+            this.eventMask = eventMask;
+            this.clearFlags = clearFlags;
+            this.backgroundColor = backgroundColor;
+            this.aspect = aspect;
+            //this.velocity = velocity;
+            this.lensShift = lensShift;
+            this.depth = depth;
+            this.transparencySortAxis = transparencySortAxis;
+            this.transparencySortMode = transparencySortMode;
+            this.opaqueSortMode = opaqueSortMode;
+            this.orthographic = orthographic;
+            this.orthographicSize = orthographicSize;
+            this.forceIntoRenderTexture = forceIntoRenderTexture;
+            this.allowDynamicResolution = allowDynamicResolution;
+            this.allowMSAA = allowMSAA;
+            this.allowHDR = allowHDR;
+            this.actualRenderingPath = actualRenderingPath;
+            this.renderingPath = renderingPath;
+            this.cullingMask = cullingMask;
+            this.focalLength = focalLength;
+            this.pixelHeight = pixelHeight;
+            this.rect = rect;
+            //this.stereoMirrorMode = stereoMirrorMode;
+            this.commandBufferCount = commandBufferCount;
+            this.sceneViewFilterMode = sceneViewFilterMode;
+            this.stereoActiveEye = stereoActiveEye;
+            this.stereoTargetEye = stereoTargetEye;
+            this.areVRStereoViewMatricesWithinSingleCullTolerance = areVRStereoViewMatricesWithinSingleCullTolerance;
+            this.stereoConvergence = stereoConvergence;
+            this.stereoSeparation = stereoSeparation;
+            this.stereoEnabled = stereoEnabled;
+            this.scene = scene;
+            this.previousViewProjectionMatrix = previousViewProjectionMatrix;
+            this.useJitteredProjectionMatrixForTransparentRendering = useJitteredProjectionMatrixForTransparentRendering;
+            this.nonJitteredProjectionMatrix = nonJitteredProjectionMatrix;
+            this.projectionMatrix = projectionMatrix;
+            //this.worldToCameraMatrix = worldToCameraMatrix;
+            //this.cameraToWorldMatrix = cameraToWorldMatrix;
+            this.targetDisplay = targetDisplay;
+            this.activeTexture = activeTexture;
+            this.targetTexture = targetTexture;
+            this.scaledPixelHeight = scaledPixelHeight;
+            this.scaledPixelWidth = scaledPixelWidth;
+            this.farClipPlane = farClipPlane;
+            this.pixelWidth = pixelWidth;
+            this.pixelRect = pixelRect;
+            this.gateFit = gateFit;
+            this.nearClipPlane = nearClipPlane;
+            this.fieldOfView = fieldOfView;
         }
     }
 
@@ -5644,9 +6704,12 @@ public class Stereo3D : MonoBehaviour
         public Camera cameraLeft;
         public Camera cameraRight;
 #if HDRP
-        public RenderTexture RTLeft;
-        public RenderTexture RTRight;
+        public RenderTexture leftCamRT;
+        public RenderTexture rightCamRT;
 #endif
+        public CameraDataStruct cameraDataStruct;
+        public CameraDataStruct lastCameraDataStruct;
+
     }
 
     [Serializable]
@@ -5712,9 +6775,9 @@ public class Stereo3D : MonoBehaviour
     {
         public string userName;
 
-        public SaveLoadUserName(string inUserName)
+        public SaveLoadUserName(string userName)
         {
-            userName = inUserName;
+            this.userName = userName;
         }
     }
 
