@@ -93,7 +93,7 @@ using UnityEngine.Rendering.PostProcessing;
 
 public class Stereo3D : MonoBehaviour
 {
-    public enum Method {Interlace_Horizontal, Interlace_Vertical, Interlace_Checkerboard, SideBySide, SideBySide_HMD, OverUnder, Anaglyph_RedCyan, Anaglyph_RedBlue, Anaglyph_GreenMagenta, Anaglyph_AmberBlue};
+    public enum Method {Interlace_Horizontal, Interlace_Vertical, Interlace_Checkerboard, SideBySide, SideBySide_Full, SideBySide_HMD, OverUnder, Anaglyph_RedCyan, Anaglyph_RedBlue, Anaglyph_GreenMagenta, Anaglyph_AmberBlue};
     public enum InterlaceType {Horizontal, Vertical, Checkerboard};
     public enum EyePriority {Left, Center, Right};
 
@@ -1221,11 +1221,13 @@ public class Stereo3D : MonoBehaviour
             //Resize();
             CamRect_Set();
             PanelDepthMinMaxSet();
+            UserIPDSet();
+            VirtualIPDSet();
             Aspect_Set();
             VSyncSet();
             PPISet();
-            UserIPDSet();
-            VirtualIPDSet();
+            //UserIPDSet();
+            //VirtualIPDSet();
             //PanelDepthMinMaxSet();
             //PanelDepthSet();
             //PanelOverlayDepthMinMaxSet();
@@ -3588,7 +3590,8 @@ public class Stereo3D : MonoBehaviour
         //aspect = cam.aspect;
         aspect = cam.pixelWidth / (float)cam.pixelHeight;
 
-        if (S3DEnabled && method == Method.SideBySide_HMD)
+        //if (S3DEnabled && method == Method.SideBySide_HMD)
+        if (S3DEnabled && (method == Method.SideBySide_HMD || method == Method.SideBySide_Full))
             aspect *= .5f;
 
         //cam.aspect = aspect;
@@ -4226,7 +4229,13 @@ public class Stereo3D : MonoBehaviour
     void UserIPDSet()
     {
         //userIPD = Mathf.Max(userIPD, 0);
-        userIPD = Mathf.Clamp(userIPD, 0.01f, 100);
+        //userIPD = Mathf.Clamp(userIPD, 0.01f, 100);
+
+        if (GUIAsOverlay)
+            userIPD = Mathf.Clamp(userIPD, 0, 100);
+        else
+            userIPD = Mathf.Clamp(userIPD, .01f, 100);
+
         userIPD_slider.value = userIPD;
         //userIPD_inputField.text = Convert.ToString(userIPD);
         userIPD_inputField.text = userIPD.ToString();
@@ -4243,7 +4252,12 @@ public class Stereo3D : MonoBehaviour
 		if (matchUserIPD)
 			virtualIPD = userIPD;
         else
-            virtualIPD = Mathf.Clamp(virtualIPD, 0.01f, virtualIPDMax);
+            //virtualIPD = Mathf.Clamp(virtualIPD, 0.01f, virtualIPDMax);
+            if (GUIAsOverlay)
+                virtualIPD = Mathf.Clamp(virtualIPD, 0, virtualIPDMax);
+            else
+                virtualIPD = Mathf.Clamp(virtualIPD, .01f, virtualIPDMax);
+
 
         virtualIPD_slider.value = virtualIPD;
         //virtualIPD_inputField.text = Convert.ToString(virtualIPD);
@@ -4822,23 +4836,46 @@ public class Stereo3D : MonoBehaviour
 
                 case Method.SideBySide:
 
-                    if (optimize)
-                        rtWidth /= 2;
+                    //if (optimize)
+                    //    rtWidth /= 2;
 
-                    verticesUV[2] = new Vector2(2, 1);
-                    verticesUV[3] = new Vector2(2, 0);
-                    pass = 3;
+                    //verticesUV[2] = new Vector2(2, 1);
+                    //verticesUV[3] = new Vector2(2, 0);
+                    //pass = 3;
+                    MethodSideBySide();
+                break;
+
+                case Method.SideBySide_Full:
+
+                    //if (optimize)
+                    //    rtWidth /= 2;
+
+                    //verticesUV[2] = new Vector2(2, 1);
+                    //verticesUV[3] = new Vector2(2, 0);
+                    //pass = 3;
+                    MethodSideBySide();
                 break;
 
                 case Method.SideBySide_HMD:
 
+                    //if (optimize)
+                    //    rtWidth /= 2;
+
+                    //verticesUV[2] = new Vector2(2, 1);
+                    //verticesUV[3] = new Vector2(2, 0);
+                    //pass = 3;
+                    MethodSideBySide();
+                break;
+
+                void MethodSideBySide()
+                {
                     if (optimize)
                         rtWidth /= 2;
 
                     verticesUV[2] = new Vector2(2, 1);
                     verticesUV[3] = new Vector2(2, 0);
                     pass = 3;
-                    break;
+                }
 
                 case Method.OverUnder:
 
@@ -6741,32 +6778,60 @@ public class Stereo3D : MonoBehaviour
         //public Vector2 panelPos;
         public SavableVector2 panelPos;
 
+        //public SaveLoad(
+        //    bool inSwapLR,
+        //    bool inOptimize,
+        //    bool inVSync,
+        //    Method inMethod,
+        //    float inPPI,
+        //    float inUserIPD,
+        //    float inVirtualIPD,
+        //    bool inMatchUserIPD,
+        //    float inFOV,
+        //    float inPanelDepth,
+        //    //Vector2 inPanelPos
+        //    SavableVector2 inPanelPos
+        //    )
+        //{
+        //    swapLR = inSwapLR;
+        //    optimize = inOptimize;
+        //    vSync = inVSync;
+        //    method = inMethod;
+        //    PPI = inPPI;
+        //    userIPD = inUserIPD;
+        //    virtualIPD = inVirtualIPD;
+        //    matchUserIPD = inMatchUserIPD;
+        //    FOV = inFOV;
+        //    panelDepth = inPanelDepth;
+        //    panelPos = inPanelPos;
+        //}
+
         public SaveLoad(
-            bool inSwapLR,
-            bool inOptimize,
-            bool inVSync,
-            Method inMethod,
-            float inPPI,
-            float inUserIPD,
-            float inVirtualIPD,
-            bool inMatchUserIPD,
-            float inFOV,
-            float inPanelDepth,
-            //Vector2 inPanelPos
-            SavableVector2 inPanelPos
+            bool swapLR,
+            bool optimize,
+            bool vSync,
+            Method method,
+            float PPI,
+            float userIPD,
+            float virtualIPD,
+            bool matchUserIPD,
+            float FOV,
+            float panelDepth,
+            //Vector2 panelPos
+            SavableVector2 panelPos
             )
         {
-            swapLR = inSwapLR;
-            optimize = inOptimize;
-            vSync = inVSync;
-            method = inMethod;
-            PPI = inPPI;
-            userIPD = inUserIPD;
-            virtualIPD = inVirtualIPD;
-            matchUserIPD = inMatchUserIPD;
-            FOV = inFOV;
-            panelDepth = inPanelDepth;
-            panelPos = inPanelPos;
+            this.swapLR = swapLR;
+            this.optimize = optimize;
+            this.vSync = vSync;
+            this.method = method;
+            this.PPI = PPI;
+            this.userIPD = userIPD;
+            this.virtualIPD = virtualIPD;
+            this.matchUserIPD = matchUserIPD;
+            this.FOV = FOV;
+            this.panelDepth = panelDepth;
+            this.panelPos = panelPos;
         }
     }
 
