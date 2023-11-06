@@ -5002,6 +5002,9 @@ public class Stereo3D : MonoBehaviour
                 leftCam.targetDisplay = 0;
                 rightCam.targetDisplay = 1;
                 //OnOffToggle();
+
+                if (Display.displays.Length > 1)
+                    Display.displays[1].Activate();
             }
             else
             {
