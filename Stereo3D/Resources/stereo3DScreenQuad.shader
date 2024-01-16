@@ -10,6 +10,7 @@ Shader "Stereo3D Screen Quad"
 
 	   _Columns ("Columns", Int) = 1
 	   _Rows ("Rows", Int) = 1
+	   _OddFrame("OddFrame", Int) = 0
 	}
 
 	SubShader 
@@ -222,7 +223,45 @@ Shader "Stereo3D Screen Quad"
 			ENDCG
 		}
 
-		//pass5 Anaglyph
+		//pass5 Sequential
+		Pass
+		{
+			ZWrite Off ZTest Always
+
+			CGPROGRAM
+			#pragma vertex vert
+			#pragma fragment frag
+
+			StructuredBuffer<float2> verticesPosBuffer;
+			StructuredBuffer<float2> verticesUVBuffer;
+
+			struct vertData
+			{
+				float4 pos : SV_POSITION;
+				float2 uv : uv;
+			};
+
+			vertData vert(uint vertexID : SV_VertexID)
+			{
+				vertData o;
+				o.pos = float4(verticesPosBuffer[vertexID], 0, 1);
+				o.uv = verticesUVBuffer[vertexID];
+				return o;
+			}
+
+			Texture2D  _LeftTex;
+			Texture2D  _RightTex;
+			int _OddFrame;
+			SamplerState repeat_point_sampler;
+
+			fixed4 frag(vertData i) : SV_Target
+			{
+				return _OddFrame == 0 ? _LeftTex.Sample(repeat_point_sampler, i.uv) : _RightTex.Sample(repeat_point_sampler, i.uv);
+			}
+			ENDCG
+		}
+
+		//pass6 Anaglyph
 		Pass
 		{
 			ZWrite Off ZTest Always

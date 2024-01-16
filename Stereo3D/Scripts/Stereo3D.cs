@@ -102,6 +102,7 @@ public class Stereo3D : MonoBehaviour
         SideBySide_HMD, 
         Two_Displays, 
         OverUnder, 
+        Sequential, 
         Anaglyph_RedCyan, 
         Anaglyph_RedBlue, 
         Anaglyph_GreenMagenta, 
@@ -2206,6 +2207,7 @@ public class Stereo3D : MonoBehaviour
     //float lastVCamNearClip;
     //bool vCamSelected;
     //float vCamSelectedTimer;
+    bool oddFrame;
 
     //void VCamUnselect()
     //{
@@ -2220,6 +2222,7 @@ public class Stereo3D : MonoBehaviour
         //Debug.Log("cam.nearClipPlane " + cam.nearClipPlane);
         //Debug.Log("cam.projectionMatrix " + cam.projectionMatrix);
         //Debug.Log(Cinemachine.CinemachineBrain.SoloCamera);
+
         //if (cam.nearClipPlane == -1 && vCam != null && UnityEditor.Selection.activeObject == vCam.VirtualCameraGameObject)
         //    //Debug.Log("UnityEditor.Selection.activeObject == vCam.VirtualCameraGameObject");
         //    ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = -1;
@@ -3856,6 +3859,35 @@ public class Stereo3D : MonoBehaviour
 //            if (additionalS3DCameras.Count != 0 || canvasCamera && canvasCamera.isActiveAndEnabled)
 //                cam.targetTexture = renderTexture;
 //#endif
+
+        if (S3DEnabled && method == Method.Sequential)
+        {
+            oddFrame = !oddFrame;
+            S3DMaterial.SetInt("_OddFrame", oddFrame ? 1 : 0);
+
+            //if (Time.time < 10)
+            if (oddFrame)
+            {
+                camera_left.Render();
+                camera_right.Render();
+
+#if !URP
+                foreach (var c in additionalS3DCamerasStruct)
+                    if (c.camera)
+                    {
+                        c.camera_left.Render();
+                        c.camera_right.Render();
+                    }
+#endif
+
+                if (GUIAsOverlay && GUIVisible)
+                {
+                    //Debug.Log("canvasCamera_left && canvasCamera_left.isActiveAndEnabled");
+                    canvasCamera_left.Render();
+                    canvasCamera_right.Render();
+                }
+            }
+        }
     }
 
     //void OnOffToggle()
@@ -4409,7 +4441,13 @@ public class Stereo3D : MonoBehaviour
 
                 //canvasCamera.enabled = true;
                 canvasCamera.enabled = false;
-                canvasCamera_left.enabled = canvasCamera_right.enabled = true;
+                //canvasCamera_left.enabled = canvasCamera_right.enabled = true;
+
+                if (method == Method.Sequential)
+                    canvasCamera_left.enabled = canvasCamera_right.enabled = false;
+                else
+                    canvasCamera_left.enabled = canvasCamera_right.enabled = true;
+
                 //canvasCamera.orthographicSize = canvasHalfSizeY;
                 canvasCamera_left.orthographicSize = canvasCamera_right.orthographicSize = canvasHalfSizeY;
                 ////canvasCamMatrix = Matrix4x4.Ortho(-canvasHalfSizeX - canvasHalfSizeX * -shift, canvasHalfSizeX - canvasHalfSizeX * -shift, -canvasHalfSizeY, canvasHalfSizeY, -1, 1);
@@ -6098,28 +6136,40 @@ public class Stereo3D : MonoBehaviour
                     pass = 4;
                 break;
 
+                case Method.Sequential:
+                    camera_left.enabled = camera_right.enabled = false;
+
+#if !URP
+                    foreach (var c in additionalS3DCamerasStruct)
+                        if (c.camera)
+                            c.camera_left.enabled = c.camera_right.enabled = false;
+#endif
+
+                    pass = 5;
+                break;
+
                 case Method.Anaglyph_RedCyan:
                     S3DMaterial.SetColor("_LeftCol", Color.red);
                     S3DMaterial.SetColor("_RightCol", Color.cyan);
-                    pass = 5;
+                    pass = 6;
                 break;
 
                 case Method.Anaglyph_RedBlue:
                     S3DMaterial.SetColor("_LeftCol", Color.red);
                     S3DMaterial.SetColor("_RightCol", Color.blue);
-                    pass = 5;
+                    pass = 6;
                 break;
 
                 case Method.Anaglyph_GreenMagenta:
                     S3DMaterial.SetColor("_LeftCol", Color.green);
                     S3DMaterial.SetColor("_RightCol", Color.magenta);
-                    pass = 5;
+                    pass = 6;
                     break;
 
                 case Method.Anaglyph_AmberBlue:
                     S3DMaterial.SetColor("_LeftCol", new Color(1, 1, 0, 1));
                     S3DMaterial.SetColor("_RightCol", Color.blue);
-                    pass = 5;
+                    pass = 6;
                 break;
             }
 
