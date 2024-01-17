@@ -2222,6 +2222,38 @@ public class Stereo3D : MonoBehaviour
         //Debug.Log("cam.nearClipPlane " + cam.nearClipPlane);
         //Debug.Log("cam.projectionMatrix " + cam.projectionMatrix);
         //Debug.Log(Cinemachine.CinemachineBrain.SoloCamera);
+        oddFrame = !oddFrame;
+
+        if (S3DEnabled && method == Method.Sequential)
+        {
+            //oddFrame = !oddFrame;
+            S3DMaterial.SetInt("_OddFrame", oddFrame ? 1 : 0);
+
+#if !HDRP
+            //if (Time.time < 10)
+            if (oddFrame)
+            {
+                camera_left.Render();
+                camera_right.Render();
+
+#if !URP
+                foreach (var c in additionalS3DCamerasStruct)
+                    if (c.camera)
+                    {
+                        c.camera_left.Render();
+                        c.camera_right.Render();
+                    }
+#endif
+
+                if (GUIAsOverlay && GUIVisible)
+                {
+                    //Debug.Log("canvasCamera_left && canvasCamera_left.isActiveAndEnabled");
+                    canvasCamera_left.Render();
+                    canvasCamera_right.Render();
+                }
+            }
+#endif
+        }
 
         //if (cam.nearClipPlane == -1 && vCam != null && UnityEditor.Selection.activeObject == vCam.VirtualCameraGameObject)
         //    //Debug.Log("UnityEditor.Selection.activeObject == vCam.VirtualCameraGameObject");
@@ -3860,34 +3892,34 @@ public class Stereo3D : MonoBehaviour
 //                cam.targetTexture = renderTexture;
 //#endif
 
-        if (S3DEnabled && method == Method.Sequential)
-        {
-            oddFrame = !oddFrame;
-            S3DMaterial.SetInt("_OddFrame", oddFrame ? 1 : 0);
+//        if (S3DEnabled && method == Method.Sequential)
+//        {
+//            //oddFrame = !oddFrame;
+//            S3DMaterial.SetInt("_OddFrame", oddFrame ? 1 : 0);
 
-            //if (Time.time < 10)
-            if (oddFrame)
-            {
-                camera_left.Render();
-                camera_right.Render();
+//            //if (Time.time < 10)
+//            if (oddFrame)
+//            {
+//                camera_left.Render();
+//                camera_right.Render();
 
-#if !URP
-                foreach (var c in additionalS3DCamerasStruct)
-                    if (c.camera)
-                    {
-                        c.camera_left.Render();
-                        c.camera_right.Render();
-                    }
-#endif
+//#if !URP
+//                foreach (var c in additionalS3DCamerasStruct)
+//                    if (c.camera)
+//                    {
+//                        c.camera_left.Render();
+//                        c.camera_right.Render();
+//                    }
+//#endif
 
-                if (GUIAsOverlay && GUIVisible)
-                {
-                    //Debug.Log("canvasCamera_left && canvasCamera_left.isActiveAndEnabled");
-                    canvasCamera_left.Render();
-                    canvasCamera_right.Render();
-                }
-            }
-        }
+//                if (GUIAsOverlay && GUIVisible)
+//                {
+//                    //Debug.Log("canvasCamera_left && canvasCamera_left.isActiveAndEnabled");
+//                    canvasCamera_left.Render();
+//                    canvasCamera_right.Render();
+//                }
+//            }
+//        }
     }
 
     //void OnOffToggle()
@@ -4443,10 +4475,12 @@ public class Stereo3D : MonoBehaviour
                 canvasCamera.enabled = false;
                 //canvasCamera_left.enabled = canvasCamera_right.enabled = true;
 
+#if !HDRP
                 if (method == Method.Sequential)
                     canvasCamera_left.enabled = canvasCamera_right.enabled = false;
                 else
                     canvasCamera_left.enabled = canvasCamera_right.enabled = true;
+#endif
 
                 //canvasCamera.orthographicSize = canvasHalfSizeY;
                 canvasCamera_left.orthographicSize = canvasCamera_right.orthographicSize = canvasHalfSizeY;
@@ -6137,12 +6171,14 @@ public class Stereo3D : MonoBehaviour
                 break;
 
                 case Method.Sequential:
+#if !HDRP
                     camera_left.enabled = camera_right.enabled = false;
 
 #if !URP
                     foreach (var c in additionalS3DCamerasStruct)
                         if (c.camera)
                             c.camera_left.enabled = c.camera_right.enabled = false;
+#endif
 #endif
 
                     pass = 5;
