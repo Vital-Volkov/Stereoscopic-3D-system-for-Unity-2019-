@@ -2208,6 +2208,7 @@ public class Stereo3D : MonoBehaviour
     //bool vCamSelected;
     //float vCamSelectedTimer;
     bool oddFrame;
+    //RenderTexture nullRT;
 
     //void VCamUnselect()
     //{
@@ -2229,30 +2230,46 @@ public class Stereo3D : MonoBehaviour
             //oddFrame = !oddFrame;
             S3DMaterial.SetInt("_OddFrame", oddFrame ? 1 : 0);
 
-#if !HDRP
-            //if (Time.time < 10)
-            if (oddFrame)
+//#if !HDRP
+            if (optimize)
             {
-                camera_left.Render();
-                camera_right.Render();
+                //if (Time.time < 10)
+                if (oddFrame)
+                {
+                    camera_left.Render();
+                    camera_right.Render();
 
 #if !URP
-                foreach (var c in additionalS3DCamerasStruct)
-                    if (c.camera)
-                    {
-                        c.camera_left.Render();
-                        c.camera_right.Render();
-                    }
+                    foreach (var c in additionalS3DCamerasStruct)
+                        if (c.camera)
+                        {
+                            c.camera_left.Render();
+                            c.camera_right.Render();
+                        }
 #endif
 
-                if (GUIAsOverlay && GUIVisible)
-                {
-                    //Debug.Log("canvasCamera_left && canvasCamera_left.isActiveAndEnabled");
-                    canvasCamera_left.Render();
-                    canvasCamera_right.Render();
+                    if (GUIAsOverlay && GUIVisible)
+                    {
+                        //Debug.Log("canvasCamera_left && canvasCamera_left.isActiveAndEnabled");
+                        canvasCamera_left.Render();
+                        canvasCamera_right.Render();
+                    }
                 }
             }
-#endif
+            //else
+            //{
+            //    if (oddFrame)
+            //    {
+            //        camera_left.targetTexture = renderTexture_left;
+            //        camera_right.targetTexture = renderTexture_right;
+            //    }
+            //    else
+            //    {
+            //        camera_left.targetTexture = nullRT;
+            //        camera_right.targetTexture = nullRT;
+            //    }
+            //}
+//#endif
         }
 
         //if (cam.nearClipPlane == -1 && vCam != null && UnityEditor.Selection.activeObject == vCam.VirtualCameraGameObject)
@@ -4475,12 +4492,12 @@ public class Stereo3D : MonoBehaviour
                 canvasCamera.enabled = false;
                 //canvasCamera_left.enabled = canvasCamera_right.enabled = true;
 
-#if !HDRP
-                if (method == Method.Sequential)
+//#if !HDRP
+                if (method == Method.Sequential && optimize)
                     canvasCamera_left.enabled = canvasCamera_right.enabled = false;
                 else
                     canvasCamera_left.enabled = canvasCamera_right.enabled = true;
-#endif
+//#endif
 
                 //canvasCamera.orthographicSize = canvasHalfSizeY;
                 canvasCamera_left.orthographicSize = canvasCamera_right.orthographicSize = canvasHalfSizeY;
@@ -6171,15 +6188,22 @@ public class Stereo3D : MonoBehaviour
                 break;
 
                 case Method.Sequential:
-#if !HDRP
-                    camera_left.enabled = camera_right.enabled = false;
+//#if !HDRP
+                    if (optimize)
+                    {
+                        camera_left.enabled = camera_right.enabled = false;
 
 #if !URP
-                    foreach (var c in additionalS3DCamerasStruct)
-                        if (c.camera)
-                            c.camera_left.enabled = c.camera_right.enabled = false;
+                        foreach (var c in additionalS3DCamerasStruct)
+                            if (c.camera)
+                                c.camera_left.enabled = c.camera_right.enabled = false;
 #endif
-#endif
+                    }
+//#endif
+                    //nullRT = new RenderTexture(8, 8, 0, RenderTextureFormat.R8); //minimal RenderTexture for fastest rendering
+                    ////nullRT = new RenderTexture(rtWidth, rtHeight, 0, RenderTextureFormat.R8); //minimal RenderTexture for fastest rendering
+                    //nullRT.filterMode = FilterMode.Point;
+                    ////nullRT = RT_Make();
 
                     pass = 5;
                 break;
@@ -6445,6 +6469,9 @@ public class Stereo3D : MonoBehaviour
                     CanvasCameraLeftRenderTexture_Set();
                     //canvasCamera_right.targetTexture = canvasRenderTexture_right;
                     CanvasCameraRightRenderTexture_Set();
+
+                    //if (method == Method.Sequential)
+                    //    RenderPipelineManager.beginContextRendering += RenderTexture_Reset; //add render context
 #else
                     canvasCamera_left.targetTexture = renderTexture_left;
                     canvasCamera_right.targetTexture = renderTexture_right;
@@ -6484,6 +6511,9 @@ public class Stereo3D : MonoBehaviour
                     verticesUVBuffer = new ComputeBuffer(4, Marshal.SizeOf(typeof(Vector2)));
                     verticesUVBuffer.SetData(verticesUV);
                     S3DMaterial.SetBuffer("verticesUVBuffer", verticesUVBuffer);
+
+                    //if (method == Method.Sequential)
+                    //    RenderPipelineManager.beginContextRendering += RenderTexture_Reset; //add render context
                 }
 #if URP || HDRP
                 else
@@ -6912,7 +6942,11 @@ public class Stereo3D : MonoBehaviour
                 //RenderTexture.active = rta;
 
                 if (GUIAsOverlay && GUIVisible && camera_left.targetTexture == null)
+                //if (GUIAsOverlay && GUIVisible && camera_left.targetTexture == null || method == Method.Sequential && !optimize && oddFrame)
+                {
+                    //Debug.Log("RenderTexture_Reset camera_left.targetTexture = renderTexture_left " + Time.time);
                     camera_left.targetTexture = renderTexture_left;
+                }
             }
             else
                 if (camera == camera_right)
@@ -6923,6 +6957,7 @@ public class Stereo3D : MonoBehaviour
                     //RenderTexture.active = rta;
 
                     if (GUIAsOverlay && GUIVisible && camera_right.targetTexture == null)
+                    //if (GUIAsOverlay && GUIVisible && camera_right.targetTexture == null || method == Method.Sequential && !optimize && oddFrame)
                         camera_right.targetTexture = renderTexture_right;
                 }
                 else
@@ -7212,6 +7247,12 @@ public class Stereo3D : MonoBehaviour
                         }
                         //#endif
                     }
+                    //else
+                    //    if (method == Method.Sequential && !optimize && !oddFrame)
+                    //    {
+                    //        //Debug.Log("camera_left.targetTexture = nullRT " + Time.time);
+                    //        camera_left.targetTexture = nullRT;
+                    //    }
 
                     //context.ExecuteCommandBuffer(commandBuffer);
                     //commandBuffer.Release();
@@ -7249,6 +7290,9 @@ public class Stereo3D : MonoBehaviour
                             }
                             //#endif
                         }
+                        //else
+                        //    if (method == Method.Sequential && !optimize && !oddFrame)
+                        //        camera_right.targetTexture = nullRT;
 
                         //context.ExecuteCommandBuffer(commandBuffer);
                         //commandBuffer.Release();
