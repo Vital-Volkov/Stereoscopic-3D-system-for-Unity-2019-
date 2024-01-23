@@ -1439,7 +1439,8 @@ public class Stereo3D : MonoBehaviour
             trigger.triggers.Add(entry);
 
             Tooltip(optimize_toggle.gameObject, "Half X/Y render resolution for certain output methods");
-            Tooltip(vSync_toggle.gameObject, "Required for 'Over Under' S3D method");
+            //Tooltip(vSync_toggle.gameObject, "Required for 'Over Under' S3D method");
+            Tooltip(vSync_toggle.gameObject, "Required for 'Over Under'\nand Sequential S3D methods");
             Tooltip(panel.Find("Text (Legacy)_ScreenDensity").gameObject, "Pixels Per Inch(PPI) density of the screen\nRequired to calculate the real physical size of the viewport");
             Tooltip(panel.Find("Text (Legacy)_UserIPD").gameObject, "Your interpupillary distance(IPD) in real millimeters on the screen if Screen Density is set correct\nRequired for realistic infinity depth perception and not overshoot as it causes abnormal eyes angle");
             Tooltip(panel.Find("Text (Legacy)_VirtualIPD").gameObject, "Your  interpupillary distance(IPD) in virtual 3D world millimeters\nUnlock from UserIPD and increase to simulate not user Stereo3D perception like toy size 3D world");
@@ -7172,8 +7173,8 @@ public class Stereo3D : MonoBehaviour
                     //            //}
 
                     //render clip space screen quad using S3DMaterial preset vertices buffer with:
-                    //commandBuffer.DrawProcedural(Matrix4x4.identity, S3DMaterial, pass, MeshTopology.Quads, 4); //this need "nearClipPlane = -1" for same quad position as using Blit with custom camera Rect coordinates
-                    commandBuffer.Blit(null, cam.activeTexture, S3DMaterial, pass); //or this
+                    commandBuffer.DrawProcedural(Matrix4x4.identity, S3DMaterial, pass, MeshTopology.Quads, 4); //this need "nearClipPlane = -1" for same quad position as using Blit with custom camera Rect coordinates
+                    //commandBuffer.Blit(null, cam.activeTexture, S3DMaterial, pass); //or this
 
                     //context.ExecuteCommandBuffer(commandBuffer);
                     //commandBuffer.Release();
