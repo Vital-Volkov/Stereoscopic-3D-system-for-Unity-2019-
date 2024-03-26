@@ -1702,8 +1702,11 @@ public class Stereo3D : MonoBehaviour
 #if SimpleCameraController
             bool simpleCameraControllerScriptEnabled = false;
 
-            foreach (var script in FindObjectsByType<UnityTemplateProjects.SimpleCameraController>(FindObjectsSortMode.None))
+            //foreach (var script in FindObjectsByType<UnityTemplateProjects.SimpleCameraController>(FindObjectsSortMode.None))
+            foreach (var script in FindObjectsOfType<UnityTemplateProjects.SimpleCameraController>())
             {
+                Debug.Log("FindObjectsOfType<UnityTemplateProjects.SimpleCameraController>()");
+
                 if (script.enabled)
                 {
                     //if (lookWithMouseScriptEnabled)
@@ -6538,11 +6541,13 @@ public class Stereo3D : MonoBehaviour
 #if URP || HDRP
                 else
                 {
-                    RenderPipelineManager.beginContextRendering += RenderTexture_Reset; //add render context
+                    //RenderPipelineManager.beginContextRendering += RenderTexture_Reset; //add render context
+                    RenderPipelineManager.beginCameraRendering += RenderTexture_Reset; //add render context
                     //RenderPipelineManager.endContextRendering += RenderBlit; //add render context
                 }
 
-                RenderPipelineManager.endContextRendering += RenderQuad; //add render context
+                //RenderPipelineManager.endContextRendering += RenderQuad; //add render context
+                RenderPipelineManager.endCameraRendering += RenderQuad; //add render context
 #else
                 //Camera.onPreRender += PreRender;
                 //Camera.onPostRender += PostRender;
@@ -6636,7 +6641,8 @@ public class Stereo3D : MonoBehaviour
                     CanvasCameraRenderTexture_Set();
                 }
 
-                RenderPipelineManager.beginContextRendering += RenderTexture_Reset; //add render context
+                //RenderPipelineManager.beginContextRendering += RenderTexture_Reset; //add render context
+                RenderPipelineManager.beginCameraRendering += RenderTexture_Reset; //add render context
             }
 //#if HDRP
 //            for (int i = 0; i < additionalS3DCamerasStruct.Length; i++)
@@ -6681,7 +6687,8 @@ public class Stereo3D : MonoBehaviour
                 || method == Method.Two_Displays && (GUIAsOverlay && GUIVisible || additionalS3DCamerasStruct != null)
 #endif
                 )
-                RenderPipelineManager.endContextRendering += RenderQuad; //add render context
+                //RenderPipelineManager.endContextRendering += RenderQuad; //add render context
+                RenderPipelineManager.endCameraRendering += RenderQuad; //add render context
 #endif
         }
 
@@ -6920,7 +6927,8 @@ public class Stereo3D : MonoBehaviour
     CommandBuffer commandBuffer;
     //float frameTime;
 
-    void RenderTexture_Reset(ScriptableRenderContext context, List<Camera> cameraList)
+    //void RenderTexture_Reset(ScriptableRenderContext context, List<Camera> cameraList)
+    void RenderTexture_Reset(ScriptableRenderContext context, Camera camera)
     {
         //Debug.Log("RenderTexture_Reset");
         commandBuffer = new CommandBuffer();
@@ -6956,7 +6964,7 @@ public class Stereo3D : MonoBehaviour
         //    if (camera == camera_right)
         //        camera_right.targetTexture = renderTexture_right;
 
-        foreach (Camera camera in cameraList)
+        //foreach (Camera camera in cameraList)
             if (camera == camera_left)
             {
                 //RenderTexture rta = RenderTexture.active;
@@ -7040,16 +7048,16 @@ public class Stereo3D : MonoBehaviour
 #if HDRP
             canvasCamera.targetTexture = canvasRenderTexture;
 #elif URP
-        if (cam.rect != Rect.MinMaxRect(0, 0, 1, 1))
-        {
+        //if (cam.rect != Rect.MinMaxRect(0, 0, 1, 1))
+        //{
             canvasCamera.clearFlags = CameraClearFlags.Depth;
             canvasCamera.targetTexture = canvasRenderTexture;
-        }
-        else
-        {
-            canvasCamera.clearFlags = CameraClearFlags.Nothing;
-            canvasCamera.targetTexture = renderTexture;
-        }
+        //}
+        //else
+        //{
+        //    canvasCamera.clearFlags = CameraClearFlags.Nothing;
+        //    canvasCamera.targetTexture = renderTexture;
+        //}
 #else
         canvasCamera.targetTexture = renderTexture;
 #endif
@@ -7060,16 +7068,16 @@ public class Stereo3D : MonoBehaviour
 #if HDRP
             canvasCamera_left.targetTexture = canvasRenderTexture_left;
 #elif URP
-        if (cam.rect != Rect.MinMaxRect(0, 0, 1, 1))
-        {
+        //if (cam.rect != Rect.MinMaxRect(0, 0, 1, 1))
+        //{
             canvasCamera_left.clearFlags = CameraClearFlags.Depth;
             canvasCamera_left.targetTexture = canvasRenderTexture_left;
-        }
-        else
-        {
-            canvasCamera_left.clearFlags = CameraClearFlags.Nothing;
-            canvasCamera_left.targetTexture = renderTexture_left;
-        }
+        //}
+        //else
+        //{
+        //    canvasCamera_left.clearFlags = CameraClearFlags.Nothing;
+        //    canvasCamera_left.targetTexture = renderTexture_left;
+        //}
 #else
         canvasCamera_left.targetTexture = renderTexture_left;
 #endif
@@ -7080,22 +7088,23 @@ public class Stereo3D : MonoBehaviour
 #if HDRP
             canvasCamera_right.targetTexture = canvasRenderTexture_right;
 #elif URP
-        if (cam.rect != Rect.MinMaxRect(0, 0, 1, 1))
-        {
+        //if (cam.rect != Rect.MinMaxRect(0, 0, 1, 1))
+        //{
             canvasCamera_right.clearFlags = CameraClearFlags.Depth;
             canvasCamera_right.targetTexture = canvasRenderTexture_right;
-        }
-        else
-        {
-            canvasCamera_right.clearFlags = CameraClearFlags.Nothing;
-            canvasCamera_right.targetTexture = renderTexture_right;
-        }
+        //}
+        //else
+        //{
+        //    canvasCamera_right.clearFlags = CameraClearFlags.Nothing;
+        //    canvasCamera_right.targetTexture = renderTexture_right;
+        //}
 #else
         canvasCamera_right.targetTexture = renderTexture_right;
 #endif
     }
 
-    void RenderQuad(ScriptableRenderContext context, List<Camera> cameraList) //render context for SRP
+    //void RenderQuad(ScriptableRenderContext context, List<Camera> cameraList) //render context for SRP
+    void RenderQuad(ScriptableRenderContext context, Camera camera) //render context for SRP
     {
         //Debug.Log("RenderQuad");
         //foreach (Camera camera in cameraList)
@@ -7104,7 +7113,7 @@ public class Stereo3D : MonoBehaviour
         commandBuffer = new CommandBuffer();
         commandBuffer.name = "S3DCamera";
 
-        foreach (Camera camera in cameraList)
+        //foreach (Camera camera in cameraList)
             if (camera == cam)
             {
                 if (S3DEnabled)
@@ -7382,9 +7391,9 @@ public class Stereo3D : MonoBehaviour
                     //Debug.Log("blit2");
                     //#if HDRP
 #if HDRP || URP
-#if URP
-                    if (cam.rect != Rect.MinMaxRect(0, 0, 1, 1))
-#endif
+//#if URP
+//                    if (cam.rect != Rect.MinMaxRect(0, 0, 1, 1))
+//#endif
                         commandBuffer.Blit(canvasRenderTexture, renderTexture, S3DPanelMaterial);
 #endif
                     canvasCamera.targetTexture = null;
@@ -7402,9 +7411,9 @@ public class Stereo3D : MonoBehaviour
                     //Debug.Log("camera == canvasCamera_left " + camera + " " + Time.time);
 //#if HDRP
 #if HDRP || URP
-#if URP
-                    if (cam.rect != Rect.MinMaxRect(0, 0, 1, 1))
-#endif
+//#if URP
+//                    if (cam.rect != Rect.MinMaxRect(0, 0, 1, 1))
+//#endif
                         commandBuffer.Blit(canvasRenderTexture_left, renderTexture_left, S3DPanelMaterial);
 #endif
 //#if !UNITY_EDITOR
@@ -7425,9 +7434,9 @@ public class Stereo3D : MonoBehaviour
                     //Debug.Log("camera == canvasCamera_right " + camera + " " + Time.time);
 //#if HDRP
 #if HDRP || URP
-#if URP
-                    if (cam.rect != Rect.MinMaxRect(0, 0, 1, 1))
-#endif
+//#if URP
+//                    if (cam.rect != Rect.MinMaxRect(0, 0, 1, 1))
+//#endif
                         commandBuffer.Blit(canvasRenderTexture_right, renderTexture_right, S3DPanelMaterial);
 #endif
 //#if !UNITY_EDITOR
@@ -7860,9 +7869,11 @@ public class Stereo3D : MonoBehaviour
         //{
         //#if HDRP
 #if URP || HDRP
-            RenderPipelineManager.beginContextRendering -= RenderTexture_Reset; //remove render context
+            //RenderPipelineManager.beginContextRendering -= RenderTexture_Reset; //remove render context
+            RenderPipelineManager.beginCameraRendering -= RenderTexture_Reset; //remove render context
 //#endif
-            RenderPipelineManager.endContextRendering -= RenderQuad; //remove render context
+            //RenderPipelineManager.endContextRendering -= RenderQuad; //remove render context
+            RenderPipelineManager.endCameraRendering -= RenderQuad; //remove render context
             //RenderPipelineManager.endCameraRendering -= RenderBlit; //remove render context
             //RenderPipelineManager.endContextRendering -= RenderBlit; //remove render context
         //}
@@ -8531,11 +8542,15 @@ public class Stereo3D : MonoBehaviour
              cd.antialiasingQuality,
              cd.antialiasing,
              cd.renderPostProcessing,
+#if UNITY_2020_3_18_OR_NEWER
              cd.volumeStack,
+#endif
              cd.volumeTrigger,
              cd.volumeLayerMask,
              cd.requiresColorTexture,
+#if UNITY_2020_2_OR_NEWER
              cd.allowXRRendering,
+#endif
              cd.renderType,
              cd.requiresColorOption,
              cd.requiresDepthOption,
@@ -8581,8 +8596,8 @@ public class Stereo3D : MonoBehaviour
             cd.deepLearningSuperSamplingSharpening,
             cd.materialMipBias,
 #endif
-            //c.depth,
-            //c.useOcclusionCulling
+        //c.depth,
+        //c.useOcclusionCulling
 
         ////
         //// Summary:
@@ -8910,11 +8925,15 @@ public class Stereo3D : MonoBehaviour
         public AntialiasingQuality antialiasingQuality;
         public AntialiasingMode antialiasing;
         public bool renderPostProcessing;
+#if UNITY_2020_3_18_OR_NEWER
         public VolumeStack volumeStack;
+#endif
         public Transform volumeTrigger;
         public LayerMask volumeLayerMask;
         public bool requiresColorTexture;
+#if UNITY_2020_2_OR_NEWER
         public bool allowXRRendering;
+#endif
         public CameraRenderType renderType;
         public CameraOverrideOption requiresColorOption;
         public CameraOverrideOption requiresDepthOption;
@@ -9042,11 +9061,15 @@ public class Stereo3D : MonoBehaviour
             AntialiasingQuality antialiasingQuality,
             AntialiasingMode antialiasing,
             bool renderPostProcessing,
+#if UNITY_2020_3_18_OR_NEWER
             VolumeStack volumeStack,
+#endif
             Transform volumeTrigger,
             LayerMask volumeLayerMask,
             bool requiresColorTexture,
+#if UNITY_2020_2_OR_NEWER
             bool allowXRRendering,
+#endif
             CameraRenderType renderType,
             CameraOverrideOption requiresColorOption,
             CameraOverrideOption requiresDepthOption,
@@ -9174,11 +9197,15 @@ public class Stereo3D : MonoBehaviour
              this.antialiasingQuality = antialiasingQuality;
              this.antialiasing = antialiasing;
              this.renderPostProcessing = renderPostProcessing;
+#if UNITY_2020_3_18_OR_NEWER
              this.volumeStack = volumeStack;
+#endif
              this.volumeTrigger = volumeTrigger;
              this.volumeLayerMask = volumeLayerMask;
              this.requiresColorTexture = requiresColorTexture;
+#if UNITY_2020_2_OR_NEWER
              this.allowXRRendering = allowXRRendering;
+#endif
              this.renderType = renderType;
              this.requiresColorOption = requiresColorOption;
              this.requiresDepthOption = requiresDepthOption;
@@ -9406,7 +9433,8 @@ public class Stereo3D : MonoBehaviour
         }
     }
 
-#if UNITY_EDITOR && UNITY_2021_2_OR_NEWER
+#if UNITY_EDITOR
+//#if UNITY_EDITOR && UNITY_2021_2_OR_NEWER
     [UnityEditor.InitializeOnLoad]
     public class Startup
     {
@@ -9414,6 +9442,7 @@ public class Stereo3D : MonoBehaviour
         {
             //Debug.Log("Up and running");
 
+#if UNITY_2021_2_OR_NEWER
             foreach (var package in UnityEditor.PackageManager.PackageInfo.GetAllRegisteredPackages())
                 if (package.name == "com.unity.cinemachine")
                 {
@@ -9441,6 +9470,7 @@ public class Stereo3D : MonoBehaviour
 
                     AddDefine("CINEMACHINE");
                 }
+#endif
 
             foreach (var assembly in UnityEditor.Compilation.CompilationPipeline.GetAssemblies())
             {
@@ -9483,6 +9513,7 @@ public class Stereo3D : MonoBehaviour
 
     static void AddDefine(string defineName)
     {
+#if UNITY_2021_2_OR_NEWER
         //Debug.Log("AddDefine");
         var buildTarget = UnityEditor.Build.NamedBuildTarget.FromBuildTargetGroup(UnityEditor.EditorUserBuildSettings.selectedBuildTargetGroup);
         UnityEditor.PlayerSettings.GetScriptingDefineSymbols(buildTarget, out string[] defines);
@@ -9507,6 +9538,19 @@ public class Stereo3D : MonoBehaviour
 
             UnityEditor.PlayerSettings.SetScriptingDefineSymbols(buildTarget, newDefines);
         }
+#else
+        var buildTargetGroup = UnityEditor.EditorUserBuildSettings.selectedBuildTargetGroup;
+        string defines = UnityEditor.PlayerSettings.GetScriptingDefineSymbolsForGroup(buildTargetGroup);
+
+        if (!defines.Contains(defineName))
+        {
+            if (defines != "")
+                defines += ";";
+
+            defines += defineName;
+            UnityEditor.PlayerSettings.SetScriptingDefineSymbolsForGroup(buildTargetGroup, defines);
+        }
+#endif
     }
 #endif
 } 
