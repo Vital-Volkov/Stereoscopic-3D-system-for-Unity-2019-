@@ -790,6 +790,7 @@ public class Stereo3D : MonoBehaviour
             //canvas.transform.parent = transform;
             canvas.transform.SetParent(transform);
             canvasRayCam = canvas.gameObject.AddComponent<Camera>();
+            canvasRayCam.stereoTargetEye = StereoTargetEyeMask.None;
             canvasRayCam.enabled = false;
             //orthoCamSet(canvasRayCam);
             //canvasRayCam.GetUniversalAdditionalCameraData().renderType = CameraRenderType.Overlay;
@@ -1017,6 +1018,7 @@ public class Stereo3D : MonoBehaviour
 
                 if (c != null)
                 {
+                    c.stereoTargetEye = StereoTargetEyeMask.None;
                     closestCameraIndex = i;
                     lastAdditionalClosestCamera = c;
 
@@ -1483,6 +1485,7 @@ public class Stereo3D : MonoBehaviour
                 canvasCamera_left = new GameObject("canvasCamera_left").AddComponent<Camera>();
                 canvasCamera_right = new GameObject("canvasCamera_right").AddComponent<Camera>();
                 canvasCamera.CopyFrom(canvasRayCam);
+                canvasCamera.stereoTargetEye = StereoTargetEyeMask.None;
                 canvasCamera.cullingMask = canvasCamera.cullingMask | (1 << 5); //add UI layer
 
                 //if (additionalS3DCameras.Count != 0)
@@ -1496,6 +1499,8 @@ public class Stereo3D : MonoBehaviour
                 //canvasCamera_right.CopyFrom(canvasRayCam);
                 canvasCamera_left.CopyFrom(canvasCamera);
                 canvasCamera_right.CopyFrom(canvasCamera);
+                canvasCamera_left.stereoTargetEye = StereoTargetEyeMask.Left;
+                canvasCamera_right.stereoTargetEye = StereoTargetEyeMask.Right;
                 canvasCamera.transform.SetParent(canvas.transform);
                 //canvasCamera_left.transform.SetParent(canvas.transform);
                 //canvasCamera_right.transform.SetParent(canvas.transform);
@@ -6004,17 +6009,27 @@ public class Stereo3D : MonoBehaviour
 
 //#if URP || HDRP
         camera_left.rect = camera_right.rect = cam.rect;
+        camera_left.targetDisplay = 0;
+        camera_right.targetDisplay = 0;
 
-        for (int i = 0; i < additionalS3DCamerasStruct.Length; i++)
-            if (additionalS3DCamerasStruct[i].camera)
-                additionalS3DCamerasStruct[i].camera_left.rect = additionalS3DCamerasStruct[i].camera_right.rect = cam.rect;
+        //for (int i = 0; i < additionalS3DCamerasStruct.Length; i++)
+        //    if (additionalS3DCamerasStruct[i].camera)
+        //        additionalS3DCamerasStruct[i].camera_left.rect = additionalS3DCamerasStruct[i].camera_right.rect = cam.rect;
+
+        foreach (var c in additionalS3DCamerasStruct)
+            if (c.camera)
+            {
+                c.camera_left.rect = c.camera_right.rect = cam.rect;
+                c.camera_left.targetDisplay = 0;
+                c.camera_right.targetDisplay = 0;
+            }
 //#endif
 
         if (canvasCamera)
         {
             canvasCamera_left.rect = canvasCamera_right.rect = cam.rect;
-            canvasCamera_left.targetDisplay = displayIndex_left;
-            canvasCamera_right.targetDisplay = displayIndex_right;
+            canvasCamera_left.targetDisplay = 0;
+            canvasCamera_right.targetDisplay = 0;
         }
 
         if (S3DEnabled)
@@ -6405,14 +6420,18 @@ public class Stereo3D : MonoBehaviour
 #endif
                 )
             {
+                //renderTexture = RT_Make();
                 renderTexture_left = RT_Make();
                 renderTexture_right = RT_Make();
+                renderTexture_left.Create();
+                renderTexture_right.Create();
                 //canvasRenderTexture_left = RT_Make();
                 //canvasRenderTexture_right = RT_Make();
 
                 //camera_left.targetDisplay = camera_right.targetDisplay = 0;
                 //camera_left.rect = camera_right.rect = Rect.MinMaxRect(0, 0, 1, 1);
 
+                //cam.targetTexture = renderTexture;
                 camera_left.targetTexture = renderTexture_left;
                 camera_right.targetTexture = renderTexture_right;
 
@@ -6524,6 +6543,9 @@ public class Stereo3D : MonoBehaviour
                 }
 
                 RenderPipelineManager.endContextRendering += RenderQuad; //add render context
+#else
+                //Camera.onPreRender += PreRender;
+                //Camera.onPostRender += PostRender;
 #endif
 
             }
@@ -7833,10 +7855,10 @@ public class Stereo3D : MonoBehaviour
     void Render_Release()
     {
         //Debug.Log("Render_Release " + name);
-//#if UNITY_2019_1_OR_NEWER
+        //#if UNITY_2019_1_OR_NEWER
         //if (!defaultRender)
         //{
-//#if HDRP
+        //#if HDRP
 #if URP || HDRP
             RenderPipelineManager.beginContextRendering -= RenderTexture_Reset; //remove render context
 //#endif
@@ -7844,6 +7866,9 @@ public class Stereo3D : MonoBehaviour
             //RenderPipelineManager.endCameraRendering -= RenderBlit; //remove render context
             //RenderPipelineManager.endContextRendering -= RenderBlit; //remove render context
         //}
+#else
+        //Camera.onPreRender -= PreRender;
+        //Camera.onPostRender -= PostRender;
 #endif
         //cam.targetTexture = null;
         //camera_left.targetTexture = null;
@@ -7972,8 +7997,27 @@ public class Stereo3D : MonoBehaviour
     //        Invoke("VCamNearClipRestore", Time.deltaTime);
     //}
 
+    ////void OnPreCull()
+    //void PreRender(Camera c)
+    //{
+    //    Debug.Log(c + " PreRender " + Time.time);
+
+    //    //if (c == canvasCamera_right)
+    //    //    canvasCamera_right.targetTexture = renderTexture_right;
+
+    //    //canvasCamera_left.targetTexture = renderTexture_left;
+    //    //if (c == cam)
+    //    //{
+    //    //    //canvasCamera_left.targetTexture = renderTexture_left;
+    //    //    cam.targetTexture = renderTexture;
+
+    //    //}
+    //}
+
     //ignored in SRP(URP or HDRP) but in default render via cam buffer even empty function give fps gain from 294 to 308
     void OnRenderImage(RenderTexture source, RenderTexture destination) //works only in the default render pipeline
+    //void OnPostRender() //works only in the default render pipeline //not working if antialiasing set in quality settings
+    //void PostRender(Camera c) //works only in the default render pipeline
     {
         //Debug.Log("OnRenderImage");
         //if (defaultRender) //commented till SRP don't go here
@@ -7992,8 +8036,23 @@ public class Stereo3D : MonoBehaviour
             Rect camRect = cam.rect;
             cam.rect = Rect.MinMaxRect(0, 0, 1, 1); //set temporary rect required before Graphics.Blit to blit render texture correctly with no fullscreen rect
 
+            //canvasCamera_left.targetTexture = null;
+
+            //if (c == cam)
+            //{
+                //canvasCamera_left.targetTexture = null;
+                //canvasCamera_right.targetTexture = null;
+                //RenderTexture rt = RenderTexture.active;
+                //cam.targetTexture = null;
+                RenderTexture.active = null;
+                //Graphics.Blit(null, null, S3DMaterial, pass); //not working with OpenGL core
+                S3DMaterial.SetPass(pass);
+                Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
+                //RenderTexture.active = rt;
+            //}
+
+
             //if (method != Method.Two_Displays)
-                Graphics.Blit(null, destination, S3DMaterial, pass);
             //Graphics.Blit(source, null, S3DMaterial, pass); //or this
             //else
             //    if (canvasCamera_left && canvasCamera_left.isActiveAndEnabled)
@@ -8007,6 +8066,14 @@ public class Stereo3D : MonoBehaviour
         else
             Graphics.Blit(source, destination);
     }
+
+    //void PostRender(Camera c)
+    //{
+    //    Debug.Log(c + " PostRender " + Time.time);
+
+    //    //if (c == canvasCamera_right)
+    //    //    canvasCamera_right.targetTexture = null;
+    //}
 
     //void CanvasCamS3DRender_Set()
     //{
@@ -8702,9 +8769,11 @@ public class Stereo3D : MonoBehaviour
         // Summary:
         //     Number of command buffers set up on this camera (Read Only).
         c.commandBufferCount, // { get; }
+#if UNITY_2021_2_OR_NEWER
         //[NativeConditional("UNITY_EDITOR")]
         c.sceneViewFilterMode, // { get; }
         //
+#endif
         // Summary:
         //     Returns the eye that is currently rendering. If called when stereo is not enabled
         //     it will return Camera.MonoOrStereoscopicEye.Mono. If called during a camera rendering
@@ -8928,7 +8997,9 @@ public class Stereo3D : MonoBehaviour
         public Rect rect;
         //public bool stereoMirrorMode;
         public int commandBufferCount;
+#if UNITY_2021_2_OR_NEWER
         public Camera.SceneViewFilterMode sceneViewFilterMode;
+#endif
         public Camera.MonoOrStereoscopicEye stereoActiveEye;
         public StereoTargetEyeMask stereoTargetEye;
         public bool areVRStereoViewMatricesWithinSingleCullTolerance;
@@ -9058,7 +9129,9 @@ public class Stereo3D : MonoBehaviour
             Rect rect,
             //bool stereoMirrorMode,
             int commandBufferCount,
+#if UNITY_2021_2_OR_NEWER
             Camera.SceneViewFilterMode sceneViewFilterMode,
+#endif
             Camera.MonoOrStereoscopicEye stereoActiveEye,
             StereoTargetEyeMask stereoTargetEye,
             bool areVRStereoViewMatricesWithinSingleCullTolerance,
@@ -9188,7 +9261,9 @@ public class Stereo3D : MonoBehaviour
             this.rect = rect;
             //this.stereoMirrorMode = stereoMirrorMode;
             this.commandBufferCount = commandBufferCount;
+#if UNITY_2021_2_OR_NEWER
             this.sceneViewFilterMode = sceneViewFilterMode;
+#endif
             this.stereoActiveEye = stereoActiveEye;
             this.stereoTargetEye = stereoTargetEye;
             this.areVRStereoViewMatricesWithinSingleCullTolerance = areVRStereoViewMatricesWithinSingleCullTolerance;
@@ -9331,7 +9406,7 @@ public class Stereo3D : MonoBehaviour
         }
     }
 
-#if UNITY_EDITOR
+#if UNITY_EDITOR && UNITY_2021_2_OR_NEWER
     [UnityEditor.InitializeOnLoad]
     public class Startup
     {
