@@ -8542,7 +8542,7 @@ public class Stereo3D : MonoBehaviour
              cd.antialiasingQuality,
              cd.antialiasing,
              cd.renderPostProcessing,
-#if UNITY_2020_3_18_OR_NEWER
+#if UNITY_2021_1_OR_NEWER
              cd.volumeStack,
 #endif
              cd.volumeTrigger,
@@ -8565,23 +8565,23 @@ public class Stereo3D : MonoBehaviour
             cd.volumeAnchorOverride,
             cd.antialiasing,
             cd.dithering,
-#if UNITY_2020_1_0b6_OR_NEWER
+#if UNITY_2020_2_OR_NEWER
             cd.xrRendering,
 #endif
             cd.SMAAQuality,
             cd.stopNaNs,
             cd.taaSharpenStrength,
-#if UNITY_2020_1_0b13_OR_NEWER
+#if UNITY_2020_2_OR_NEWER
             cd.TAAQuality,
             cd.taaHistorySharpening,
             cd.taaAntiFlicker,
             cd.taaMotionVectorRejection,
             cd.taaAntiHistoryRinging,
 #endif
-#if UNITY_2020_2_0b6_OR_NEWER
+#if UNITY_2021_2_OR_NEWER
             cd.taaBaseBlendFactor,
 #endif
-#if UNITY_2020_2_0b15_OR_NEWER
+#if UNITY_2021_3_OR_NEWER
             cd.taaJitterScale,
 #endif
             cd.flipYMode,
@@ -8590,7 +8590,7 @@ public class Stereo3D : MonoBehaviour
             cd.invertFaceCulling,
             cd.probeLayerMask,
             cd.hasPersistentHistory,
-#if UNITY_2020_2_0a20_OR_NEWER
+#if UNITY_2020_2_OR_NEWER
             cd.exposureTarget,
 #endif
             cd.physicalParameters,
@@ -8598,7 +8598,7 @@ public class Stereo3D : MonoBehaviour
             cd.renderingPathCustomFrameSettingsOverrideMask,
             cd.defaultFrameSettings,
         //cd.probeCustomFixedExposure,
-#if UNITY_2020_2_0b6_OR_NEWER
+#if UNITY_2021_2_OR_NEWER
             cd.allowDeepLearningSuperSampling,
             cd.deepLearningSuperSamplingUseCustomQualitySettings,
             cd.deepLearningSuperSamplingQuality,
@@ -8937,7 +8937,7 @@ public class Stereo3D : MonoBehaviour
         public AntialiasingQuality antialiasingQuality;
         public AntialiasingMode antialiasing;
         public bool renderPostProcessing;
-#if UNITY_2020_3_18_OR_NEWER
+#if UNITY_2021_1_OR_NEWER
         public VolumeStack volumeStack;
 #endif
         public Transform volumeTrigger;
@@ -8960,23 +8960,23 @@ public class Stereo3D : MonoBehaviour
         public Transform volumeAnchorOverride;
         public HDAdditionalCameraData.AntialiasingMode antialiasing;
         public bool dithering;
-#if UNITY_2020_1_0b6_OR_NEWER
+#if UNITY_2020_2_OR_NEWER
         public bool xrRendering;
 #endif
         public HDAdditionalCameraData.SMAAQualityLevel SMAAQuality;
         public bool stopNaNs;
         public float taaSharpenStrength;
-#if UNITY_2020_1_0b13_OR_NEWER
+#if UNITY_2020_2_OR_NEWER
         public HDAdditionalCameraData.TAAQualityLevel TAAQuality;
         public float taaHistorySharpening;
         public float taaAntiFlicker;
         public float taaMotionVectorRejection;
         public bool taaAntiHistoryRinging;
 #endif
-#if UNITY_2020_2_0b6_OR_NEWER
+#if UNITY_2021_2_OR_NEWER
         public float taaBaseBlendFactor;
 #endif
-#if UNITY_2020_2_0b15_OR_NEWER
+#if UNITY_2021_3_OR_NEWER
         public float taaJitterScale;
 #endif
         public HDAdditionalCameraData.FlipYMode flipYMode;
@@ -8985,7 +8985,7 @@ public class Stereo3D : MonoBehaviour
         public bool invertFaceCulling;
         public LayerMask probeLayerMask;
         public bool hasPersistentHistory;
-#if UNITY_2020_2_0a20_OR_NEWER
+#if UNITY_2020_2_OR_NEWER
         public GameObject exposureTarget;
 #endif
         public HDPhysicalCamera physicalParameters;
@@ -8993,7 +8993,7 @@ public class Stereo3D : MonoBehaviour
         public FrameSettingsOverrideMask renderingPathCustomFrameSettingsOverrideMask;
         public FrameSettingsRenderType defaultFrameSettings;
         //public object probeCustomFixedExposure;
-#if UNITY_2020_2_0b6_OR_NEWER
+#if UNITY_2021_2_OR_NEWER
         bool allowDeepLearningSuperSampling;
         public bool deepLearningSuperSamplingUseCustomQualitySettings;
         public uint deepLearningSuperSamplingQuality;
@@ -9085,7 +9085,7 @@ public class Stereo3D : MonoBehaviour
             AntialiasingQuality antialiasingQuality,
             AntialiasingMode antialiasing,
             bool renderPostProcessing,
-#if UNITY_2020_3_18_OR_NEWER
+#if UNITY_2021_1_OR_NEWER
             VolumeStack volumeStack,
 #endif
             Transform volumeTrigger,
@@ -9108,23 +9108,23 @@ public class Stereo3D : MonoBehaviour
             Transform volumeAnchorOverride,
             HDAdditionalCameraData.AntialiasingMode antialiasing,
             bool dithering,
-#if UNITY_2020_1_0b6_OR_NEWER
+#if UNITY_2020_2_OR_NEWER
             bool xrRendering,
 #endif
             HDAdditionalCameraData.SMAAQualityLevel SMAAQuality,
             bool stopNaNs,
             float taaSharpenStrength,
-#if UNITY_2020_1_0b13_OR_NEWER
+#if UNITY_2020_2_OR_NEWER
             HDAdditionalCameraData.TAAQualityLevel TAAQuality,
             float taaHistorySharpening,
             float taaAntiFlicker,
             float taaMotionVectorRejection,
             bool taaAntiHistoryRinging,
 #endif
-#if UNITY_2020_2_0b6_OR_NEWER
+#if UNITY_2021_2_OR_NEWER
             float taaBaseBlendFactor,
 #endif
-#if UNITY_2020_2_0b15_OR_NEWER
+#if UNITY_2021_3_OR_NEWER
             float taaJitterScale,
 #endif
             HDAdditionalCameraData.FlipYMode flipYMode,
@@ -9133,7 +9133,7 @@ public class Stereo3D : MonoBehaviour
             bool invertFaceCulling,
             LayerMask probeLayerMask,
             bool hasPersistentHistory,
-#if UNITY_2020_2_0a20_OR_NEWER
+#if UNITY_2020_2_OR_NEWER
             GameObject exposureTarget,
 #endif
             HDPhysicalCamera physicalParameters,
@@ -9141,7 +9141,7 @@ public class Stereo3D : MonoBehaviour
             FrameSettingsOverrideMask renderingPathCustomFrameSettingsOverrideMask,
             FrameSettingsRenderType defaultFrameSettings,
             //object probeCustomFixedExposure,
-#if UNITY_2020_2_0b6_OR_NEWER
+#if UNITY_2021_2_OR_NEWER
             bool allowDeepLearningSuperSampling,
             bool deepLearningSuperSamplingUseCustomQualitySettings,
             uint deepLearningSuperSamplingQuality,
@@ -9233,7 +9233,7 @@ public class Stereo3D : MonoBehaviour
              this.antialiasingQuality = antialiasingQuality;
              this.antialiasing = antialiasing;
              this.renderPostProcessing = renderPostProcessing;
-#if UNITY_2020_3_18_OR_NEWER
+#if UNITY_2021_1_OR_NEWER
              this.volumeStack = volumeStack;
 #endif
              this.volumeTrigger = volumeTrigger;
@@ -9256,23 +9256,23 @@ public class Stereo3D : MonoBehaviour
             this.volumeAnchorOverride = volumeAnchorOverride;
             this.antialiasing = antialiasing;
             this.dithering = dithering;
-#if UNITY_2020_1_0b6_OR_NEWER
+#if UNITY_2020_2_OR_NEWER
             this.xrRendering = xrRendering;
 #endif
             this.SMAAQuality = SMAAQuality;
             this.stopNaNs = stopNaNs;
             this.taaSharpenStrength = taaSharpenStrength;
-#if UNITY_2020_1_0b13_OR_NEWER
+#if UNITY_2020_2_OR_NEWER
             this.TAAQuality = TAAQuality;
             this.taaHistorySharpening = taaHistorySharpening;
             this.taaAntiFlicker = taaAntiFlicker;
             this.taaMotionVectorRejection = taaMotionVectorRejection;
             this.taaAntiHistoryRinging = taaAntiHistoryRinging;
 #endif
-#if UNITY_2020_2_0b6_OR_NEWER
+#if UNITY_2021_2_OR_NEWER
             this.taaBaseBlendFactor = taaBaseBlendFactor;
 #endif
-#if UNITY_2020_2_0b15_OR_NEWER
+#if UNITY_2021_3_OR_NEWER
             this.taaJitterScale = taaJitterScale;
 #endif
             this.flipYMode = flipYMode;
@@ -9281,7 +9281,7 @@ public class Stereo3D : MonoBehaviour
             this.invertFaceCulling = invertFaceCulling;
             this.probeLayerMask = probeLayerMask;
             this.hasPersistentHistory = hasPersistentHistory;
-#if UNITY_2020_2_0a20_OR_NEWER
+#if UNITY_2020_2_OR_NEWER
             this.exposureTarget = exposureTarget;
 #endif
             this.physicalParameters = physicalParameters;
@@ -9289,7 +9289,7 @@ public class Stereo3D : MonoBehaviour
             this.renderingPathCustomFrameSettingsOverrideMask = renderingPathCustomFrameSettingsOverrideMask;
             this.defaultFrameSettings = defaultFrameSettings;
             //this.probeCustomFixedExposure = probeCustomFixedExposure;
-#if UNITY_2020_2_0b6_OR_NEWER
+#if UNITY_2021_2_OR_NEWER
             this.allowDeepLearningSuperSampling = allowDeepLearningSuperSampling;
             this.deepLearningSuperSamplingUseCustomQualitySettings = deepLearningSuperSamplingUseCustomQualitySettings;
             this.deepLearningSuperSamplingQuality = deepLearningSuperSamplingQuality;
