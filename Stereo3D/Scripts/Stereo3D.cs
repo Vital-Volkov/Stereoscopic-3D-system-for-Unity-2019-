@@ -100,15 +100,17 @@ public class Stereo3D : MonoBehaviour
         SideBySide, 
         SideBySide_Full, 
         SideBySide_HMD, 
-        Two_Displays, 
         OverUnder, 
+        Two_Displays, 
+        Two_Displays_MirrorX, 
+        Two_Displays_MirrorY, 
         Sequential, 
         Anaglyph_RedCyan, 
         Anaglyph_RedBlue, 
         Anaglyph_GreenMagenta, 
         Anaglyph_AmberBlue
     };
-    public enum InterlaceType {Horizontal, Vertical, Checkerboard};
+    //public enum InterlaceType {Horizontal, Vertical, Checkerboard};
     public enum EyePriority {Left, Center, Right};
 
     [Header("Settings")]
@@ -4538,6 +4540,15 @@ public class Stereo3D : MonoBehaviour
                     float shift = imageOffset * panelDepth * (swapLR ? -1 : 1);
                     canvasCamMatrix_left[0, 3] = -shift;
                     canvasCamMatrix_right[0, 3] = shift;
+
+                    if (method == Method.Two_Displays_MirrorX)
+                    {
+                        canvasCamMatrix_right[0, 3] *= -1;
+		                canvasCamMatrix_right *= Matrix4x4.Scale(new Vector3(-1, 1, 1));
+                    }
+                    else
+                        if (method == Method.Two_Displays_MirrorY)
+		                    canvasCamMatrix_right *= Matrix4x4.Scale(new Vector3(1, -1, 1));
                 }
 
                 if (method == Method.Interlace_Horizontal)
@@ -4731,7 +4742,8 @@ public class Stereo3D : MonoBehaviour
     void S3DKeyUp(float modifier1, float modifier2, float modifier3)
     {
         if (S3DKeyTimer < 1)
-            if (modifier1 != 0 && modifier2 != 0 && method == Method.Two_Displays)
+            //if (modifier1 != 0 && modifier2 != 0 && method == Method.Two_Displays)
+            if (modifier1 != 0 && modifier2 != 0 && (method == Method.Two_Displays || method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY))
                 //Debug.Log("modifier1 != 0 & modifier2 != 0");
                 TargetDisplays_Select();
             else
@@ -5864,6 +5876,15 @@ public class Stereo3D : MonoBehaviour
             matrix[1, 2] += shiftY;
             //matrix[3, 2] = -1;
 
+            if (method == Method.Two_Displays_MirrorX && c.name.Contains("_right"))
+            {
+                matrix[0, 2] *= -1;
+		        matrix *= Matrix4x4.Scale(new Vector3(-1, 1, 1));
+            }
+            else
+                if (method == Method.Two_Displays_MirrorY && c.name.Contains("_right"))
+		            matrix *= Matrix4x4.Scale(new Vector3(1, -1, 1));
+
             //Debug.Log("Matrix_Set parent " + parent);
             //Debug.Log("nearClip " + nearClip + " farClip " + farClip);
             //Debug.Log(c.name + " Matrix_Set\n" + matrix);
@@ -6256,7 +6277,8 @@ public class Stereo3D : MonoBehaviour
             //Debug.Log("Render_Set columns: " + columns + " rows: " + rows);
 
             //if (!(method == Method.Two_Displays))
-            if (method == Method.Two_Displays)
+            //if (method == Method.Two_Displays)
+            if (method == Method.Two_Displays || method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
             {
                 cam.enabled = false;
                 camera_right.tag = "MainCamera"; //prevent TerrainsVisibilityUpdater(in "Test Track" sample) throw errors while the main camera disabled and no other camera with "MainCamera" tag in the scene
@@ -6347,38 +6369,47 @@ public class Stereo3D : MonoBehaviour
                 //        c.camera_left.rect = c.camera_right.rect = c.camera.rect;
                 //    }
 
-//                //TargetDisplays_Set();
-//                camera_left.rect = camera_right.rect = cam.rect;
+                //                //TargetDisplays_Set();
+                //                camera_left.rect = camera_right.rect = cam.rect;
 
-//                for (int i = 0; i < additionalS3DCamerasStruct.Length; i++)
-//                    if (additionalS3DCamerasStruct[i].camera)
-//                        additionalS3DCamerasStruct[i].camera_left.rect = additionalS3DCamerasStruct[i].camera_right.rect = cam.rect;
+                //                for (int i = 0; i < additionalS3DCamerasStruct.Length; i++)
+                //                    if (additionalS3DCamerasStruct[i].camera)
+                //                        additionalS3DCamerasStruct[i].camera_left.rect = additionalS3DCamerasStruct[i].camera_right.rect = cam.rect;
 
-//                if (canvasCamera)
-//                {
-//                    //canvasCamera_left.targetTexture = null;
-//                    //canvasCamera_right.targetTexture = null;
-//                    canvasCamera_left.rect = canvasCamera_right.rect = cam.rect;
-////#if URP
-////                    canvasCamera_left.GetUniversalAdditionalCameraData().renderType = canvasCamera_right.GetUniversalAdditionalCameraData().renderType = CameraRenderType.Overlay;
+                //                if (canvasCamera)
+                //                {
+                //                    //canvasCamera_left.targetTexture = null;
+                //                    //canvasCamera_right.targetTexture = null;
+                //                    canvasCamera_left.rect = canvasCamera_right.rect = cam.rect;
+                ////#if URP
+                ////                    canvasCamera_left.GetUniversalAdditionalCameraData().renderType = canvasCamera_right.GetUniversalAdditionalCameraData().renderType = CameraRenderType.Overlay;
 
-////                    if (!leftCameraStack.Contains(canvasCamera_left))
-////                    {
-////                        leftCameraStack.Add(canvasCamera_left);
-////                        rightCameraStack.Add(canvasCamera_right);
-////                    }
-////#endif
-////#else
-////#endif
-//                    //canvasCamera_left.targetDisplay = 0;
-//                    //canvasCamera_right.targetDisplay = 1;
-//                    canvasCamera_left.targetDisplay = displayIndex_left;
-//                    canvasCamera_right.targetDisplay = displayIndex_right;
-//                }
+                ////                    if (!leftCameraStack.Contains(canvasCamera_left))
+                ////                    {
+                ////                        leftCameraStack.Add(canvasCamera_left);
+                ////                        rightCameraStack.Add(canvasCamera_right);
+                ////                    }
+                ////#endif
+                ////#else
+                ////#endif
+                //                    //canvasCamera_left.targetDisplay = 0;
+                //                    //canvasCamera_right.targetDisplay = 1;
+                //                    canvasCamera_left.targetDisplay = displayIndex_left;
+                //                    canvasCamera_right.targetDisplay = displayIndex_right;
+                //                }
 
                 //Debug.Log("Display.displays[0].systemWidth: " + Display.displays[0].systemWidth + " Display.displays[0].systemHeight: " + Display.displays[0].systemHeight);
                 //Debug.Log("Display.displays[0].renderingWidth: " + Display.displays[0].renderingWidth + " Display.displays[0].renderingHeight: " + Display.displays[0].renderingHeight);
                 //Debug.Log("Display.displays[0]: " + Display.displays[0]);
+
+#if !(URP || HDRP)
+                if (method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
+                {
+                    //Camera.onPreCull += PreCull;
+                    Camera.onPreRender += PreRender;
+                    Camera.onPostRender += PostRender;
+                }
+#endif
             }
             else
             {
@@ -6414,12 +6445,15 @@ public class Stereo3D : MonoBehaviour
                 //   //renderTexture_left.wrapMode = renderTexture_right.wrapMode = canvasRenderTexture_left.wrapMode = canvasRenderTexture_right.wrapMode = leftCamAdditionalRT.wrapMode = rightCamAdditionalRT.wrapMode = TextureWrapMode.Repeat;
             }
 
-            if (method != Method.Two_Displays
+            //if (method != Method.Two_Displays
+            if (method != Method.Two_Displays && method != Method.Two_Displays_MirrorX && method != Method.Two_Displays_MirrorY
                 //|| method == Method.Two_Displays && GUIAsOverlay && GUIVisible
 #if URP
-                || method == Method.Two_Displays && GUIAsOverlay && GUIVisible
+                //|| method == Method.Two_Displays && GUIAsOverlay && GUIVisible
+                || GUIAsOverlay && GUIVisible
 #elif HDRP
-                || method == Method.Two_Displays && (GUIAsOverlay && GUIVisible || additionalS3DCamerasStruct != null)
+                //|| method == Method.Two_Displays && (GUIAsOverlay && GUIVisible || additionalS3DCamerasStruct != null)
+                || GUIAsOverlay && GUIVisible || additionalS3DCamerasStruct != null
 #endif
                 )
             {
@@ -6520,7 +6554,8 @@ public class Stereo3D : MonoBehaviour
 //                RenderPipelineManager.beginContextRendering += RenderTexture_Reset; //add render context
 //#endif
 
-                if (method != Method.Two_Displays)
+                //if (method != Method.Two_Displays)
+                if (method != Method.Two_Displays && method != Method.Two_Displays_MirrorX && method != Method.Two_Displays_MirrorY)
                 {
                     S3DMaterial.SetTexture("_LeftTex", renderTexture_left);
                     S3DMaterial.SetTexture("_RightTex", renderTexture_right);
@@ -6548,9 +6583,10 @@ public class Stereo3D : MonoBehaviour
 
                 //RenderPipelineManager.endContextRendering += RenderQuad; //add render context
                 RenderPipelineManager.endCameraRendering += RenderQuad; //add render context
-#else
-                //Camera.onPreRender += PreRender;
-                //Camera.onPostRender += PostRender;
+//#else
+//                Camera.onPreCull += PreCull;
+//                Camera.onPreRender += PreRender;
+//                Camera.onPostRender += PostRender;
 #endif
 
             }
@@ -6679,12 +6715,15 @@ public class Stereo3D : MonoBehaviour
             StaticTooltip_Destroy();
 
 #if URP || HDRP
-            if (method != Method.Two_Displays
+            //if (method != Method.Two_Displays
+            if (method != Method.Two_Displays && method != Method.Two_Displays_MirrorX && method != Method.Two_Displays_MirrorY
                 //|| method == Method.Two_Displays && GUIAsOverlay && GUIVisible
 #if URP
-                || method == Method.Two_Displays && GUIAsOverlay && GUIVisible
+                //|| method == Method.Two_Displays && GUIAsOverlay && GUIVisible
+                || GUIAsOverlay && GUIVisible
 #elif HDRP
-                || method == Method.Two_Displays && (GUIAsOverlay && GUIVisible || additionalS3DCamerasStruct != null)
+                //|| method == Method.Two_Displays && (GUIAsOverlay && GUIVisible || additionalS3DCamerasStruct != null)
+                || GUIAsOverlay && GUIVisible || additionalS3DCamerasStruct != null
 #endif
                 )
                 //RenderPipelineManager.endContextRendering += RenderQuad; //add render context
@@ -6990,6 +7029,9 @@ public class Stereo3D : MonoBehaviour
                     if (GUIAsOverlay && GUIVisible && camera_right.targetTexture == null)
                     //if (GUIAsOverlay && GUIVisible && camera_right.targetTexture == null || method == Method.Sequential && !optimize && oddFrame)
                         camera_right.targetTexture = renderTexture_right;
+
+                    if (method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
+                        GL.invertCulling = true;
                 }
                 else
                     if (camera == canvasCamera && !S3DEnabled && canvasCamera.targetTexture == null)
@@ -7238,15 +7280,15 @@ public class Stereo3D : MonoBehaviour
 //#if HDRP
             else
             {
-#if HDRP
+//#if HDRP
                 //if (method == Method.Two_Displays)
                 //if (!cam.enabled)
                 if (camera == camera_left)
                 {
-                    //Debug.Log("camera = camera_left");
-                    //commandBuffer = new CommandBuffer();
-                    //commandBuffer.name = "camera_left";
-                    //#if HDRP
+                //Debug.Log("camera = camera_left");
+                //commandBuffer = new CommandBuffer();
+                //commandBuffer.name = "camera_left";
+#if HDRP
                     //                    foreach (var c in additionalS3DCamerasStruct)
                     //                    {
                     //                        //Debug.Log("foreach (var c in additionalS3DCamerasStruct)");
@@ -7262,7 +7304,8 @@ public class Stereo3D : MonoBehaviour
                     //                    }
                     //#endif
 
-                    if (method == Method.Two_Displays)
+                    //if (method == Method.Two_Displays)
+                    if (method == Method.Two_Displays || method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
                     {
                         //#if UNITY_EDITOR
                         //camera_left.targetTexture = null; //kill FPS from 32 to 22 but required only in player to blit render texture to the screen
@@ -7290,14 +7333,15 @@ public class Stereo3D : MonoBehaviour
                     //commandBuffer.Release();
                     //context.Submit();
                     //camera_left.targetTexture = renderTexture_left;
+#endif
                 }
                 else
                     if (camera == camera_right)
                     {
-                        //Debug.Log("camera = camera_right");
-                        //commandBuffer = new CommandBuffer();
-                        //commandBuffer.name = "camera_right";
-                        //#if HDRP
+                //Debug.Log("camera = camera_right");
+                //commandBuffer = new CommandBuffer();
+                //commandBuffer.name = "camera_right";
+#if HDRP
                         //                        foreach (var c in additionalS3DCamerasStruct)
                         //                            commandBuffer.Blit(c.renderTexture_right, renderTexture_right, S3DPanelMaterial);
 
@@ -7305,7 +7349,8 @@ public class Stereo3D : MonoBehaviour
                         //                            commandBuffer.Blit(canvasRenderTexture_right, renderTexture_right, S3DPanelMaterial);
                         //#endif
 
-                        if (method == Method.Two_Displays)
+                        //if (method == Method.Two_Displays)
+                        if (method == Method.Two_Displays || method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
                         {
                             //#if UNITY_EDITOR
                             //camera_right.targetTexture = null; //kill FPS from 32 to 22 but required only in player to blit render texture to the screen
@@ -7329,6 +7374,9 @@ public class Stereo3D : MonoBehaviour
                         //context.ExecuteCommandBuffer(commandBuffer);
                         //commandBuffer.Release();
                         //context.Submit();
+#endif
+                        if (method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
+                            GL.invertCulling = false;
                     }
 
                 //            foreach (var c in additionalS3DCamerasStruct)
@@ -7340,7 +7388,7 @@ public class Stereo3D : MonoBehaviour
                 ////#endif
                 //                    //commandBuffer.Blit(renderTexture, null as RenderTexture);
                 //                }
-//#if HDRP
+#if HDRP
                 for (int i = 0; i < additionalS3DCamerasStruct.Length; i++)
                     if (camera == additionalS3DCamerasStruct[i].camera)
                     {
@@ -7359,7 +7407,9 @@ public class Stereo3D : MonoBehaviour
                         {
                             commandBuffer.Blit(additionalS3DCamerasStruct[i].renderTexture_left, renderTexture_left, S3DPanelMaterial);
     //#if !UNITY_EDITOR
-                            if (method == Method.Two_Displays && i == additionalS3DCamerasStruct.Length - 1 && !(canvasCamera_left && canvasCamera_left.isActiveAndEnabled))
+                            //if (method == Method.Two_Displays && i == additionalS3DCamerasStruct.Length - 1 && !(canvasCamera_left && canvasCamera_left.isActiveAndEnabled))
+                            if ((method == Method.Two_Displays || method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY) 
+                            && i == additionalS3DCamerasStruct.Length - 1 && !(canvasCamera_left && canvasCamera_left.isActiveAndEnabled))
                             {
                                 additionalS3DCamerasStruct[i].camera_left.targetTexture = null;
                                 commandBuffer.Blit(renderTexture_left, null as RenderTexture);
@@ -7371,7 +7421,9 @@ public class Stereo3D : MonoBehaviour
                             {
                                 commandBuffer.Blit(additionalS3DCamerasStruct[i].renderTexture_right, renderTexture_right, S3DPanelMaterial);
         //#if !UNITY_EDITOR
-                                if (method == Method.Two_Displays && i == additionalS3DCamerasStruct.Length - 1 && !(canvasCamera_right && canvasCamera_right.isActiveAndEnabled))
+                                //if (method == Method.Two_Displays && i == additionalS3DCamerasStruct.Length - 1 && !(canvasCamera_right && canvasCamera_right.isActiveAndEnabled))
+                                if ((method == Method.Two_Displays || method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY) 
+                                && i == additionalS3DCamerasStruct.Length - 1 && !(canvasCamera_right && canvasCamera_right.isActiveAndEnabled))
                                 {
                                     additionalS3DCamerasStruct[i].camera_right.targetTexture = null;
                                     commandBuffer.Blit(renderTexture_right, null as RenderTexture);
@@ -7390,12 +7442,12 @@ public class Stereo3D : MonoBehaviour
                     //{
                     //Debug.Log("blit2");
                     //#if HDRP
-#if HDRP || URP
+//#if HDRP || URP
 //#if URP
 //                    if (cam.rect != Rect.MinMaxRect(0, 0, 1, 1))
 //#endif
                         commandBuffer.Blit(canvasRenderTexture, renderTexture, S3DPanelMaterial);
-#endif
+//#endif
                     canvasCamera.targetTexture = null;
                     commandBuffer.Blit(renderTexture, null as RenderTexture);
                     //}
@@ -7410,14 +7462,15 @@ public class Stereo3D : MonoBehaviour
                 {
                     //Debug.Log("camera == canvasCamera_left " + camera + " " + Time.time);
 //#if HDRP
-#if HDRP || URP
+//#if HDRP || URP
 //#if URP
 //                    if (cam.rect != Rect.MinMaxRect(0, 0, 1, 1))
 //#endif
                         commandBuffer.Blit(canvasRenderTexture_left, renderTexture_left, S3DPanelMaterial);
-#endif
+//#endif
 //#if !UNITY_EDITOR
-                    if (method == Method.Two_Displays)
+                    //if (method == Method.Two_Displays)
+                    if (method == Method.Two_Displays || method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
                     {
                         canvasCamera_left.targetTexture = null;
                         commandBuffer.Blit(renderTexture_left, null as RenderTexture);
@@ -7433,14 +7486,15 @@ public class Stereo3D : MonoBehaviour
                 {
                     //Debug.Log("camera == canvasCamera_right " + camera + " " + Time.time);
 //#if HDRP
-#if HDRP || URP
+//#if HDRP || URP
 //#if URP
 //                    if (cam.rect != Rect.MinMaxRect(0, 0, 1, 1))
 //#endif
                         commandBuffer.Blit(canvasRenderTexture_right, renderTexture_right, S3DPanelMaterial);
-#endif
+//#endif
 //#if !UNITY_EDITOR
-                    if (method == Method.Two_Displays)
+                    //if (method == Method.Two_Displays)
+                    if (method == Method.Two_Displays || method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
                     {
                         canvasCamera_right.targetTexture = null;
                         commandBuffer.Blit(renderTexture_right, null as RenderTexture);
@@ -7611,7 +7665,7 @@ public class Stereo3D : MonoBehaviour
 //    }
 #endif
 
-    void Vertices() //set clip space vertices and texture coordinates for render fullscreen quad via shader buffer
+                void Vertices() //set clip space vertices and texture coordinates for render fullscreen quad via shader buffer
     {
         //if (defaultRender)
 //#if !(URP || HDRP)
@@ -7878,8 +7932,9 @@ public class Stereo3D : MonoBehaviour
             //RenderPipelineManager.endContextRendering -= RenderBlit; //remove render context
         //}
 #else
-        //Camera.onPreRender -= PreRender;
-        //Camera.onPostRender -= PostRender;
+        //Camera.onPreCull -= PreCull;
+        Camera.onPreRender -= PreRender;
+        Camera.onPostRender -= PostRender;
 #endif
         //cam.targetTexture = null;
         //camera_left.targetTexture = null;
@@ -8008,22 +8063,40 @@ public class Stereo3D : MonoBehaviour
     //        Invoke("VCamNearClipRestore", Time.deltaTime);
     //}
 
-    ////void OnPreCull()
-    //void PreRender(Camera c)
+    //void PreCull(Camera c)
     //{
-    //    Debug.Log(c + " PreRender " + Time.time);
+    //    //Debug.Log(c + " PreCull " + Time.time);
 
-    //    //if (c == canvasCamera_right)
-    //    //    canvasCamera_right.targetTexture = renderTexture_right;
+    //    if (c == camera_right)
+    //    {
+    //        //canvasCamera_left.targetTexture = renderTexture_left;
+    //        //cam.targetTexture = renderTexture;
 
-    //    //canvasCamera_left.targetTexture = renderTexture_left;
-    //    //if (c == cam)
-    //    //{
-    //    //    //canvasCamera_left.targetTexture = renderTexture_left;
-    //    //    cam.targetTexture = renderTexture;
-
-    //    //}
+		  //  //c.ResetWorldToCameraMatrix();
+		  //  //c.ResetProjectionMatrix();
+		  //  //Vector3 scale = new Vector3(flipHorizontal ? -1 : 1, 1, 1);
+		  //  //Vector3 scale = new Vector3(-1, 1, 1);
+		  //  //c.projectionMatrix = c.projectionMatrix * Matrix4x4.Scale(scale);
+    //    }
     //}
+
+    //void OnPreCull()
+    void PreRender(Camera c)
+    {
+        //Debug.Log(c + " PreRender " + Time.time);
+
+        //if (c == canvasCamera_right)
+        //    canvasCamera_right.targetTexture = renderTexture_right;
+
+        //canvasCamera_left.targetTexture = renderTexture_left;
+        //if (c == cam)
+        if (c == camera_right)
+        {
+            //canvasCamera_left.targetTexture = renderTexture_left;
+            //cam.targetTexture = renderTexture;
+            GL.invertCulling = true;
+        }
+    }
 
     //ignored in SRP(URP or HDRP) but in default render via cam buffer even empty function give fps gain from 294 to 308
     void OnRenderImage(RenderTexture source, RenderTexture destination) //works only in the default render pipeline
@@ -8078,13 +8151,20 @@ public class Stereo3D : MonoBehaviour
             Graphics.Blit(source, destination);
     }
 
-    //void PostRender(Camera c)
-    //{
-    //    Debug.Log(c + " PostRender " + Time.time);
+    void PostRender(Camera c)
+    {
+        //Debug.Log(c + " PostRender " + Time.time);
 
-    //    //if (c == canvasCamera_right)
-    //    //    canvasCamera_right.targetTexture = null;
-    //}
+        //if (c == canvasCamera_right)
+        //    canvasCamera_right.targetTexture = null;
+
+        if (c == camera_right)
+        {
+            //canvasCamera_left.targetTexture = renderTexture_left;
+            //cam.targetTexture = renderTexture;
+            GL.invertCulling = false;
+        }
+    }
 
     //void CanvasCamS3DRender_Set()
     //{
