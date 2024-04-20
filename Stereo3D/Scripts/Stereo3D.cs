@@ -153,6 +153,7 @@ public class Stereo3D : MonoBehaviour
     public bool matrixKillHack; //Hack for FPS gain from 308 to 328 and required to fix terrain gaps caused by nearClipHack(Test Track Demo in Unity 2021)
     //public Canvas canvas;
     //public CameraDataStruct cameraDataStruct;
+    public bool debug;
 
 #if ENABLE_INPUT_SYSTEM
     public InputAction GUIAction;
@@ -388,7 +389,7 @@ public class Stereo3D : MonoBehaviour
 
     public void Awake()
     {
-        Debug.Log("Awake");
+        if (debug) Debug.Log("Awake");
         /* Screen.width is not correct OnEnable so viewportWidth need to be set here or at variable declaration and update only on changing
          GameObject.Find("SceneCamera").GetComponent<Camera>().pixelRect also not correct OnEnable
          EditorWindow.GetWindow<SceneView>().camera.pixelRect works but changing active window in player to scene view
@@ -399,13 +400,13 @@ public class Stereo3D : MonoBehaviour
         //for (int i = 0; i < 4; i++)
         //{
         //    int val = (i ^ 3);
-        //    Debug.Log(i + " ^ 3 = " + val);
+        //    if (debug) Debug.Log(i + " ^ 3 = " + val);
         //}
 
         if (!name.Contains("(Clone)"))
         {
 #if ENABLE_INPUT_SYSTEM
-            //Debug.Log(GUIAction.bindings.Count);
+            //if (debug) Debug.Log(GUIAction.bindings.Count);
 
             if (GUIAction.bindings.Count == 0)
                 GUIAction.AddBinding("<Keyboard>/tab");
@@ -427,7 +428,7 @@ public class Stereo3D : MonoBehaviour
             if (modifier3Action.bindings.Count == 0)
                 modifier3Action.AddBinding("<Keyboard>/leftAlt");
 
-            //Debug.Log(modifier3Action.bindings[0].effectivePath);
+            //if (debug) Debug.Log(modifier3Action.bindings[0].effectivePath);
 
             GUIAction.performed += context => { OnGUIAction(context); };
             //S3DAction.performed += context => { OnS3DAction(context); };
@@ -448,17 +449,17 @@ public class Stereo3D : MonoBehaviour
     }
 
     //GameObject selectedObject;
-    int closestCameraIndex;
-    Camera lastAdditionalClosestCamera;
+    int additionalS3DTopmostCameraIndex;
+    Camera lastAdditionalS3DTopmostCamera;
 
     void OnEnable()
     {
-        //Debug.Log("OnEnable " + name);
-        //Debug.Log("OnEnable panelDepth " + panelDepth);
+        //if (debug) Debug.Log("OnEnable " + name);
+        //if (debug) Debug.Log("OnEnable panelDepth " + panelDepth);
 
         if (!name.Contains("(Clone)"))
         {
-            Debug.Log("OnEnable cameraDataStructIsReady " + cameraDataStructIsReady);
+            if (debug) Debug.Log("OnEnable cameraDataStructIsReady " + cameraDataStructIsReady);
 
 #if UNITY_POST_PROCESSING_STACK_V2
         if (GetComponent<PostProcessLayer>())
@@ -472,31 +473,31 @@ public class Stereo3D : MonoBehaviour
         }
 #endif
 
-            //Debug.Log("windowSize " + windowSize);
+            //if (debug) Debug.Log("windowSize " + windowSize);
             //List<Type> types = GetAllTypesInAssembly(new string[] { "Assembly-CSharp" });
-            //Debug.Log(types.Count);
+            //if (debug) Debug.Log(types.Count);
 
             //foreach (var type in types)
             //{
-            //    Debug.Log(type.Name);
+            //    if (debug) Debug.Log(type.Name);
 
             //    //if (type.Name.Contains("LookWithMouse", StringComparison.CurrentCultureIgnoreCase))
-            //    //    Debug.Log(type.AssemblyQualifiedName);
+            //    //    if (debug) Debug.Log(type.AssemblyQualifiedName);
             //}
 
-            //Debug.Log(types.Exists(x => x.Name.Contains("mouse", StringComparison.CurrentCultureIgnoreCase)));
+            //if (debug) Debug.Log(types.Exists(x => x.Name.Contains("mouse", StringComparison.CurrentCultureIgnoreCase)));
             //var assemblies = UnityEditor.Compilation.CompilationPipeline.GetAssemblies();
 
             //foreach (var assemble in assemblies)
             //{
-            //    Debug.Log(assemble.name);
+            //    if (debug) Debug.Log(assemble.name);
 
             //    if (assemble.name.Contains("mouse", StringComparison.CurrentCultureIgnoreCase))
-            //        Debug.Log("***********************************");
+            //        if (debug) Debug.Log("***********************************");
             //}
 
             //if (Type.GetType("LookWithMouse") != null)
-            //    Debug.Log("LookWithMouse");
+            //    if (debug) Debug.Log("LookWithMouse");
 
             //if (GraphicsSettings.defaultRenderPipeline == null)
             //    defaultRender = true;
@@ -517,13 +518,13 @@ public class Stereo3D : MonoBehaviour
             cam.orthographic = false; //S3D is not possible in orthographic
             cam.stereoTargetEye = StereoTargetEyeMask.None;
             sceneCullingMask = cam.cullingMask;
-            Debug.Log("sceneCullingMask " + sceneCullingMask);
+            if (debug) Debug.Log("sceneCullingMask " + sceneCullingMask);
             physicalCamera = cam.usePhysicalProperties;
 
             //if (cam.projectionMatrix != Matrix4x4.zero)
                 camMatrix = cam.projectionMatrix;
 
-            Debug.Log("OnEnable camMatrix\n" + camMatrix);
+            if (debug) Debug.Log("OnEnable camMatrix\n" + camMatrix);
             camVanishPoint = new Vector2(cam.projectionMatrix[0, 2], cam.projectionMatrix[1, 2]);
             //nearClip = sceneNearClip = cam.nearClipPlane;
 
@@ -535,16 +536,16 @@ public class Stereo3D : MonoBehaviour
             //    //{
             //    //    if (additionalS3DCameras[i] != null)
             //    //    {
-            //    //        //Debug.Log("i " + i);
-            //    //        closestCameraIndex = i;
-            //    //        Debug.Log("closestCameraIndex " + closestCameraIndex);
+            //    //        //if (debug) Debug.Log("i " + i);
+            //    //        additionalS3DTopmostCameraIndex = i;
+            //    //        if (debug) Debug.Log("additionalS3DTopmostCameraIndex " + additionalS3DTopmostCameraIndex);
             //    //        break;
             //    //    }
             //    //}
 
             //    ClosestCameraIndex_Set();
-            //    //closestCameraIndex = additionalS3DCameras.Count - 2;
-            //    nearClip = sceneNearClip = additionalS3DCameras[closestCameraIndex].nearClipPlane;
+            //    //additionalS3DTopmostCameraIndex = additionalS3DCameras.Count - 2;
+            //    nearClip = sceneNearClip = additionalS3DCameras[additionalS3DTopmostCameraIndex].nearClipPlane;
             //}
             //else
             //    nearClip = sceneNearClip = cam.nearClipPlane;
@@ -606,8 +607,8 @@ public class Stereo3D : MonoBehaviour
             //    farClip = sceneFarClip = cam.farClipPlane;
             //}
 
-            //Debug.Log("OnEnable sceneNearClip " + sceneNearClip);
-            //Debug.Log("OnEnable sceneNearClip " + sceneNearClip + " sceneFarClip " + sceneFarClip);
+            //if (debug) Debug.Log("OnEnable sceneNearClip " + sceneNearClip);
+            //if (debug) Debug.Log("OnEnable sceneNearClip " + sceneNearClip + " sceneFarClip " + sceneFarClip);
 
 //#if UNITY_POST_PROCESSING_STACK_V2
 //        if (GetComponent<PostProcessLayer>())
@@ -652,8 +653,8 @@ public class Stereo3D : MonoBehaviour
                     ////oldList.Add(camClone.GetUniversalAdditionalCameraData());
                     ////newList = new List<UniversalAdditionalCameraData>();
                     ////newList.Add(cam.GetUniversalAdditionalCameraData());
-                    //////Debug.Log(newList.Count);
-                    //////Debug.Log(camCloneData.renderPostProcessing);
+                    //////if (debug) Debug.Log(newList.Count);
+                    //////if (debug) Debug.Log(camCloneData.renderPostProcessing);
                     //camCloneData = camClone.GetUniversalAdditionalCameraData();
                     ////oldList[0] = newList[0];
 
@@ -662,7 +663,7 @@ public class Stereo3D : MonoBehaviour
                     ////var obj2 = new GameObject("obj2");
 
                     //if (obj1 != obj2)
-                    //    Debug.Log(obj1.GetInstanceID() + " " + obj2.GetInstanceID());
+                    //    if (debug) Debug.Log(obj1.GetInstanceID() + " " + obj2.GetInstanceID());
 
                     //camera_left = Instantiate(cam.gameObject, transform.position, transform.rotation).GetComponent<Camera>();
                     camera_left = Instantiate(cam, transform.position, transform.rotation);
@@ -675,7 +676,7 @@ public class Stereo3D : MonoBehaviour
 
                     //for (int child = 0; child < camera_left.transform.childCount; child++)
                     //{
-                    //    //Debug.Log(camera_left.transform.GetChild(child));
+                    //    //if (debug) Debug.Log(camera_left.transform.GetChild(child));
                     //    Destroy(camera_left.transform.GetChild(child).gameObject);
                     //}
 
@@ -688,7 +689,7 @@ public class Stereo3D : MonoBehaviour
 
                     //void DestroyComponents(Camera camera)
                     //{
-                    //    Debug.Log("destroyComponents");
+                    //    if (debug) Debug.Log("destroyComponents");
 
                     //    foreach (var component in camera.GetComponents(typeof(Component)))
                     //        if (!(component is Transform) && !(component is Camera) && !(component is UnityEngine.Rendering.Universal.UniversalAdditionalCameraData))
@@ -715,7 +716,7 @@ public class Stereo3D : MonoBehaviour
 
                     for (int child = 0; child < camera_left.transform.childCount; child++)
                     {
-                        //Debug.Log(camera_left.transform.GetChild(child));
+                        //if (debug) Debug.Log(camera_left.transform.GetChild(child));
                         Destroy(camera_left.transform.GetChild(child).gameObject);
                         Destroy(camera_right.transform.GetChild(child).gameObject);
                     }
@@ -732,7 +733,7 @@ public class Stereo3D : MonoBehaviour
 //                    //UnityEditor.Selection.activeGameObject = camera_left.gameObject;
 //                    //HDAdditionalCameraData leftCamData = camera_left.GetComponent<HDAdditionalCameraData>();
 //                    //leftCamData = camera_left.GetComponent<HDAdditionalCameraData>();
-//                    //Debug.Log("camData = " + camData);
+//                    //if (debug) Debug.Log("camData = " + camData);
 //                    //leftCamData = camera_left.gameObject.AddComponent<HDAdditionalCameraData>();
 //                    //camData.CopyTo(leftCamData);
 //                    ////UnityEditor.Selection.activeGameObject = camera_right.gameObject;
@@ -766,7 +767,7 @@ public class Stereo3D : MonoBehaviour
             //GameObject go = cam.transform.Find("Plane").gameObject;
             //go.SetActive(false);
             //Instantiate(go, transform.position, transform.rotation);
-            //Debug.Log(name);
+            //if (debug) Debug.Log(name);
 
             //if (!name.Contains("Clone"))
             //{
@@ -804,7 +805,7 @@ public class Stereo3D : MonoBehaviour
             camera_left.stereoTargetEye = StereoTargetEyeMask.Left;
             camera_right.stereoTargetEye = StereoTargetEyeMask.Right;
             //camera_left.allowMSAA = camera_right.allowMSAA = false;
-            //Debug.Log("sceneCullingMask " + sceneCullingMask);
+            //if (debug) Debug.Log("sceneCullingMask " + sceneCullingMask);
 
             if (Screen.dpi != 0)
                 PPI = Screen.dpi;
@@ -828,8 +829,8 @@ public class Stereo3D : MonoBehaviour
             canvas.worldCamera = canvasRayCam;
             //canvas.pixelPerfect = true;
             additionalS3DCamerasStruct = new AdditionalS3DCamera[additionalS3DCameras.Count];
-            closestCameraIndex = -1; //if no additionalS3DCameras
-            lastAdditionalClosestCamera = null;
+            additionalS3DTopmostCameraIndex = -1; //if no additionalS3DCameras
+            lastAdditionalS3DTopmostCamera = null;
 
 #if URP
             camData = cam.GetUniversalAdditionalCameraData();
@@ -842,10 +843,10 @@ public class Stereo3D : MonoBehaviour
             leftCameraStack.RemoveAll(t => t); //clean stacks after clone from the main camera
             rightCameraStack.RemoveAll(t => t);
 
-            //Debug.Log(cameraStack.Count);
+            //if (debug) Debug.Log(cameraStack.Count);
 
             //foreach (var cam in cameraStack)
-            //    Debug.Log(cam);
+            //    if (debug) Debug.Log(cam);
 
             //additionalS3DCamerasStruct = new AdditionalS3DCamera[additionalS3DCameras.Count];
             //int i = 0;
@@ -913,8 +914,8 @@ public class Stereo3D : MonoBehaviour
             //        }
             //    }
 
-            //closestCameraIndex = -1; //if no additionalS3DCameras
-            //lastAdditionalClosestCamera = null;
+            //additionalS3DTopmostCameraIndex = -1; //if no additionalS3DCameras
+            //lastAdditionalS3DTopmostCamera = null;
 
             //for (int i = 0; i < additionalS3DCameras.Count; i++) //foreach not working if member is duplicate
             //{
@@ -924,20 +925,20 @@ public class Stereo3D : MonoBehaviour
             //    //    cameraStack.Add(c);
 
             //    //if (c == null)
-            //    //    Debug.Log("int i = 0; i < additionalS3DCameras.Count; i++ c == null");
+            //    //    if (debug) Debug.Log("int i = 0; i < additionalS3DCameras.Count; i++ c == null");
             //    //else
-            //    //    closestCameraIndex = i;
+            //    //    additionalS3DTopmostCameraIndex = i;
 
-            //    //Debug.Log("closestCameraIndex " + closestCameraIndex);
+            //    //if (debug) Debug.Log("additionalS3DTopmostCameraIndex " + additionalS3DTopmostCameraIndex);
 
             //    if (c != null)
             //    {
-            //        closestCameraIndex = i;
-            //        lastAdditionalClosestCamera = c;
+            //        additionalS3DTopmostCameraIndex = i;
+            //        lastAdditionalS3DTopmostCamera = c;
 
             //        if (c.transform.Find(c.name + "(Clone)_left"))
             //        {
-            //            Debug.Log("c.transform.Find(c.name + '(Clone)_left')");
+            //            if (debug) Debug.Log("c.transform.Find(c.name + '(Clone)_left')");
             //            additionalS3DCamerasStruct[i].camera = c;
             //            additionalS3DCamerasStruct[i].camera_left = c.transform.Find(c.name + "(Clone)_left").GetComponent<Camera>();
             //            additionalS3DCamerasStruct[i].camera_right = c.transform.Find(c.name + "(Clone)_right").GetComponent<Camera>();
@@ -967,15 +968,15 @@ public class Stereo3D : MonoBehaviour
             //        }
             //    }
 
-            //    Debug.Log("closestCameraIndex " + closestCameraIndex);
+            //    if (debug) Debug.Log("additionalS3DTopmostCameraIndex " + additionalS3DTopmostCameraIndex);
             //}
 
-            ////lastAdditionalClosestCamera = additionalS3DCameras[closestCameraIndex];
+            ////lastAdditionalS3DTopmostCamera = additionalS3DCameras[additionalS3DTopmostCameraIndex];
             //SceneNearClip_Set();
             //SceneFarClip_Set();
             //nearClip = sceneNearClip; //set nearClip & farClip to non zero before Clip_Set call delayed after GUI_Set
             //farClip = sceneFarClip;
-            //Debug.Log("OnEnable sceneNearClip " + sceneNearClip + " sceneFarClip " + sceneFarClip);
+            //if (debug) Debug.Log("OnEnable sceneNearClip " + sceneNearClip + " sceneFarClip " + sceneFarClip);
 
             URPAsset = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
             //URPAsset = (UniversalRenderPipelineAsset)GraphicsSettings.currentRenderPipeline;
@@ -1004,7 +1005,7 @@ public class Stereo3D : MonoBehaviour
 
 //                    if (additionalCamData.clearColorMode != HDAdditionalCameraData.ClearColorMode.Color)
 //                    {
-//                        Debug.Log("additionalCamData.clearColorMode != HDAdditionalCameraData.ClearColorMode.Color");
+//                        if (debug) Debug.Log("additionalCamData.clearColorMode != HDAdditionalCameraData.ClearColorMode.Color");
 //                        additionalCamData.clearColorMode = HDAdditionalCameraData.ClearColorMode.Color;
 //                        additionalCamData.backgroundColorHDR = Color.clear;
 //                    }
@@ -1033,29 +1034,30 @@ public class Stereo3D : MonoBehaviour
 //                    additionalS3DCamerasStruct[index].camera_left = cloneLeft;
 //                    additionalS3DCamerasStruct[index].camera_right = cloneRight;
 
-//                    closestCameraIndex = index;
-//                    lastAdditionalClosestCamera = c;
+//                    additionalS3DTopmostCameraIndex = index;
+//                    lastAdditionalS3DTopmostCamera = c;
 
-//                    Debug.Log("closestCameraIndex " + closestCameraIndex);
+//                    if (debug) Debug.Log("additionalS3DTopmostCameraIndex " + additionalS3DTopmostCameraIndex);
 //                }
 //            }
 #endif
 
             float depth = cam.depth;
 
-            for (int i = 0; i < additionalS3DCameras.Count; i++) //foreach not go throught all iterations if member is copy and not set correct additionalS3DCamerasStruct as result
+            for (int i = 0; i < additionalS3DCameras.Count; i++) //foreach not go throught all iterations if member is copy and not set correct additionalS3DCamerasStruct
             {
                 Camera c = additionalS3DCameras[i];
 
-                if (c != null)
+                //if (c != null)
+                if (c)
                 {
                     c.stereoTargetEye = StereoTargetEyeMask.None;
-                    closestCameraIndex = i;
-                    lastAdditionalClosestCamera = c;
+                    additionalS3DTopmostCameraIndex = i;
+                    lastAdditionalS3DTopmostCamera = c;
 
                     if (c.transform.Find(c.name + "(Clone)_left"))
                     {
-                        Debug.Log("c.transform.Find(c.name + '(Clone)_left')");
+                        if (debug) Debug.Log("c.transform.Find(c.name + '(Clone)_left')");
                         additionalS3DCamerasStruct[i].camera = c;
                         additionalS3DCamerasStruct[i].camera_left = c.transform.Find(c.name + "(Clone)_left").GetComponent<Camera>();
                         additionalS3DCamerasStruct[i].camera_right = c.transform.Find(c.name + "(Clone)_right").GetComponent<Camera>();
@@ -1072,7 +1074,7 @@ public class Stereo3D : MonoBehaviour
 
                     if (additionalCamData.clearColorMode != HDAdditionalCameraData.ClearColorMode.Color)
                     {
-                        Debug.Log("additionalCamData.clearColorMode != HDAdditionalCameraData.ClearColorMode.Color");
+                        if (debug) Debug.Log("additionalCamData.clearColorMode != HDAdditionalCameraData.ClearColorMode.Color");
                         additionalCamData.clearColorMode = HDAdditionalCameraData.ClearColorMode.Color;
                         additionalCamData.backgroundColorHDR = Color.clear;
                     }
@@ -1103,14 +1105,14 @@ public class Stereo3D : MonoBehaviour
                     }
                 }
 
-                Debug.Log("closestCameraIndex " + closestCameraIndex);
+                if (debug) Debug.Log("additionalS3DTopmostCameraIndex " + additionalS3DTopmostCameraIndex);
             }
 
             SceneNearClip_Set();
             SceneFarClip_Set();
             nearClip = sceneNearClip; //set nearClip & farClip to non zero before Clip_Set call delayed after GUI_Set
             farClip = sceneFarClip;
-            Debug.Log("OnEnable sceneNearClip " + sceneNearClip + " sceneFarClip " + sceneFarClip);
+            if (debug) Debug.Log("OnEnable sceneNearClip " + sceneNearClip + " sceneFarClip " + sceneFarClip);
 //#elif HDRP
 #if HDRP
             camData = cam.GetComponent<HDAdditionalCameraData>();
@@ -1185,7 +1187,7 @@ public class Stereo3D : MonoBehaviour
             //                //{
             //                //    //if (field.Name.Contains("physicalParameters"))
             //                //    if (!str.Contains(field.Name))
-            //                //        Debug.Log(field);
+            //                //        if (debug) Debug.Log(field);
             //                //}
 
             //                //foreach (var line in lines)
@@ -1199,7 +1201,7 @@ public class Stereo3D : MonoBehaviour
             //                //    }
 
             //                //    if (!contains)
-            //                //        Debug.Log(line);
+            //                //        if (debug) Debug.Log(line);
             //                //}
 
             //                ////HDCamDataCopy_Get();
@@ -1212,7 +1214,7 @@ public class Stereo3D : MonoBehaviour
             //                canvasCamData.backgroundColorHDR = Color.clear;
             //                //canvasCamData.clearDepth = true;
             //                canvasCamData.probeLayerMask = 0;
-            //                Debug.Log("canvasCamData.name " + canvasCamData.name);
+            //                if (debug) Debug.Log("canvasCamData.name " + canvasCamData.name);
             //                //HDCamera HDCam = HDCamera.GetOrCreate(canvasCamera);
             //                //HDCam.frameSettings.
             //                //canvasCamData.volumeLayerMask = 1 << 1;
@@ -1240,12 +1242,12 @@ public class Stereo3D : MonoBehaviour
             //                //GraphicsSettings.renderPipelineAsset = pipelineAsset;
 
             //                ////var flags = BindingFlags.Instance | BindingFlags.NonPublic;
-            //                //////Debug.Log(typeof(HDRenderPipelineAsset).GetField("m_RenderPipelineSettings", flags).GetValue(GraphicsSettings.currentRenderPipeline));
+            //                //////if (debug) Debug.Log(typeof(HDRenderPipelineAsset).GetField("m_RenderPipelineSettings", flags).GetValue(GraphicsSettings.currentRenderPipeline));
             //                ////RenderPipelineSettings HDRPSettings = (RenderPipelineSettings)typeof(HDRenderPipelineAsset).GetField("m_RenderPipelineSettings", flags).GetValue(GraphicsSettings.currentRenderPipeline);
             //                ////RenderPipelineSettings HDRPSettings = (RenderPipelineSettings)typeof(HDRenderPipelineAsset).GetField("m_RenderPipelineSettings", flags).GetValue(GraphicsSettings.currentRenderPipeline);
             //                //RenderPipelineSettings HDRPSettings = (RenderPipelineSettings)typeof(HDRenderPipelineAsset).GetField("m_RenderPipelineSettings", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(GraphicsSettings.currentRenderPipeline);
             //                //HDRPSettings.colorBufferFormat = RenderPipelineSettings.ColorBufferFormat.R16G16B16A16;
-            //                ////Debug.Log(HDRPSettings.colorBufferFormat);
+            //                ////if (debug) Debug.Log(HDRPSettings.colorBufferFormat);
             //                ////typeof(HDRenderPipelineAsset).GetField("m_RenderPipelineSettings", flags).SetValue(GraphicsSettings.currentRenderPipeline, HDRPSettings);
             //                //typeof(HDRenderPipelineAsset).GetField("m_RenderPipelineSettings", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(GraphicsSettings.currentRenderPipeline, HDRPSettings);
             //#endif
@@ -1282,7 +1284,7 @@ public class Stereo3D : MonoBehaviour
             //if (inputSystem)
 #if STARTER_ASSETS_PACKAGES_CHECKED
             {
-                //Debug.Log(FindObjectOfType<StarterAssetsInputs>());
+                //if (debug) Debug.Log(FindObjectOfType<StarterAssetsInputs>());
                 starterAssetsInputs = FindObjectOfType<StarterAssetsInputs>();
             cursorLockedDefault = starterAssetsInputs.cursorLocked;
             cursorInputForLookDefault = starterAssetsInputs.cursorInputForLook;
@@ -1304,7 +1306,7 @@ public class Stereo3D : MonoBehaviour
 
             //        if (!EventSystem.current)
             //        {
-            //            //Debug.Log("!EventSystem.current");
+            //            //if (debug) Debug.Log("!EventSystem.current");
             //            //canvas.gameObject.AddComponent<EventSystem>();
             //            //canvas.gameObject.AddComponent<StandaloneInputModule>();
 
@@ -1315,7 +1317,7 @@ public class Stereo3D : MonoBehaviour
             //#endif
             //        }
             //        //else
-            //        //    //Debug.Log("EventSystem.current " + EventSystem.current.name);
+            //        //    //if (debug) Debug.Log("EventSystem.current " + EventSystem.current.name);
 
 #if ENABLE_INPUT_SYSTEM
         GUIAction.Enable();
@@ -1379,7 +1381,7 @@ public class Stereo3D : MonoBehaviour
 
             for (int i = 0; i < arr.Length; i++)
             {
-                //Debug.Log(arr.GetValue(i).ToString());
+                //if (debug) Debug.Log(arr.GetValue(i).ToString());
                 Dropdown.OptionData optionData = new Dropdown.OptionData();
                 optionData.text = arr.GetValue(i).ToString().Replace("_", " ");
                 list.Add(optionData);
@@ -1389,7 +1391,7 @@ public class Stereo3D : MonoBehaviour
 
             //foreach(var v in arr)
             //{
-            //   //Debug.Log(v);
+            //   //if (debug) Debug.Log(v);
             //}
 
             PPI_inputField = panel.Find("InputField (Legacy)_PPI").GetComponent<InputField>();
@@ -1535,9 +1537,9 @@ public class Stereo3D : MonoBehaviour
                 canvasCamera.cullingMask = canvasCamera.cullingMask | (1 << 5); //add UI layer
 
                 //if (additionalS3DCameras.Count != 0)
-                if (closestCameraIndex != -1)
+                if (additionalS3DTopmostCameraIndex != -1)
                     //canvasCamera.depth = additionalS3DCameras[additionalS3DCameras.Count - 1].depth + 1;
-                    canvasCamera.depth = additionalS3DCameras[closestCameraIndex].depth + 1;
+                    canvasCamera.depth = additionalS3DCameras[additionalS3DTopmostCameraIndex].depth + 1;
                 else
                     canvasCamera.depth = cam.depth + 1;
 
@@ -1587,7 +1589,7 @@ public class Stereo3D : MonoBehaviour
                 //                canvasCamData.volumeLayerMask = canvasCamData_left.volumeLayerMask = canvasCamData_right.volumeLayerMask = 0;
                 //                canvasCamData.backgroundColorHDR = canvasCamData_left.backgroundColorHDR = canvasCamData_right.backgroundColorHDR = Color.clear;
                 //                canvasCamData.probeLayerMask = canvasCamData_left.probeLayerMask = canvasCamData_right.probeLayerMask = 0;
-                //                //Debug.Log("canvasCamData.name " + canvasCamData.name);
+                //                //if (debug) Debug.Log("canvasCamData.name " + canvasCamData.name);
                 //                //canvasCamData.clearColorMode = HDAdditionalCameraData.ClearColorMode.None;
                 //                //canvasCamData_left.clearColorMode = canvasCamData_right.clearColorMode = HDAdditionalCameraData.ClearColorMode.Color;
                 //                canvasCamData.clearColorMode = canvasCamData_left.clearColorMode = canvasCamData_right.clearColorMode = HDAdditionalCameraData.ClearColorMode.Color;
@@ -1632,7 +1634,7 @@ public class Stereo3D : MonoBehaviour
 #endif
             //if (!loaded && loadSettingsFromFile)
             //{
-            //    Debug.Log("!loaded && loadSettingsFromFile");
+            //    if (debug) Debug.Log("!loaded && loadSettingsFromFile");
             //    loaded = true;
             //    LoadLastSave();
             //}
@@ -1709,9 +1711,9 @@ public class Stereo3D : MonoBehaviour
             //float setLastCameraDataStructTime = Time.deltaTime * 32;
             //float setLastCameraDataStructTime = 1f / Screen.currentResolution.refreshRate * 32;
             //float setLastCameraDataStructTime = .021f;
-            //Debug.Log("OnEnable setLastCameraDataStructTime " + setLastCameraDataStructTime);
+            //if (debug) Debug.Log("OnEnable setLastCameraDataStructTime " + setLastCameraDataStructTime);
             //Invoke("SetLastCameraDataStruct", setLastCameraDataStructTime);
-            //Debug.Log("OnEnable before Invoke('SetLastCameraDataStruct'', setLastCameraDataStructTime) " + setLastCameraDataStructTime);
+            //if (debug) Debug.Log("OnEnable before Invoke('SetLastCameraDataStruct'', setLastCameraDataStructTime) " + setLastCameraDataStructTime);
             //Invoke("SetLastCameraDataStruct", setLastCameraDataStructTime);
             Invoke("SetLastCameraDataStruct", .021f);
 
@@ -1740,12 +1742,12 @@ public class Stereo3D : MonoBehaviour
                 {
                     lookWithMouseScriptEnabled = true;
                     lookWithMouseScript = script;
-                    //Debug.Log(lookWithMouseScript);
+                    //if (debug) Debug.Log(lookWithMouseScript);
                     //break;
                 }
                 else
                 {
-                    Debug.Log("More than one lookWithMouseScript enabled in the scene");
+                    if (debug) Debug.Log("More than one lookWithMouseScript enabled in the scene");
                     lookWithMouseScript = null;
                 }
         }
@@ -1757,23 +1759,23 @@ public class Stereo3D : MonoBehaviour
             //foreach (var script in FindObjectsByType<UnityTemplateProjects.SimpleCameraController>(FindObjectsSortMode.None))
             foreach (var script in FindObjectsOfType<UnityTemplateProjects.SimpleCameraController>())
             {
-                Debug.Log("FindObjectsOfType<UnityTemplateProjects.SimpleCameraController>()");
+                if (debug) Debug.Log("FindObjectsOfType<UnityTemplateProjects.SimpleCameraController>()");
 
                 if (script.enabled)
                 {
                     //if (lookWithMouseScriptEnabled)
-                    //    Debug.Log("More than one mouse control script enabled in the scene");
+                    //    if (debug) Debug.Log("More than one mouse control script enabled in the scene");
 
                     if (!simpleCameraControllerScriptEnabled)
                     {
                         simpleCameraControllerScriptEnabled = true;
                         simpleCameraControllerScript = script;
-                        //Debug.Log(simpleCameraControllerScript);
+                        //if (debug) Debug.Log(simpleCameraControllerScript);
                         //break;
                     }
                     else
                     {
-                        Debug.Log("More than one simpleCameraControllerScript enabled in the scene");
+                        if (debug) Debug.Log("More than one simpleCameraControllerScript enabled in the scene");
                         simpleCameraControllerScript = null;
                     }
                 }
@@ -1782,27 +1784,15 @@ public class Stereo3D : MonoBehaviour
         }
     }
 
-    //void URPAsset_Get()
-    void URPAssetSettings_Get()
-    {
-        //URPAsset = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
-        ////lastURPAsset = new UniversalRenderPipelineAsset();
-        //lastURPAsset = ScriptableObject.CreateInstance<UniversalRenderPipelineAsset>();
-        //lastURPAsset = URPAsset;
-        lastScriptableRenderer = URPAsset.scriptableRenderer;
-        //lastMSAASampleCount = URPAsset.msaaSampleCount;
-        URPAssetIsReady = true;
-    }
-
     //void ClosestCameraIndex_Set()
     //{
     //    for (int i = additionalS3DCameras.Count - 1; i >= 0; i--)
     //    {
     //        if (additionalS3DCameras[i] != null)
     //        {
-    //            //Debug.Log("i " + i);
-    //            closestCameraIndex = i;
-    //            Debug.Log("closestCameraIndex " + closestCameraIndex);
+    //            //if (debug) Debug.Log("i " + i);
+    //            additionalS3DTopmostCameraIndex = i;
+    //            if (debug) Debug.Log("additionalS3DTopmostCameraIndex " + additionalS3DTopmostCameraIndex);
     //            break;
     //        }
     //    }
@@ -1810,10 +1800,10 @@ public class Stereo3D : MonoBehaviour
 
     void SceneNearClip_Set()
     {
-        //Debug.Log("cineBrain " + cineBrain);
-        //Debug.Log("SceneNearClip_Set ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane);
+        //if (debug) Debug.Log("cineBrain " + cineBrain);
+        //if (debug) Debug.Log("SceneNearClip_Set ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane);
         cameraNearClip = cam.nearClipPlane;
-        //Debug.Log("SceneNearClip_Set cameraNearClip " + cameraNearClip);
+        //if (debug) Debug.Log("SceneNearClip_Set cameraNearClip " + cameraNearClip);
 
 #if CINEMACHINE
         if (cineBrain)
@@ -1832,19 +1822,19 @@ public class Stereo3D : MonoBehaviour
         //cameraNearClip = cam.nearClipPlane;
 
         //if (additionalS3DCameras.Count != 0)
-        if (closestCameraIndex != -1)
-            //nearClip = sceneNearClip = additionalS3DCameras[closestCameraIndex].nearClipPlane;
-            sceneNearClip = additionalS3DCameras[closestCameraIndex].nearClipPlane;
+        if (additionalS3DTopmostCameraIndex != -1)
+            //nearClip = sceneNearClip = additionalS3DCameras[additionalS3DTopmostCameraIndex].nearClipPlane;
+            sceneNearClip = additionalS3DCameras[additionalS3DTopmostCameraIndex].nearClipPlane;
         else
             sceneNearClip = cameraNearClip;
 
-        Debug.Log("SceneNearClip_Set sceneNearClip " + sceneNearClip);
+        if (debug) Debug.Log("SceneNearClip_Set sceneNearClip " + sceneNearClip);
     }
 
     void SceneFarClip_Set()
     {
-        //Debug.Log("cineBrain " + cineBrain);
-        //Debug.Log("SceneFarClip_Set ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.FarClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.FarClipPlane);
+        //if (debug) Debug.Log("cineBrain " + cineBrain);
+        //if (debug) Debug.Log("SceneFarClip_Set ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.FarClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.FarClipPlane);
         sceneFarClip = cam.farClipPlane;
 
 #if CINEMACHINE
@@ -1858,7 +1848,7 @@ public class Stereo3D : MonoBehaviour
                 //    Invoke("SceneFarClip_Set", Time.deltaTime);
 #endif
 
-        Debug.Log("SceneFarClip_Set sceneFarClip " + sceneFarClip);
+        if (debug) Debug.Log("SceneFarClip_Set sceneFarClip " + sceneFarClip);
     }
 
     void HDRPSettings_Restore()
@@ -1873,7 +1863,7 @@ public class Stereo3D : MonoBehaviour
 
     //void CamData_Get()
     //{
-    //    Debug.Log("CamData_Get");
+    //    if (debug) Debug.Log("CamData_Get");
     //    camData = cam.GetComponent<HDAdditionalCameraData>();
 
     //    if (!camData)
@@ -1882,7 +1872,7 @@ public class Stereo3D : MonoBehaviour
 
     //void HDCamDataCopy_Get()
     //{
-    //    Debug.Log("HDCamDataCopy_Get");
+    //    if (debug) Debug.Log("HDCamDataCopy_Get");
     //    //HDCamDataCopy = (HDAdditionalCameraData)typeof(HDCamera).GetField("m_AdditionalCameraData", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(HDCam);
     //    HDCamDataCopy = typeof(HDCamera).GetField("m_AdditionalCameraData", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(HDCam) as HDAdditionalCameraData;
     //    HDCamDataCopy2 = typeof(HDCamera).GetField("m_AdditionalCameraData", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(HDCam2) as HDAdditionalCameraData;
@@ -1899,7 +1889,7 @@ public class Stereo3D : MonoBehaviour
 
     //void DefaultColorBufferFormat_Set()
     //{
-    //    Debug.Log("DefaultColorBufferFormat_Set");
+    //    if (debug) Debug.Log("DefaultColorBufferFormat_Set");
     //    HDRPSettings.colorBufferFormat = defaultColorBufferFormat;
     //    typeof(HDRenderPipelineAsset).GetField("m_RenderPipelineSettings", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(GraphicsSettings.currentRenderPipeline, HDRPSettings);
     //}
@@ -1908,7 +1898,7 @@ public class Stereo3D : MonoBehaviour
 
     //    void CanvasCamHDRPData_Set()
     //    {
-    //        //Debug.Log("CanvasCamHDRPData_Set()");
+    //        //if (debug) Debug.Log("CanvasCamHDRPData_Set()");
 
     //#if UNITY_EDITOR
     //        if (!selectedObject)
@@ -1925,10 +1915,10 @@ public class Stereo3D : MonoBehaviour
     //            canvasCamData.clearColorMode = HDAdditionalCameraData.ClearColorMode.Color;
     //            //canvasCamData.clearDepth = true;
     //            canvasCamData.probeLayerMask = 0;
-    //            //Debug.Log("canvasCamData.name " + canvasCamData.name);
+    //            //if (debug) Debug.Log("canvasCamData.name " + canvasCamData.name);
     //#if UNITY_EDITOR
     //            //selectedObject = UnityEditor.Selection.activeGameObject;
-    //            Debug.Log("selectedObject " + selectedObject.name);
+    //            if (debug) Debug.Log("selectedObject " + selectedObject.name);
     //            UnityEditor.Selection.activeObject = selectedObject;
     //#endif
     //        }
@@ -1971,7 +1961,7 @@ public class Stereo3D : MonoBehaviour
                 if (c != canvasCamera)
                     if (additionalS3DCameras.Contains(c))
                     {
-                        Debug.Log("additionalS3DCameras.Contains(c) " + c);
+                        if (debug) Debug.Log("additionalS3DCameras.Contains(c) " + c);
                         //Camera cloneLeft = Instantiate(c, c.transform.position, c.transform.rotation);
                         //cloneLeft.tag = "Untagged";
                         //cloneLeft.name += "_left";
@@ -2051,17 +2041,17 @@ public class Stereo3D : MonoBehaviour
             //    //rightCameraStack.Remove(c);
 
             //    //foreach (var d in additionalS3DCameras)
-            //    //Debug.Log("CameraStackSet c.name.Replace("_left", "")" + c.name.Replace("_left", ""));
+            //    //if (debug) Debug.Log("CameraStackSet c.name.Replace("_left", "")" + c.name.Replace("_left", ""));
 
             //    //string cameraName = c.name.Replace("(Clone)_left", "");
-            //    //Debug.Log("CameraStackSet cameraName " + cameraName);
-            //    Debug.Log("******************CameraStackSet var c in leftCameraStack " + c);
+            //    //if (debug) Debug.Log("CameraStackSet cameraName " + cameraName);
+            //    if (debug) Debug.Log("******************CameraStackSet var c in leftCameraStack " + c);
 
             //    //Camera additionalS3DCamera = additionalS3DCameras.Find(t => t.name == cameraName);
             //    Camera additionalS3DCamera = additionalS3DCameras.Find(t => t.name == c.name.Replace("(Clone)_left", ""));
             //    //Camera additionalS3DCamera = additionalS3DCameras.Find(t => t.name.Contains(cameraName));
 
-            //    //Debug.Log("CameraStackSet additionalS3DCamera " + additionalS3DCamera);
+            //    //if (debug) Debug.Log("CameraStackSet additionalS3DCamera " + additionalS3DCamera);
 
             //    //if (additionalS3DCameras.Find(t => t.name.Contains(c.name.Replace("_left", ""))))
             //    if (additionalS3DCamera)
@@ -2106,8 +2096,8 @@ public class Stereo3D : MonoBehaviour
         }
 
         lastCameraStack = cameraStack.ToArray();
-        //Debug.Log("CameraStackSet cameraStack.Count " + cameraStack.Count);
-        Debug.Log("CameraStackSet lastCameraStack.Length " + lastCameraStack.Length + " cameraStack.Count " + cameraStack.Count);
+        //if (debug) Debug.Log("CameraStackSet cameraStack.Count " + cameraStack.Count);
+        if (debug) Debug.Log("CameraStackSet lastCameraStack.Length " + lastCameraStack.Length + " cameraStack.Count " + cameraStack.Count);
 //#endif
     }
 
@@ -2137,7 +2127,7 @@ public class Stereo3D : MonoBehaviour
 
         leftCameraStack.RemoveAll(t => t);
         rightCameraStack.RemoveAll(t => t);
-        Debug.Log("CameraStackRestore cameraStack.Count " + cameraStack.Count);
+        if (debug) Debug.Log("CameraStackRestore cameraStack.Count " + cameraStack.Count);
 //#endif
     }
 
@@ -2165,7 +2155,7 @@ public class Stereo3D : MonoBehaviour
     //        {
     //            if (assembly.FullName.StartsWith(assemblyName))
     //            {
-    //                Debug.Log(assembly.FullName);
+    //                if (debug) Debug.Log(assembly.FullName);
 
     //                foreach (Type type in assembly.GetTypes())
     //                {
@@ -2177,11 +2167,23 @@ public class Stereo3D : MonoBehaviour
     //    }
     //    return results;
     //}
+
+    //void URPAsset_Get()
+    void URPAssetSettings_Get()
+    {
+        //URPAsset = GraphicsSettings.currentRenderPipeline as UniversalRenderPipelineAsset;
+        ////lastURPAsset = new UniversalRenderPipelineAsset();
+        //lastURPAsset = ScriptableObject.CreateInstance<UniversalRenderPipelineAsset>();
+        //lastURPAsset = URPAsset;
+        lastScriptableRenderer = URPAsset.scriptableRenderer;
+        //lastMSAASampleCount = URPAsset.msaaSampleCount;
+        URPAssetIsReady = true;
+    }
 #endif
 
     //void Start()
     //{
-    //    Debug.Log("Start " + name);
+    //    if (debug) Debug.Log("Start " + name);
     //}
 
     float vFOV;
@@ -2204,7 +2206,7 @@ public class Stereo3D : MonoBehaviour
     //void Start()
     IEnumerator Start()
     {
-        Debug.Log("Start");
+        if (debug) Debug.Log("Start");
         lastLoadSettingsFromFile = loadSettingsFromFile = false; //prevent reload settings by OnOffToggle
 
         //if (loadSettingsFromFile)
@@ -2214,11 +2216,11 @@ public class Stereo3D : MonoBehaviour
         ////camData = cam.GetUniversalAdditionalCameraData();
         ////CameraDataStruct_Set();
         ////lastCameraDataStruct = cameraDataStruct;
-        ////Debug.Log("Time.deltaTime " + Time.deltaTime);
+        ////if (debug) Debug.Log("Time.deltaTime " + Time.deltaTime);
         ////Invoke("SetLastCameraDataStruct", Time.deltaTime * 8);
         //setLastCameraDataStructTime = Time.deltaTime * 32;
         //Invoke("SetLastCameraDataStruct", setLastCameraDataStructTime);
-        ////Debug.Log("Start cameraDataStruct " + cameraDataStruct);
+        ////if (debug) Debug.Log("Start cameraDataStruct " + cameraDataStruct);
         ////Invoke("CamData_Change", 5);
 
         //if (method == Method.Two_Displays) //prevent disabled post process with Method.Two_Displays at start
@@ -2242,7 +2244,7 @@ public class Stereo3D : MonoBehaviour
             ////Graphics.Blit(renderTexture_left, null as RenderTexture);
             //Graphics.Blit(RenderTexture.active, null as RenderTexture);
             ////camera_left.targetDisplay = 0;
-            ////Debug.Log("WaitForEndOfFrame Camera.current: " + Camera.current);
+            ////if (debug) Debug.Log("WaitForEndOfFrame Camera.current: " + Camera.current);
 
             //Camera.SetupCurrent(camera_right);
             //camera_right.targetTexture = null;
@@ -2255,7 +2257,7 @@ public class Stereo3D : MonoBehaviour
             ////Graphics.Blit(renderTexture_right, null, RenderTextureFlipMaterial);
             //Graphics.Blit(RenderTexture.active, null, RenderTextureFlipMaterial);
             ////camera_right.targetDisplay = 1;
-            ////Debug.Log("WaitForEndOfFrame Camera.current: " + Camera.current);
+            ////if (debug) Debug.Log("WaitForEndOfFrame Camera.current: " + Camera.current);
 
             ////Camera.SetupCurrent(cam);
             ////Camera.SetupCurrent(camera_right);
@@ -2264,27 +2266,27 @@ public class Stereo3D : MonoBehaviour
 
     void SetLastCameraDataStruct()
     {
-        //Debug.Log("SetLastCameraDataStruct " + Time.time);
+        //if (debug) Debug.Log("SetLastCameraDataStruct " + Time.time);
         lastCameraDataStruct = cameraDataStruct;
-        //Debug.Log("SetLastCameraDataStruct after lastCameraDataStruct = cameraDataStruct " + Time.time);
+        //if (debug) Debug.Log("SetLastCameraDataStruct after lastCameraDataStruct = cameraDataStruct " + Time.time);
 
         for (int i = 0; i < additionalS3DCamerasStruct.Length; i++)
             additionalS3DCamerasStruct[i].lastCameraDataStruct = additionalS3DCamerasStruct[i].cameraDataStruct;
 
-        //Debug.Log("SetLastCameraDataStruct after additionalS3DCamerasStruct[i].lastCameraDataStruct = additionalS3DCamerasStruct[i].cameraDataStruct " + Time.time);
+        //if (debug) Debug.Log("SetLastCameraDataStruct after additionalS3DCamerasStruct[i].lastCameraDataStruct = additionalS3DCamerasStruct[i].cameraDataStruct " + Time.time);
         cameraDataStructIsReady = true;
         //CameraDataStruct_Check();
     }
 
     //void CameraDataStruct_Check()
     //{
-    //    Debug.Log("CameraDataStruct_Check");
+    //    if (debug) Debug.Log("CameraDataStruct_Check");
     //    bool notEqual = false;
 
     //    if (!lastCameraDataStruct.Equals(cameraDataStruct))
     //    {
     //        //Debug.Break();
-    //        Debug.Log("CameraDataStruct_Check !lastCameraDataStruct.Equals(cameraDataStruct)--------------------------------------------------------------");
+    //        if (debug) Debug.Log("CameraDataStruct_Check !lastCameraDataStruct.Equals(cameraDataStruct)--------------------------------------------------------------");
 
     //        //lastCameraDataStruct = cameraDataStruct;
     //        //Invoke("CameraDataStruct_Check", Time.deltaTime);
@@ -2295,7 +2297,7 @@ public class Stereo3D : MonoBehaviour
     //        {
     //            if (!additionalS3DCamerasStruct[i].lastCameraDataStruct.Equals(additionalS3DCamerasStruct[i].cameraDataStruct))
     //            {
-    //                Debug.Log("CameraDataStruct_Check !additionalS3DCamerasStruct[i].lastCameraDataStruct.Equals(additionalS3DCamerasStruct[i].cameraDataStruct)---------------------------------------------------------");
+    //                if (debug) Debug.Log("CameraDataStruct_Check !additionalS3DCamerasStruct[i].lastCameraDataStruct.Equals(additionalS3DCamerasStruct[i].cameraDataStruct)---------------------------------------------------------");
     //                //additionalS3DCamerasStruct[i].lastCameraDataStruct = additionalS3DCamerasStruct[i].cameraDataStruct;
     //                //OnOffToggle();
     //                notEqual = true;
@@ -2342,11 +2344,11 @@ public class Stereo3D : MonoBehaviour
 
     void Update()
     {
-        //Debug.Log("lastAdditionalClosestCamera " + lastAdditionalClosestCamera);
-        //Debug.Log("additionalS3DCameras.Count " + additionalS3DCameras.Count + " additionalS3DCamerasStruct.Length " + additionalS3DCamerasStruct.Length);
-        //Debug.Log("cam.nearClipPlane " + cam.nearClipPlane);
-        //Debug.Log("cam.projectionMatrix " + cam.projectionMatrix);
-        //Debug.Log(Cinemachine.CinemachineBrain.SoloCamera);
+        //if (debug) Debug.Log("lastAdditionalS3DTopmostCamera " + lastAdditionalS3DTopmostCamera);
+        //if (debug) Debug.Log("additionalS3DCameras.Count " + additionalS3DCameras.Count + " additionalS3DCamerasStruct.Length " + additionalS3DCamerasStruct.Length);
+        //if (debug) Debug.Log("cam.nearClipPlane " + cam.nearClipPlane);
+        //if (debug) Debug.Log("cam.projectionMatrix " + cam.projectionMatrix);
+        //if (debug) Debug.Log(Cinemachine.CinemachineBrain.SoloCamera);
         oddFrame = !oddFrame;
 
         if (S3DEnabled && method == Method.Sequential)
@@ -2374,7 +2376,7 @@ public class Stereo3D : MonoBehaviour
 
                     if (GUIAsOverlay && GUIVisible)
                     {
-                        //Debug.Log("canvasCamera_left && canvasCamera_left.isActiveAndEnabled");
+                        //if (debug) Debug.Log("canvasCamera_left && canvasCamera_left.isActiveAndEnabled");
                         canvasCamera_left.Render();
                         canvasCamera_right.Render();
                     }
@@ -2397,16 +2399,16 @@ public class Stereo3D : MonoBehaviour
         }
 
         //if (cam.nearClipPlane == -1 && vCam != null && UnityEditor.Selection.activeObject == vCam.VirtualCameraGameObject)
-        //    //Debug.Log("UnityEditor.Selection.activeObject == vCam.VirtualCameraGameObject");
+        //    //if (debug) Debug.Log("UnityEditor.Selection.activeObject == vCam.VirtualCameraGameObject");
         //    ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = -1;
 
         //if (vCam != null && UnityEditor.Selection.activeObject == vCam.VirtualCameraGameObject)
         //{
         //    //if (lastVCamNearClip != ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane)
         //    //{
-        //    //    Debug.Log("lastVCamNearClip != ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane lastVCamNearClip " + lastVCamNearClip + " ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane);
+        //    //    if (debug) Debug.Log("lastVCamNearClip != ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane lastVCamNearClip " + lastVCamNearClip + " ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane);
         //    //    lastVCamNearClip = ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane;
-        //    //    Debug.Log("lastVCamNearClip " + lastVCamNearClip + " ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane);
+        //    //    if (debug) Debug.Log("lastVCamNearClip " + lastVCamNearClip + " ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane);
         //    //}
         //    //else
         //    //{
@@ -2436,16 +2438,16 @@ public class Stereo3D : MonoBehaviour
         //        onOffToggle = true;
         //    }
 
-        //    Debug.Log("lastVCamNearClip != ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane lastVCamNearClip " + lastVCamNearClip + " ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane);
+        //    if (debug) Debug.Log("lastVCamNearClip != ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane lastVCamNearClip " + lastVCamNearClip + " ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane);
         //    lastVCamNearClip = ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane;
         //}
 
-        //Debug.Log("Update " + Time.time);
-        //Debug.Log("aspect " + aspect);
-        //Debug.Log("cam.aspect " + cam.aspect + " camera_left.aspect " + camera_left.aspect + " camera_right.aspect " + camera_right.aspect);
+        //if (debug) Debug.Log("Update " + Time.time);
+        //if (debug) Debug.Log("aspect " + aspect);
+        //if (debug) Debug.Log("cam.aspect " + cam.aspect + " camera_left.aspect " + camera_left.aspect + " camera_right.aspect " + camera_right.aspect);
 
         //foreach (var c in additionalS3DCamerasStruct)
-        //    Debug.Log("c.camera.aspect " + c.camera.aspect + " c.camera_left.aspect " + c.camera_left.aspect + " c.camera_right.aspect " + c.camera_right.aspect);
+        //    if (debug) Debug.Log("c.camera.aspect " + c.camera.aspect + " c.camera_left.aspect " + c.camera_left.aspect + " c.camera_right.aspect " + c.camera_right.aspect);
 
         //rtWidth = cam.pixelWidth;
         //rtHeight = cam.pixelHeight;
@@ -2458,8 +2460,8 @@ public class Stereo3D : MonoBehaviour
         //if (method == Method.Two_Displays)
         //    camera_left.rect = camera_right.rect = canvasCamera_left.rect = canvasCamera_right.rect = cam.rect;
 
-        //Debug.Log(cullingMask);
-        //Debug.Log(additionalS3DCamerasStruct[0].camera_left.targetTexture);
+        //if (debug) Debug.Log(cullingMask);
+        //if (debug) Debug.Log(additionalS3DCamerasStruct[0].camera_left.targetTexture);
 
         //if (canvasCamera_left && canvasCamera_left.isActiveAndEnabled)
         //{
@@ -2488,7 +2490,7 @@ public class Stereo3D : MonoBehaviour
         //    done = true;
 
         //    //cam.cullingMask = 0;
-        //    //Debug.Log("cam.cullingMask " + cam.cullingMask);
+        //    //if (debug) Debug.Log("cam.cullingMask " + cam.cullingMask);
 
         //    Matrix4x4 m = cam.projectionMatrix;
         //    m[0, 2] = .1f;
@@ -2511,23 +2513,23 @@ public class Stereo3D : MonoBehaviour
         //}
 
 #if UNITY_EDITOR && ENABLE_INPUT_SYSTEM
-        //Debug.Log(GUIAction.bindings[0].path);
-        //Debug.Log(GUIAction.bindings.Count);
+        //if (debug) Debug.Log(GUIAction.bindings[0].path);
+        //if (debug) Debug.Log(GUIAction.bindings.Count);
 
         //if (!done && GUIAction.bindings[0].path != "<Keyboard>/tab")
         //    if (!done && Time.time > 5)
         //    {
-        //        Debug.Log("GUIAction.bindings[0].path != ' < Keyboard >/ tab'");
-        //        Debug.Log("!done && Time.time > 5");
+        //        if (debug) Debug.Log("GUIAction.bindings[0].path != ' < Keyboard >/ tab'");
+        //        if (debug) Debug.Log("!done && Time.time > 5");
         //        done = true;
         //        GUIAction.Disable();
         //        GUIAction.Reset();
         //        GUIAction.AddBinding("<Keyboard>/backspace");
         //        GUIAction.ChangeBinding(0).WithPath("<Keyboard>/backspace");
-        //        Debug.Log("GUIAction.bindings[0].path " + GUIAction.bindings[0].path);
-        //        Debug.Log("GUIAction.bindings " + GUIAction.bindings[1]);
+        //        if (debug) Debug.Log("GUIAction.bindings[0].path " + GUIAction.bindings[0].path);
+        //        if (debug) Debug.Log("GUIAction.bindings " + GUIAction.bindings[1]);
         //        GUIAction.Enable();
-        //        Debug.Log(GUIAction.actionMap.actions);
+        //        if (debug) Debug.Log(GUIAction.actionMap.actions);
         //    }
 
         if (GuiActionPath != GUIAction.bindings[0].path)
@@ -2535,8 +2537,8 @@ public class Stereo3D : MonoBehaviour
         //if (!Equals(GUIActionBindings, GUIAction.bindings))
         //if (GUIActionBindings.Count != GUIAction.bindings.Count)
         {
-            Debug.Log("GuiActionPath != GUIAction.bindings[0].path");
-            //Debug.Log("!GUIActionBindings.Equals(GUIAction.bindings)");
+            if (debug) Debug.Log("GuiActionPath != GUIAction.bindings[0].path");
+            //if (debug) Debug.Log("!GUIActionBindings.Equals(GUIAction.bindings)");
             GuiActionPath = GUIAction.bindings[0].path;
             GUIAction.ChangeBinding(0).WithPath(GUIAction.bindings[0].path);
             //GUIActionBindings = GUIAction.bindings;
@@ -2550,14 +2552,14 @@ public class Stereo3D : MonoBehaviour
 
         if (FOVActionPath1 != FOVAction.bindings[1].path)
         {
-            //Debug.Log("FOVActionPath1 != FOVAction.bindings[1].path");
+            //if (debug) Debug.Log("FOVActionPath1 != FOVAction.bindings[1].path");
             FOVActionPath1 = FOVAction.bindings[1].path;
             FOVAction.ChangeBinding(1).WithPath(FOVAction.bindings[1].path);
         }
 
         if (FOVActionPath2 != FOVAction.bindings[2].path)
         {
-            //Debug.Log("FOVActionPath2 != FOVAction.bindings[2].path");
+            //if (debug) Debug.Log("FOVActionPath2 != FOVAction.bindings[2].path");
             FOVActionPath2 = FOVAction.bindings[2].path;
             FOVAction.ChangeBinding(2).WithPath(FOVAction.bindings[2].path);
         }
@@ -2581,9 +2583,9 @@ public class Stereo3D : MonoBehaviour
         }
 #endif
 
-        //Debug.Log("sceneNearClip = " + sceneNearClip);
-        //Debug.Log("Update " + Time.time);
-        //Debug.Log(camData + " " + leftCamData);
+        //if (debug) Debug.Log("sceneNearClip = " + sceneNearClip);
+        //if (debug) Debug.Log("Update " + Time.time);
+        //if (debug) Debug.Log(camData + " " + leftCamData);
         ////UnityEditor.Selection.activeGameObject = camera_left.gameObject;
         ////camData.CopyTo(camera_left.GetComponent<HDAdditionalCameraData>());
         //leftCamData = camera_left.GetComponent<HDAdditionalCameraData>();
@@ -2595,8 +2597,8 @@ public class Stereo3D : MonoBehaviour
 
         //if (HDCamDataCopy)
         //{
-        //    Debug.Log(HDCamDataCopy.antialiasing);
-        //    Debug.Log(HDCamDataCopy2.antialiasing);
+        //    if (debug) Debug.Log(HDCamDataCopy.antialiasing);
+        //    if (debug) Debug.Log(HDCamDataCopy2.antialiasing);
         //}
 
         ////if (!Equals(HDCamData, HDCamDataCopy))
@@ -2604,22 +2606,22 @@ public class Stereo3D : MonoBehaviour
         ////if (!HDCamDataCopy.Equals(HDCamDataCopy2))
         //if (!Equals(HDCamDataCopy, HDCamDataCopy2))
         //{
-        //    Debug.Log("!HDCamData.Equals(HDCamDataCopy)");
+        //    if (debug) Debug.Log("!HDCamData.Equals(HDCamDataCopy)");
         //    //HDCamData.CopyTo(HDCamDataCopy);
         //    //HDCamDataCopy.CopyTo(HDCamDataCopy2);
         //}
 
-        //////Debug.Log("HDRPSettings.colorBufferFormat " + (GraphicsSettings.currentRenderPipeline as HDRenderPipelineAsset).currentPlatformRenderPipelineSettings.colorBufferFormat);
-        //////Debug.Log("typeof(HDRenderPipelineAsset) " + typeof(HDRenderPipelineAsset));
+        //////if (debug) Debug.Log("HDRPSettings.colorBufferFormat " + (GraphicsSettings.currentRenderPipeline as HDRenderPipelineAsset).currentPlatformRenderPipelineSettings.colorBufferFormat);
+        //////if (debug) Debug.Log("typeof(HDRenderPipelineAsset) " + typeof(HDRenderPipelineAsset));
         //var flags = BindingFlags.Instance | BindingFlags.NonPublic;
-        //////Debug.Log(typeof(HDRenderPipelineAsset).GetField("m_RenderPipelineSettings", flags).GetValue(GraphicsSettings.currentRenderPipeline));
+        //////if (debug) Debug.Log(typeof(HDRenderPipelineAsset).GetField("m_RenderPipelineSettings", flags).GetValue(GraphicsSettings.currentRenderPipeline));
         //RenderPipelineSettings HDRPSettings = (RenderPipelineSettings)typeof(HDRenderPipelineAsset).GetField("m_RenderPipelineSettings", flags).GetValue(GraphicsSettings.currentRenderPipeline);
         //HDRPSettings.colorBufferFormat = RenderPipelineSettings.ColorBufferFormat.R16G16B16A16;
 
         //if (!Equals(HDRPSettings, HDRPAsset.currentPlatformRenderPipelineSettings))
         //{
         //    HDRPSettings = HDRPAsset.currentPlatformRenderPipelineSettings;
-        //    Debug.Log("HDRPSettings.colorBufferFormat != HDRPAsset.currentPlatformRenderPipelineSettings.colorBufferFormat");
+        //    if (debug) Debug.Log("HDRPSettings.colorBufferFormat != HDRPAsset.currentPlatformRenderPipelineSettings.colorBufferFormat");
         //}
 
         //typeof(HDRenderPipelineAsset).GetField("m_RenderPipelineSettings", flags).SetValue(GraphicsSettings.currentRenderPipeline, HDRPSettings);
@@ -2639,10 +2641,10 @@ public class Stereo3D : MonoBehaviour
         //FPSText.text = FPS.ToString();
         FPSText.text = averageFPS.ToString() + " FPS";
         //canvasCamData = canvasCamera.GetComponent<HDAdditionalCameraData>();
-        //Debug.Log("OnEnable panelDepth as screen distance = " + 1 / (1 - panelDepth));
+        //if (debug) Debug.Log("OnEnable panelDepth as screen distance = " + 1 / (1 - panelDepth));
         //canvasCamera.enabled = true;
         //oddFrame = !oddFrame;
-        //Debug.Log(oddFrame + " Update " + Time.time);
+        //if (debug) Debug.Log(oddFrame + " Update " + Time.time);
 
         //if (canvasCamera && S3DEnabled)
         //{
@@ -2687,8 +2689,8 @@ public class Stereo3D : MonoBehaviour
         //    //canvasCamera.Render();
         //    //Debug.Break();
         //    //canvasCamera.enabled = false;
-        //    //Debug.Log(camera);
-        //    //Debug.Log(oddFrame + " PostRenderContext camera == canvasCamera " + Time.time);
+        //    //if (debug) Debug.Log(camera);
+        //    //if (debug) Debug.Log(oddFrame + " PostRenderContext camera == canvasCamera " + Time.time);
         //    //UniversalRenderPipeline.RenderSingleCamera(context, canvasCamera);
         //}
 
@@ -2719,7 +2721,7 @@ public class Stereo3D : MonoBehaviour
         //canvasCamMatrix[0, 2] = shift;
         //canvasCamera.projectionMatrix = canvasCamMatrix;
         //canvasCamera.ResetProjectionMatrix();
-        //Debug.Log(canvasCamera.projectionMatrix[0, 3] + " " + shift);
+        //if (debug) Debug.Log(canvasCamera.projectionMatrix[0, 3] + " " + shift);
         //canvasCamera.projectionMatrix = Matrix_Set(canvasCamera.projectionMatrix, -shift, 0);
 
         //if (oddFrame)
@@ -2730,7 +2732,7 @@ public class Stereo3D : MonoBehaviour
         //if ((int)Time.time != time)
         //{
         //    time = (int)Time.time;
-        //    //Debug.Log(time);
+        //    //if (debug) Debug.Log(time);
 
         //    canvasCamera.enabled = true;
         //    canvasCamera.targetTexture = renderTexture_left;
@@ -2741,22 +2743,22 @@ public class Stereo3D : MonoBehaviour
 
         //canvasCamera.targetTexture = renderTexture_left;
         //canvasCamera.Render();
-        //Debug.Log(canvasCamera.GetUniversalAdditionalCameraData().clearDepth);
-        //Debug.Log("Update " + Time.time);
+        //if (debug) Debug.Log(canvasCamera.GetUniversalAdditionalCameraData().clearDepth);
+        //if (debug) Debug.Log("Update " + Time.time);
 
         ////if (!S3DEnabled && !GUIVisible && sceneNearClip != cam.nearClipPlane)
         //if (!GUIVisible && cam.nearClipPlane >= 0 && sceneNearClip != cam.nearClipPlane)
         //{
         //    sceneNearClip = cam.nearClipPlane;
-        //    Debug.Log("********************************************************************************************************************sceneNearClip = " + sceneNearClip);
-        //    //Debug.Log("!GUIVisible && cam.nearClipPlane >= 0 && sceneNearClip != cam.nearClipPlane sceneNearClip= " + sceneNearClip);
+        //    if (debug) Debug.Log("********************************************************************************************************************sceneNearClip = " + sceneNearClip);
+        //    //if (debug) Debug.Log("!GUIVisible && cam.nearClipPlane >= 0 && sceneNearClip != cam.nearClipPlane sceneNearClip= " + sceneNearClip);
         //    //Render_Set();
         //    Clip_Set();
         //}
 
         //if (Time.time > GUI_Set_delay && lastCamNearClip != cam.nearClipPlane)
         //{
-        //    Debug.Log("Update cam.nearClipPlane external change");
+        //    if (debug) Debug.Log("Update cam.nearClipPlane external change");
         //    sceneNearClip = cam.nearClipPlane;
         //    Clip_Set();
         //}
@@ -2764,38 +2766,38 @@ public class Stereo3D : MonoBehaviour
         //if (!GUIVisible && cam.farClipPlane >= 0 && sceneFarClip != cam.farClipPlane)
         //if (sceneFarClip != cam.farClipPlane)
         //{
-        //    Debug.Log("Update sceneFarClip != cam.farClipPlane");
+        //    if (debug) Debug.Log("Update sceneFarClip != cam.farClipPlane");
         //    sceneFarClip = cam.farClipPlane;
         //    Clip_Set();
         //}
 
-        //Debug.Log(vCam);
-        //Debug.Log(Cinemachine.CinemachineCore.Instance.IsLive(vCam));
+        //if (debug) Debug.Log(vCam);
+        //if (debug) Debug.Log(Cinemachine.CinemachineCore.Instance.IsLive(vCam));
 
         //if (brain.ActiveVirtualCamera == null)
-        //    //Debug.Log(brain.ActiveVirtualCamera);
+        //    //if (debug) Debug.Log(brain.ActiveVirtualCamera);
 
 #if ENABLE_INPUT_SYSTEM
         //if (inputSystem)
         //{
-        //Debug.Log("inputSystem");
+        //if (debug) Debug.Log("inputSystem");
 
         //if (FOVAction.ReadValue<float>() != 0)
         //    virtualIPD += FOVAction.ReadValue<float>();
-        //    //Debug.Log(FOVAction.ReadValue<float>());
+        //    //if (debug) Debug.Log(FOVAction.ReadValue<float>());
 
         if (S3DAction.ReadValue<float>() != 0)
         {
             S3DActionPressed = true;
             //S3DKeyTimer += Time.deltaTime;
-            ////Debug.Log(S3DKeyTimer);
+            ////if (debug) Debug.Log(S3DKeyTimer);
 
             //if (S3DKeyTimer > 1 && !S3DKeyLoaded)
             //{
             //    Load(slotName);
             //    //S3DKeyTimer = 0;
             //    S3DKeyLoaded = true;
-            //    //Debug.Log("S3DKeyLoaded");
+            //    //if (debug) Debug.Log("S3DKeyLoaded");
             //}
 
             //GUI_Autoshow();
@@ -2805,7 +2807,7 @@ public class Stereo3D : MonoBehaviour
         if (S3DActionPressed && S3DAction.ReadValue<float>() == 0)
         {
             S3DActionPressed = false;
-            //Debug.Log("S3DActionPressed && S3DAction.ReadValue<float>() == 0");
+            //if (debug) Debug.Log("S3DActionPressed && S3DAction.ReadValue<float>() == 0");
 
             //if (S3DKeyTimer < 1)
             //    if (modifier1Action.ReadValue<float>() != 0)
@@ -2819,7 +2821,7 @@ public class Stereo3D : MonoBehaviour
             //    else
             //        S3DEnabled = !S3DEnabled;
             ////else
-            ////    //Debug.Log("S3DActionPressed && S3DAction.ReadValue<float>() == 0 S3DKeyTimer > 1");
+            ////    //if (debug) Debug.Log("S3DActionPressed && S3DAction.ReadValue<float>() == 0 S3DKeyTimer > 1");
 
             //S3DKeyTimer = 0;
             //S3DKeyLoaded = false;
@@ -2899,14 +2901,14 @@ public class Stereo3D : MonoBehaviour
         if (Input.GetKey(S3DKey))
         {
             //S3DKeyTimer += Time.deltaTime;
-            ////Debug.Log(S3DKeyTimer);
+            ////if (debug) Debug.Log(S3DKeyTimer);
 
             //if (S3DKeyTimer > 1 && !S3DKeyLoaded)
             //{
             //    Load(slotName);
             //    //S3DKeyTimer = 0;
             //    S3DKeyLoaded = true;
-            //    //Debug.Log("S3DKeyLoaded");
+            //    //if (debug) Debug.Log("S3DKeyLoaded");
             //}
 
             //GUI_Autoshow();
@@ -2978,11 +2980,11 @@ public class Stereo3D : MonoBehaviour
 
         if (displaySelectWaitInput)
         {
-            //Debug.Log("displaySelectWaitInput");
+            //if (debug) Debug.Log("displaySelectWaitInput");
 
             if (Input.anyKeyDown)
             {
-                //Debug.Log("Input.inputString " + Input.inputString);
+                //if (debug) Debug.Log("Input.inputString " + Input.inputString);
 
                 //if (display_left == null)
                 //{
@@ -2992,23 +2994,23 @@ public class Stereo3D : MonoBehaviour
                 //    //if (Input.inputString != "" && displays.Contains(Input.inputString))
                 //    if (inputString != "" && displays.Contains(inputString))
                 //    {
-                //        Debug.Log("displays.Contains(Input.inputString) " + Input.inputString);
-                //        //Debug.Log("displays.Contains(Input.inputString)" + Input.inputString + "end");
+                //        if (debug) Debug.Log("displays.Contains(Input.inputString) " + Input.inputString);
+                //        //if (debug) Debug.Log("displays.Contains(Input.inputString)" + Input.inputString + "end");
                 //        displayIndex_left = Convert.ToInt32(inputString);
                 //        //display_left = Display.displays[Convert.ToInt32(inputString)];
                 //        //display_left = fakeDisplays[Convert.ToInt32(inputString)];
                 //        //display_left = Display.displays[displayIndex_left];
                 //        display_left = fakeDisplays[displayIndex_left];
                 //        display_left.Activate();
-                //        Debug.Log("display_left " + display_left);
+                //        if (debug) Debug.Log("display_left " + display_left);
                 //        //DisplayRight_Set();
                 //        displays = displays.Replace(inputString, "");
-                //        //Debug.Log("displays " + displays);
+                //        //if (debug) Debug.Log("displays " + displays);
                 //        //Destroy(staticTooltip);
                 //        StaticTooltip_Make("Press the number key to select the display for Right camera:" + displays);
                 //    }
                 //    else
-                //        Debug.Log("!displays.Contains(Input.inputString) " + Input.inputString);
+                //        if (debug) Debug.Log("!displays.Contains(Input.inputString) " + Input.inputString);
                 //}
                 //else
                 //{
@@ -3016,14 +3018,14 @@ public class Stereo3D : MonoBehaviour
 
                 //    if (inputString != "" && displays.Contains(inputString))
                 //    {
-                //        Debug.Log("displays.Contains(Input.inputString) " + Input.inputString);
+                //        if (debug) Debug.Log("displays.Contains(Input.inputString) " + Input.inputString);
                 //        displayIndex_right = Convert.ToInt32(inputString);
                 //        //display_right = Display.displays[Convert.ToInt32(inputString)];
                 //        //display_right = fakeDisplays[Convert.ToInt32(inputString)];
                 //        //display_right = Display.displays[displayIndex_right];
                 //        display_right = fakeDisplays[displayIndex_right];
                 //        display_right.Activate();
-                //        Debug.Log("display_right " + display_right);
+                //        if (debug) Debug.Log("display_right " + display_right);
                 //        displays = displays.Replace(inputString, "");
                 //        Destroy(staticTooltip);
                 //        displaySelectWaitInput = false;
@@ -3044,7 +3046,7 @@ public class Stereo3D : MonoBehaviour
         //{
         //    if (PPI_inputField.transform.Find("InputField (Legacy)_PPI Input Caret"))
         //    {
-        //       //Debug.Log("PPI_inputField.transform.Find");
+        //       //if (debug) Debug.Log("PPI_inputField.transform.Find");
         //        InputFieldCaretMaterial_Set(PPI_inputField);
         //        InputFieldCaretMaterial_Set(userIPD_inputField);
         //        InputFieldCaretMaterial_Set(virtualIPD_inputField);
@@ -3054,7 +3056,7 @@ public class Stereo3D : MonoBehaviour
         //        InputFieldCaretMaterial_Set(slotName_inputField);
         //    }
 
-        //   //Debug.Log("caret == null");
+        //   //if (debug) Debug.Log("caret == null");
         //}
 
         if (Screen.width != windowSize.x || Screen.height != windowSize.y)
@@ -3062,7 +3064,7 @@ public class Stereo3D : MonoBehaviour
 
         if (GUIOpened)
         {
-            //Debug.Log(Input.mousePosition);
+            //if (debug) Debug.Log(Input.mousePosition);
             //cursorRectTransform.anchoredPosition = new Vector2(Input.mousePosition.x / windowSize.x * canvasSize.x - canvasSize.x * 0.5f, Input.mousePosition.y / windowSize.y * canvasSize.y - canvasSize.y);
             //cursorLocalPos = new Vector2(Input.mousePosition.x / windowSize.x * canvasSize.x - canvasSize.x * 0.5f, Input.mousePosition.y / windowSize.y * canvasSize.y - canvasSize.y);
             //cursorLocalPos = new Vector2((Input.mousePosition.x - cam.rect.x * windowSize.x) / cam.pixelWidth * canvasSize.x - canvasSize.x * 0.5f, (Input.mousePosition.y - cam.rect.y * windowSize.y) / cam.pixelHeight * canvasSize.y - canvasSize.y);
@@ -3091,7 +3093,7 @@ public class Stereo3D : MonoBehaviour
 
             //cursorLocalPos.x = (pointerPosition.x / windowSize.x - .5f) * canvasWidthWithOffset;
             //cursorLocalPos.y = (pointerPosition.y / windowSize.y - 1) * canvasSize.y;
-            //Debug.Log((pointerPosition.y / windowSize.y - cam.rect.y) / cam.rect.height - 1);
+            //if (debug) Debug.Log((pointerPosition.y / windowSize.y - cam.rect.y) / cam.rect.height - 1);
             //Camera canvasWorldCam = canvas.worldCamera;
             //cursorLocalPos.x = ((pointerPosition.x / windowSize.x - canvasWorldCam.rect.x) / canvasWorldCam.rect.width - .5f) * canvasWidthWithOffset;
             //cursorLocalPos.y = ((pointerPosition.y / windowSize.y - canvasWorldCam.rect.y) / canvasWorldCam.rect.height - 1) * canvasSize.y;
@@ -3101,8 +3103,8 @@ public class Stereo3D : MonoBehaviour
             Vector2 viewportLeftBottomPos = new Vector2(Mathf.Clamp01(canvas.worldCamera.rect.x), Mathf.Clamp01(canvas.worldCamera.rect.y)); //viewport LeftBottom & RightTop corner coordinates inside render window
             Vector2 viewportRightTopPos = new Vector2(Mathf.Clamp01(canvas.worldCamera.rect.xMax), Mathf.Clamp01(canvas.worldCamera.rect.yMax));
             Rect viewportRect = new Rect(viewportLeftBottomPos.x, viewportLeftBottomPos.y, viewportRightTopPos.x - viewportLeftBottomPos.x, viewportRightTopPos.y - viewportLeftBottomPos.y);
-            //Debug.Log("viewportRect.x " + viewportRect.x + " viewportRect.width " + viewportRect.width);
-            //Debug.Log("canvas.worldCamera.rect.x " + canvas.worldCamera.rect.x + " canvas.worldCamera.rect.xMin " + canvas.worldCamera.rect.xMin);
+            //if (debug) Debug.Log("viewportRect.x " + viewportRect.x + " viewportRect.width " + viewportRect.width);
+            //if (debug) Debug.Log("canvas.worldCamera.rect.x " + canvas.worldCamera.rect.x + " canvas.worldCamera.rect.xMin " + canvas.worldCamera.rect.xMin);
             cursorLocalPos.x = ((pointerPosition.x / windowSize.x - viewportRect.x) / viewportRect.width - .5f) * canvasWidthWithOffset;
             cursorLocalPos.y = ((pointerPosition.y / windowSize.y - viewportRect.y) / viewportRect.height - 1) * canvasSize.y;
 
@@ -3119,7 +3121,7 @@ public class Stereo3D : MonoBehaviour
                 if (tooltipShow && toolTipTimer >= toolTipShowDelay)
                     tooltip.SetActive(true);
 
-                //Debug.Log("toolTipTimer");
+                //if (debug) Debug.Log("toolTipTimer");
             }
 
             //pointerEventData = new PointerEventData(eventSystem);
@@ -3142,15 +3144,15 @@ public class Stereo3D : MonoBehaviour
             //iModule.inputOverride = bInput;
 
             //if (results.Count > 0)
-            //   //Debug.Log("Hit " + results[0].gameObject.name);
+            //   //if (debug) Debug.Log("Hit " + results[0].gameObject.name);
 
             //EventSystem.current = eventSystem;
 
-            //Debug.Log(pointerEventData.position);
-            //Debug.Log(panelDepth_sliderIsDragging);
-            //Debug.Log(Input.mousePosition.x);
+            //if (debug) Debug.Log(pointerEventData.position);
+            //if (debug) Debug.Log(panelDepth_sliderIsDragging);
+            //if (debug) Debug.Log(Input.mousePosition.x);
         }
-        //Debug.Log("Update " + Time.time);
+        //if (debug) Debug.Log("Update " + Time.time);
 
         //check variable changes after Keys pressed
         if (lastGUIOpened != GUIOpened)
@@ -3181,13 +3183,13 @@ public class Stereo3D : MonoBehaviour
             autoshow = true;
             GUI_autoshowTimer -= Time.deltaTime;
             GUI_autoshowTimer *= GUIOpened ? 0 : 1;
-            //Debug.Log(GUI_autoshowTimer);
+            //if (debug) Debug.Log(GUI_autoshowTimer);
 
             //if (!canvas.gameObject.activeSelf)
             if (!GUIVisible)
             {
                 //canvas.gameObject.SetActive(true);
-                //Debug.Log("canvas.gameObject.SetActive(true)");
+                //if (debug) Debug.Log("canvas.gameObject.SetActive(true)");
                 GUIVisible = true;
                 //Clip_Set();
                 //HDRPSettings_Set();
@@ -3198,7 +3200,7 @@ public class Stereo3D : MonoBehaviour
             if (autoshow)
             {
                 autoshow = false;
-                //Debug.Log("autoshow = false");
+                //if (debug) Debug.Log("autoshow = false");
 
                 if (!GUIOpened)
                 {
@@ -3331,8 +3333,8 @@ public class Stereo3D : MonoBehaviour
 
         //if (!FOVSetInProcess && cam.fieldOfView != vFOV) //check camera FOV changes to set FOV from other scripts
         //{
-        //    //Debug.Log("cam.fieldOfView != vFOV");
-        //    //Debug.Log("camFOVChangedExternal");
+        //    //if (debug) Debug.Log("cam.fieldOfView != vFOV");
+        //    //if (debug) Debug.Log("camFOVChangedExternal");
         //    camFOVChangedExternal = true;
         //    FOV_Set();
         //}
@@ -3347,14 +3349,14 @@ public class Stereo3D : MonoBehaviour
         //{
         if (cam.fieldOfView != vFOV)
             {
-                Debug.Log("camFOVChangedExternal");
+                if (debug) Debug.Log("camFOVChangedExternal");
                 camFOVChangedExternal = true;
                 FOV_Set();
             }
             else
                 if (lastFOV != FOV)
                 {
-                    Debug.Log("camFOVChanged Internal");
+                    if (debug) Debug.Log("camFOVChanged Internal");
                     FOV_Set();
                 }
         //}
@@ -3395,20 +3397,20 @@ public class Stereo3D : MonoBehaviour
 
         //cameraDataStruct.renderPostProcessing = camData.renderPostProcessing;
         //cameraDataStruct.antialiasing = camData.antialiasing;
-        //Debug.Log(camData.scriptableRenderer);
-        //Debug.Log("lastCameraDataStruct.Equals(cameraDataStruct) " + lastCameraDataStruct.Equals(cameraDataStruct));
-        //Debug.Log("lastCameraDataStruct " + lastCameraDataStruct.ToString() + " cameraDataStruct " + cameraDataStruct.ToString());
+        //if (debug) Debug.Log(camData.scriptableRenderer);
+        //if (debug) Debug.Log("lastCameraDataStruct.Equals(cameraDataStruct) " + lastCameraDataStruct.Equals(cameraDataStruct));
+        //if (debug) Debug.Log("lastCameraDataStruct " + lastCameraDataStruct.ToString() + " cameraDataStruct " + cameraDataStruct.ToString());
 
-        //Debug.Log(lastCameraDataStruct.cameraRenderType + " " + cameraDataStruct.cameraRenderType);
-        //Debug.Log(lastCameraDataStruct.scriptableRenderer + " " + cameraDataStruct.scriptableRenderer);
-        //Debug.Log(lastCameraDataStruct.renderPostProcessing + " " + cameraDataStruct.renderPostProcessing);
-        //Debug.Log(lastCameraDataStruct.antialiasing + " " + cameraDataStruct.antialiasing);
-        //Debug.Log(lastCameraDataStruct.antialiasingQuality + " " + cameraDataStruct.antialiasingQuality);
-        //Debug.Log(lastCameraDataStruct.stopNaN + " " + cameraDataStruct.stopNaN);
-        //Debug.Log(lastCameraDataStruct.dithering + " " + cameraDataStruct.dithering);
-        //Debug.Log(lastCameraDataStruct.renderShadows + " " + cameraDataStruct.renderShadows);
-        //Debug.Log(lastCameraDataStruct.depth + " " + cameraDataStruct.depth);
-        //Debug.Log(lastCameraDataStruct.useOcclusionCulling + " " + cameraDataStruct.useOcclusionCulling);
+        //if (debug) Debug.Log(lastCameraDataStruct.cameraRenderType + " " + cameraDataStruct.cameraRenderType);
+        //if (debug) Debug.Log(lastCameraDataStruct.scriptableRenderer + " " + cameraDataStruct.scriptableRenderer);
+        //if (debug) Debug.Log(lastCameraDataStruct.renderPostProcessing + " " + cameraDataStruct.renderPostProcessing);
+        //if (debug) Debug.Log(lastCameraDataStruct.antialiasing + " " + cameraDataStruct.antialiasing);
+        //if (debug) Debug.Log(lastCameraDataStruct.antialiasingQuality + " " + cameraDataStruct.antialiasingQuality);
+        //if (debug) Debug.Log(lastCameraDataStruct.stopNaN + " " + cameraDataStruct.stopNaN);
+        //if (debug) Debug.Log(lastCameraDataStruct.dithering + " " + cameraDataStruct.dithering);
+        //if (debug) Debug.Log(lastCameraDataStruct.renderShadows + " " + cameraDataStruct.renderShadows);
+        //if (debug) Debug.Log(lastCameraDataStruct.depth + " " + cameraDataStruct.depth);
+        //if (debug) Debug.Log(lastCameraDataStruct.useOcclusionCulling + " " + cameraDataStruct.useOcclusionCulling);
 
         //Debug.Break();
 
@@ -3485,13 +3487,13 @@ public class Stereo3D : MonoBehaviour
         //    //lastAdditionalS3DCameras = additionalS3DCameras;
         //    //lastAdditionalS3DCameras = (Camera[])additionalS3DCameras.Clone();
         //    //additionalS3DCameras.CopyTo(lastAdditionalS3DCameras);
-        //    //Debug.Log("lastAdditionalS3DCameras != additionalS3DCameras");
-        //    //Debug.Log("lastAdditionalS3DCameras != additionalS3DCameras " + lastAdditionalS3DCameras.Length + " " + additionalS3DCameras.Length);
+        //    //if (debug) Debug.Log("lastAdditionalS3DCameras != additionalS3DCameras");
+        //    //if (debug) Debug.Log("lastAdditionalS3DCameras != additionalS3DCameras " + lastAdditionalS3DCameras.Length + " " + additionalS3DCameras.Length);
         //    //additionalS3DCameras.CopyTo(lastAdditionalS3DCameras);
 
         //    for (int i = 0; i < additionalS3DCameras.Count; i++)
         //    {
-        //        Debug.Log("component " + additionalS3DCameras[i].name + " " + lastAdditionalS3DCameras[i].name);
+        //        if (debug) Debug.Log("component " + additionalS3DCameras[i].name + " " + lastAdditionalS3DCameras[i].name);
         //    }
         //}
 
@@ -3503,7 +3505,7 @@ public class Stereo3D : MonoBehaviour
 
         if (physicalCamera != cam.usePhysicalProperties)
         {
-            Debug.Log("physicalCamera != cam.usePhysicalProperties");
+            if (debug) Debug.Log("physicalCamera != cam.usePhysicalProperties");
             physicalCamera = cam.usePhysicalProperties;
             //OnOffToggle();
             onOffToggle = true;
@@ -3524,8 +3526,8 @@ public class Stereo3D : MonoBehaviour
             //    newPanelDepth = panelDepth * panelDepthMinMax.y;
             //}
 
-            ////Debug.Log("panelDepthMinMax " + panelDepthMinMax + " panelDepth " + panelDepth);
-            //Debug.Log("panelDepthMinMax " + panelDepthMinMax + " newPanelDepth " + newPanelDepth);
+            ////if (debug) Debug.Log("panelDepthMinMax " + panelDepthMinMax + " panelDepth " + panelDepth);
+            //if (debug) Debug.Log("panelDepthMinMax " + panelDepthMinMax + " newPanelDepth " + newPanelDepth);
 
             ////panelDepth_slider.minValue = panelDepthMinMax.x;
             ////panelDepth_slider.maxValue = panelDepthMinMax.y;
@@ -3533,7 +3535,7 @@ public class Stereo3D : MonoBehaviour
             ////panelDepth_slider.value = panelDepth;
             ////PanelDepth_Slider(panelDepth);
             ////panelDepth_inputField.text = panelDepth.ToString();
-            ////Debug.Log("panelDepth_slider.value " + panelDepth_slider.value);
+            ////if (debug) Debug.Log("panelDepth_slider.value " + panelDepth_slider.value);
             
             if (lastGUIAsOverlay) //prevent Infinity error on disable if UserIPD = 0
             {
@@ -3593,7 +3595,7 @@ public class Stereo3D : MonoBehaviour
 
         if (lastAdditionalS3DCameras.Length != additionalS3DCameras.Count)
         {
-            Debug.Log("lastAdditionalS3DCameras.Length != additionalS3DCameras.Count " + lastAdditionalS3DCameras.Length + " " + additionalS3DCameras.Count);
+            if (debug) Debug.Log("lastAdditionalS3DCameras.Length != additionalS3DCameras.Count " + lastAdditionalS3DCameras.Length + " " + additionalS3DCameras.Count);
             //AdditionalS3DCamerasUpdate();
             //OnOffToggle();
             //ClosestCameraIndex_Set();
@@ -3603,7 +3605,7 @@ public class Stereo3D : MonoBehaviour
             for (int i = 0; i < lastAdditionalS3DCameras.Length; i++)
                 if (lastAdditionalS3DCameras[i] != additionalS3DCameras[i])
                 {
-                    Debug.Log("lastAdditionalS3DCameras[i] != additionalS3DCameras[i] " + lastAdditionalS3DCameras[i] + " " + additionalS3DCameras[i]);
+                    if (debug) Debug.Log("lastAdditionalS3DCameras[i] != additionalS3DCameras[i] " + lastAdditionalS3DCameras[i] + " " + additionalS3DCameras[i]);
                     //Debug.Break();
                     //AdditionalS3DCamerasUpdate();
                     //OnOffToggle();
@@ -3613,7 +3615,7 @@ public class Stereo3D : MonoBehaviour
 
         //void AdditionalS3DCamerasUpdate()
         //{
-        //    Debug.Log("AdditionalS3DCamerasUpdate");
+        //    if (debug) Debug.Log("AdditionalS3DCamerasUpdate");
         //    //lastAdditionalS3DCameras = new Camera[additionalS3DCameras.Count];
         //    //additionalS3DCameras.CopyTo(lastAdditionalS3DCameras);
         //    //lastAdditionalS3DCameras = additionalS3DCameras.ToArray();
@@ -3631,8 +3633,8 @@ public class Stereo3D : MonoBehaviour
         //{
         //    ////defaultColorBufferFormat = HDRPSettings.colorBufferFormat;
         //    //defaultColorBufferFormat = HDRPAsset.currentPlatformRenderPipelineSettings.colorBufferFormat;
-        //    //Debug.Log("!GUIVisible && HDRPSettings.colorBufferFormat != defaultColorBufferFormat " + defaultColorBufferFormat);
-        //    Debug.Log("HDRPAsset.currentPlatformRenderPipelineSettings.colorBufferFormat != defaultColorBufferFormat");
+        //    //if (debug) Debug.Log("!GUIVisible && HDRPSettings.colorBufferFormat != defaultColorBufferFormat " + defaultColorBufferFormat);
+        //    if (debug) Debug.Log("HDRPAsset.currentPlatformRenderPipelineSettings.colorBufferFormat != defaultColorBufferFormat");
 
         //    if (!GUIVisible)
         //        defaultColorBufferFormat = HDRPAsset.currentPlatformRenderPipelineSettings.colorBufferFormat;
@@ -3643,10 +3645,16 @@ public class Stereo3D : MonoBehaviour
         //if (!Equals(HDRPSettings, HDRPAsset.currentPlatformRenderPipelineSettings))
         if (!HDRPSettings.Equals(HDRPAsset.currentPlatformRenderPipelineSettings))
         {
-            Debug.Log("!Equals(HDRPSettings, HDRPAsset.currentPlatformRenderPipelineSettings)");
-            //HDRPSettings = HDRPAsset.currentPlatformRenderPipelineSettings;
+            if (debug) Debug.Log("!Equals(HDRPSettings, HDRPAsset.currentPlatformRenderPipelineSettings)");
+            HDRPSettings = HDRPAsset.currentPlatformRenderPipelineSettings;
             //defaultColorBufferFormat = HDRPAsset.currentPlatformRenderPipelineSettings.colorBufferFormat;
-            defaultHDRPSettings = HDRPAsset.currentPlatformRenderPipelineSettings;
+            HDRPSettings.colorBufferFormat = defaultHDRPSettings.colorBufferFormat;
+
+            if (!HDRPSettings.Equals(defaultHDRPSettings))
+                defaultHDRPSettings = HDRPSettings;
+            else
+                defaultHDRPSettings = HDRPAsset.currentPlatformRenderPipelineSettings;
+
             //OnOffToggle();
             onOffToggle = true;
         }
@@ -3685,7 +3693,7 @@ public class Stereo3D : MonoBehaviour
 #elif URP
         if (lastCameraStack.Length != cameraStack.Count)
         {
-            Debug.Log("lastCameraStack.Length != cameraStack.Count " + lastCameraStack.Length + " " + cameraStack.Count);
+            if (debug) Debug.Log("lastCameraStack.Length != cameraStack.Count " + lastCameraStack.Length + " " + cameraStack.Count);
             //OnOffToggle();
             onOffToggle = true;
         }
@@ -3693,7 +3701,7 @@ public class Stereo3D : MonoBehaviour
             for (int i = 0; i < lastCameraStack.Length; i++)
                 if (lastCameraStack[i] != cameraStack[i])
                 {
-                    Debug.Log("lastCameraStack[i] != cameraStack[i] " + lastCameraStack[i] + " " + cameraStack[i]);
+                    if (debug) Debug.Log("lastCameraStack[i] != cameraStack[i] " + lastCameraStack[i] + " " + cameraStack[i]);
                     //OnOffToggle();
                     onOffToggle = true;
                     break;
@@ -3707,8 +3715,8 @@ public class Stereo3D : MonoBehaviour
         //if (!lastScriptableRenderer.Equals(URPAsset.scriptableRenderer))
         if (URPAsset != GraphicsSettings.currentRenderPipeline || URPAssetIsReady && !lastScriptableRenderer.Equals(URPAsset.scriptableRenderer))
         {
-            Debug.Log("!lastScriptableRenderer.Equals(URPAsset.scriptableRenderer) " + lastScriptableRenderer);
-            //Debug.Log("lastMSAASampleCount != URPAsset.msaaSampleCount");
+            if (debug) Debug.Log("!lastScriptableRenderer.Equals(URPAsset.scriptableRenderer) " + lastScriptableRenderer);
+            //if (debug) Debug.Log("lastMSAASampleCount != URPAsset.msaaSampleCount");
             //OnOffToggle();
             onOffToggle = true;
             //lastURPAsset = (UniversalRenderPipelineAsset)GraphicsSettings.currentRenderPipeline;
@@ -3718,13 +3726,13 @@ public class Stereo3D : MonoBehaviour
             //lastMSAASampleCount = URPAsset.msaaSampleCount;
         }
 
-        //Debug.Log("((UniversalRenderPipelineAsset)GraphicsSettings.currentRenderPipeline).supportsMainLightShadows" + ((UniversalRenderPipelineAsset)GraphicsSettings.currentRenderPipeline).supportsMainLightShadows);
+        //if (debug) Debug.Log("((UniversalRenderPipelineAsset)GraphicsSettings.currentRenderPipeline).supportsMainLightShadows" + ((UniversalRenderPipelineAsset)GraphicsSettings.currentRenderPipeline).supportsMainLightShadows);
 #endif
 
 #if CINEMACHINE
         //if (S3DEnabled && nearClipHack && cam.nearClipPlane != -1)
         //{
-        //    //Debug.Log("S3DEnabled && nearClipHack && cam.nearClipPlane != -1");
+        //    //if (debug) Debug.Log("S3DEnabled && nearClipHack && cam.nearClipPlane != -1");
         //    VCamNearClipHack();
         //}
 
@@ -3733,7 +3741,7 @@ public class Stereo3D : MonoBehaviour
         //if (Cinemachine.CinemachineBrain.SoloCamera != vCam)
         //{
         //    Cinemachine.CinemachineBrain.SoloCamera = vCam;
-        //    //Debug.Log("Cinemachine.CinemachineBrain.SoloCamera != vCam");
+        //    //if (debug) Debug.Log("Cinemachine.CinemachineBrain.SoloCamera != vCam");
         //}
 
 #if UNITY_EDITOR
@@ -3741,9 +3749,9 @@ public class Stereo3D : MonoBehaviour
         {
             //if (lastVCamNearClip != ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane)
             //{
-            //    Debug.Log("lastVCamNearClip != ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane lastVCamNearClip " + lastVCamNearClip + " ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane);
+            //    if (debug) Debug.Log("lastVCamNearClip != ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane lastVCamNearClip " + lastVCamNearClip + " ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane);
             //    lastVCamNearClip = ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane;
-            //    Debug.Log("lastVCamNearClip " + lastVCamNearClip + " ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane);
+            //    if (debug) Debug.Log("lastVCamNearClip " + lastVCamNearClip + " ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane);
             //}
             //else
             //{
@@ -3768,7 +3776,7 @@ public class Stereo3D : MonoBehaviour
         //if (cineBrain && Cinemachine.CinemachineBrain.SoloCamera != vCam)
         if (vCam != null && Cinemachine.CinemachineBrain.SoloCamera != vCam)
         {
-            Debug.Log("Cinemachine.CinemachineBrain.SoloCamera != vCam, Cinemachine.CinemachineBrain.SoloCamera = " + Cinemachine.CinemachineBrain.SoloCamera + ", vCam = " + vCam);
+            if (debug) Debug.Log("Cinemachine.CinemachineBrain.SoloCamera != vCam, Cinemachine.CinemachineBrain.SoloCamera = " + Cinemachine.CinemachineBrain.SoloCamera + ", vCam = " + vCam);
 
             //if (Cinemachine.CinemachineBrain.SoloCamera == null)
             if (Cinemachine.CinemachineBrain.SoloCamera == null || Cinemachine.CinemachineBrain.SoloCamera.ToString() == "null") //virtual camera lost
@@ -3776,7 +3784,7 @@ public class Stereo3D : MonoBehaviour
             else //virtual camera changed
                 //if (vCamSceneClipIsReady)
                 {
-                    Debug.Log("virtual camera changed");
+                    if (debug) Debug.Log("virtual camera changed");
                     ////((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = sceneNearClip; //restore vCam default NearClipPlane
                     //VCamClipRestore();
 
@@ -3785,12 +3793,12 @@ public class Stereo3D : MonoBehaviour
                     ////if (!GUIVisible && cam.nearClipPlane >= 0 && sceneNearClip != cam.nearClipPlane)
                     ////{
                     ////    sceneNearClip = cam.nearClipPlane;
-                    ////    //Debug.Log("!S3DEnabled && !GUIVisible && sceneNearClip != cam.nearClipPlane sceneNearClip= " + cam.nearClipPlane);
+                    ////    //if (debug) Debug.Log("!S3DEnabled && !GUIVisible && sceneNearClip != cam.nearClipPlane sceneNearClip= " + cam.nearClipPlane);
                     ////    Clip_Set();
                     ////}
 
                     //VCamSceneClipSet();
-                    ////Debug.Log("Cinemachine.CinemachineBrain.SoloCamera != null sceneNearClip " + sceneNearClip);
+                    ////if (debug) Debug.Log("Cinemachine.CinemachineBrain.SoloCamera != null sceneNearClip " + sceneNearClip);
                     //FOV_Set();
                     //Render_Set();
                     //Clip_Set();
@@ -3806,13 +3814,13 @@ public class Stereo3D : MonoBehaviour
         //    if (Cinemachine.CinemachineBrain.SoloCamera != vCam)
         //{
         //    vCam = Cinemachine.CinemachineBrain.SoloCamera;
-        //    //Debug.Log("Cinemachine.CinemachineBrain.SoloCamera != vCam " + vCam);
+        //    //if (debug) Debug.Log("Cinemachine.CinemachineBrain.SoloCamera != vCam " + vCam);
         //}
 
         //if (nearClipHackApplyed && cam.nearClipPlane != -1)
         ////if (nearClipHackApplyed && ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane != -1)
         //{
-        //    Debug.Log("nearClipHackApplyed && cam.nearClipPlane != -1 cam.nearClipPlane " + cam.nearClipPlane);
+        //    if (debug) Debug.Log("nearClipHackApplyed && cam.nearClipPlane != -1 cam.nearClipPlane " + cam.nearClipPlane);
         //    VCamNearClipHack();
         //}
 #endif
@@ -3825,7 +3833,7 @@ public class Stereo3D : MonoBehaviour
 //#endif
             )
         {
-            //Debug.Log("cameraDataStructIsReady");
+            //if (debug) Debug.Log("cameraDataStructIsReady");
             //bool notEqual = false; //prevent multiple OnOffToggle() call
 
             //if (!Equals(lastCameraDataStruct, cameraDataStruct))
@@ -3834,17 +3842,17 @@ public class Stereo3D : MonoBehaviour
             {
                 onOffToggle = true;
                 //Debug.Break();
-                Debug.Log("!lastCameraDataStruct.Equals(cameraDataStruct)");
+                if (debug) Debug.Log("!lastCameraDataStruct.Equals(cameraDataStruct)");
                 //onOffToggle = true;
 
                 if (lastCameraDataStruct.cullingMask != cameraDataStruct.cullingMask)
                 {
-                    //Debug.Log("lastCameraDataStruct.cullingMask != cameraDataStruct.cullingMask " + lastCameraDataStruct.cullingMask + " " + cameraDataStruct.cullingMask);
+                    //if (debug) Debug.Log("lastCameraDataStruct.cullingMask != cameraDataStruct.cullingMask " + lastCameraDataStruct.cullingMask + " " + cameraDataStruct.cullingMask);
                     sceneCullingMask = cameraDataStruct.cullingMask;
                 }
 
                 //if (additionalS3DCameras.Count == 0 && cam.nearClipPlane != sceneNearClip)
-                //    //Debug.Log("additionalS3DCameras.Count == 0 && cam.nearClipPlane != sceneNearClip");
+                //    //if (debug) Debug.Log("additionalS3DCameras.Count == 0 && cam.nearClipPlane != sceneNearClip");
                 //    SceneNearClip_Set();
 
                 //if (cam.nearClipPlane != sceneNearClip)
@@ -3855,7 +3863,7 @@ public class Stereo3D : MonoBehaviour
                 //        cameraNearClip = cam.nearClipPlane;
 
                 //}
-                //Debug.Log("additionalS3DCameras.Count == 0 && cam.nearClipPlane != sceneNearClip");
+                //if (debug) Debug.Log("additionalS3DCameras.Count == 0 && cam.nearClipPlane != sceneNearClip");
                 //SceneNearClip_Set();
 
                 //if (cam.nearClipPlane > .01f && cam.nearClipPlane != camera_left.nearClipPlane) //detect external changes in cam.nearClipPlane for set it on disable
@@ -3880,7 +3888,7 @@ public class Stereo3D : MonoBehaviour
                 else
                     if (lastCameraDataStruct.nearClipPlane != cameraDataStruct.nearClipPlane) //detect external changes in cam.nearClipPlane for set it on disable
                     {
-                        Debug.Log("lastCameraDataStruct.nearClipPlane != cameraDataStruct.nearClipPlane lastCameraDataStruct.nearClipPlane " + lastCameraDataStruct.nearClipPlane + " cameraDataStruct.nearClipPlane " + cameraDataStruct.nearClipPlane);
+                        if (debug) Debug.Log("lastCameraDataStruct.nearClipPlane != cameraDataStruct.nearClipPlane lastCameraDataStruct.nearClipPlane " + lastCameraDataStruct.nearClipPlane + " cameraDataStruct.nearClipPlane " + cameraDataStruct.nearClipPlane);
                         //cameraNearClip = cam.nearClipPlane;
 
                         ////if (cam.nearClipPlane > .001f)
@@ -3888,7 +3896,7 @@ public class Stereo3D : MonoBehaviour
                         ////if (S3DEnabled && nearClipHack && vCam != null && UnityEditor.Selection.activeObject == vCam.VirtualCameraGameObject)
                         //if (S3DEnabled && nearClipHack && cam.nearClipPlane <= .001f && vCamSelected) //detect reset nearClipHack from cam.nearClipPlane by selecting active virtual camera in the editor
                         //{
-                        //    Debug.Log("cam.nearClipPlane reset " + cam.nearClipPlane + " vCamSelected " + vCamSelected);
+                        //    if (debug) Debug.Log("cam.nearClipPlane reset " + cam.nearClipPlane + " vCamSelected " + vCamSelected);
                         //    onOffToggle = false;
                         //    cam.nearClipPlane = -1;
                         //    //VCamClip_Sync();
@@ -3897,7 +3905,7 @@ public class Stereo3D : MonoBehaviour
                         //}
                         //else
                         //{
-                        //    Debug.Log("cam.nearClipPlane set " + cam.nearClipPlane + " vCamSelected " + vCamSelected);
+                        //    if (debug) Debug.Log("cam.nearClipPlane set " + cam.nearClipPlane + " vCamSelected " + vCamSelected);
                         //    //cameraNearClip = sceneNearClip = cam.nearClipPlane;
                         //    cameraNearClip = cam.nearClipPlane;
 
@@ -3916,10 +3924,10 @@ public class Stereo3D : MonoBehaviour
                             cameraNearClip = cam.nearClipPlane;
 
                             //if (additionalS3DCameras.Count == 0)
-                            if (closestCameraIndex == -1)
+                            if (additionalS3DTopmostCameraIndex == -1)
                                 sceneNearClip = cameraNearClip;
 
-                            Debug.Log("!vCamSelected && cam.nearClipPlane > 0 || vCamSelected && cam.nearClipPlane > .001f || vCamSelected && !(S3DEnabled && nearClipHack) && cam.nearClipPlane > 0 sceneNearClip " + sceneNearClip);
+                            if (debug) Debug.Log("!vCamSelected && cam.nearClipPlane > 0 || vCamSelected && cam.nearClipPlane > .001f || vCamSelected && !(S3DEnabled && nearClipHack) && cam.nearClipPlane > 0 sceneNearClip " + sceneNearClip);
                         }
                         else
                             {
@@ -3950,11 +3958,11 @@ public class Stereo3D : MonoBehaviour
 
                 if (lastCameraDataStruct.projectionMatrix != cameraDataStruct.projectionMatrix)
                 //{
-                    //Debug.Log("lastCameraDataStruct.projectionMatrix != cameraDataStruct.projectionMatrix");
+                    //if (debug) Debug.Log("lastCameraDataStruct.projectionMatrix != cameraDataStruct.projectionMatrix");
                     for (int i = 0; i < 4; i++)
                         for (int j = 0; j < 4; j++)
                             if (lastCameraDataStruct.projectionMatrix[i, j] != cameraDataStruct.projectionMatrix[i, j])
-                                //Debug.Log("i " + i + " j " + j);
+                                //if (debug) Debug.Log("i " + i + " j " + j);
                                 camMatrix[i, j] = cameraDataStruct.projectionMatrix[i, j]; //add external changes in projectionMatrix to camMatrix while current projectionMatrix can be zero and then restore from camMatrix on disable.
 
                 //    if (S3DEnabled && matrixKillHack)
@@ -3976,13 +3984,13 @@ public class Stereo3D : MonoBehaviour
             {
                 if (!additionalS3DCamerasStruct[i].lastCameraDataStruct.Equals(additionalS3DCamerasStruct[i].cameraDataStruct))
                 {
-                    Debug.Log("!additionalS3DCamerasStruct[i].lastCameraDataStruct.Equals(additionalS3DCamerasStruct[i].cameraDataStruct)");
+                    if (debug) Debug.Log("!additionalS3DCamerasStruct[i].lastCameraDataStruct.Equals(additionalS3DCamerasStruct[i].cameraDataStruct)");
 
-                    //if (additionalS3DCamerasStruct[closestCameraIndex].camera.nearClipPlane != sceneNearClip)
-                    //if (i == closestCameraIndex && additionalS3DCamerasStruct[i].camera.nearClipPlane != additionalS3DCamerasStruct[i].camera_left.nearClipPlane)
-                    if (i == closestCameraIndex && additionalS3DCamerasStruct[i].lastCameraDataStruct.nearClipPlane != additionalS3DCamerasStruct[i].cameraDataStruct.nearClipPlane)
+                    //if (additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].camera.nearClipPlane != sceneNearClip)
+                    //if (i == additionalS3DTopmostCameraIndex && additionalS3DCamerasStruct[i].camera.nearClipPlane != additionalS3DCamerasStruct[i].camera_left.nearClipPlane)
+                    if (i == additionalS3DTopmostCameraIndex && additionalS3DCamerasStruct[i].lastCameraDataStruct.nearClipPlane != additionalS3DCamerasStruct[i].cameraDataStruct.nearClipPlane)
                     {
-                        //Debug.Log("----------sceneNearClip " + sceneNearClip + " additionalS3DCamerasStruct[i].camera.nearClipPlane " + additionalS3DCamerasStruct[i].camera.nearClipPlane + " additionalS3DCamerasStruct[i].camera_left.nearClipPlane " + additionalS3DCamerasStruct[i].camera_left.nearClipPlane);
+                        //if (debug) Debug.Log("----------sceneNearClip " + sceneNearClip + " additionalS3DCamerasStruct[i].camera.nearClipPlane " + additionalS3DCamerasStruct[i].camera.nearClipPlane + " additionalS3DCamerasStruct[i].camera_left.nearClipPlane " + additionalS3DCamerasStruct[i].camera_left.nearClipPlane);
                         //Debug.Break();
                         SceneNearClip_Set();
                     }
@@ -4000,7 +4008,7 @@ public class Stereo3D : MonoBehaviour
 
         //if (vCam != null && lastVCamNearClip != ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane)
         //{
-        //    Debug.Log("lastVCamNearClip != ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane lastVCamNearClip " + lastVCamNearClip + " ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane);
+        //    if (debug) Debug.Log("lastVCamNearClip != ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane lastVCamNearClip " + lastVCamNearClip + " ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane);
         //    //lastVCamNearClip = ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane;
 
         //    if (((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane > .001f)
@@ -4018,10 +4026,10 @@ public class Stereo3D : MonoBehaviour
         //            //lastVCamNearClip = ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = cam.nearClipPlane = -1;
 
         //            if (((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane != -1)
-        //                Debug.Log("((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane != -1-----------------------------------------------------------------------------");
+        //                if (debug) Debug.Log("((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane != -1-----------------------------------------------------------------------------");
         //        }
 
-        //    Debug.Log("lastVCamNearClip " + lastVCamNearClip + " ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane);
+        //    if (debug) Debug.Log("lastVCamNearClip " + lastVCamNearClip + " ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane);
         //    lastVCamNearClip = ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane;
         //}
 
@@ -4029,9 +4037,9 @@ public class Stereo3D : MonoBehaviour
         //void OnOffToggle()
         {
             if (!lastCameraDataStruct.Equals(cameraDataStruct))
-                Debug.Log("!lastCameraDataStruct.Equals(cameraDataStruct)**************************");
+                if (debug) Debug.Log("!lastCameraDataStruct.Equals(cameraDataStruct)**************************");
 
-            Debug.Log("OnOffToggle");
+            if (debug) Debug.Log("OnOffToggle");
             onOffToggle = false;
             enabled = false;
             //Invoke("Disable", 1);
@@ -4077,7 +4085,7 @@ public class Stereo3D : MonoBehaviour
 
 //                if (GUIAsOverlay && GUIVisible)
 //                {
-//                    //Debug.Log("canvasCamera_left && canvasCamera_left.isActiveAndEnabled");
+//                    //if (debug) Debug.Log("canvasCamera_left && canvasCamera_left.isActiveAndEnabled");
 //                    canvasCamera_left.Render();
 //                    canvasCamera_right.Render();
 //                }
@@ -4100,9 +4108,9 @@ public class Stereo3D : MonoBehaviour
     //void OnOffToggle()
     //{
     //    if (!lastCameraDataStruct.Equals(cameraDataStruct))
-    //        Debug.Log("!lastCameraDataStruct.Equals(cameraDataStruct)**************************");
+    //        if (debug) Debug.Log("!lastCameraDataStruct.Equals(cameraDataStruct)**************************");
 
-    //    Debug.Log("OnOffToggle");
+    //    if (debug) Debug.Log("OnOffToggle");
     //    enabled = false;
     //    //Invoke("Disable", 1);
     //    //enabled = true;
@@ -4157,7 +4165,7 @@ public class Stereo3D : MonoBehaviour
         PanelDepthSet(); //to prevent panelDepth reset by slider it must be set before
         panelDepth_slider.minValue = panelDepthMinMax.x;
         panelDepth_slider.maxValue = panelDepthMinMax.y;
-        Debug.Log("PanelDepthMinMaxSet" + panelDepthMinMax);
+        if (debug) Debug.Log("PanelDepthMinMaxSet" + panelDepthMinMax);
 
         //PanelDepthSet();
     }
@@ -4165,7 +4173,7 @@ public class Stereo3D : MonoBehaviour
     void PanelDepthSet()
     {
         panelDepth = Mathf.Clamp(panelDepth, panelDepthMinMax.x, panelDepthMinMax.y);
-        Debug.Log("PanelDepthSet " + panelDepth);
+        if (debug) Debug.Log("PanelDepthSet " + panelDepth);
         panelDepth_slider.value = panelDepth;
         //panelDepth_inputField.text = Convert.ToString(panelDepth);
         panelDepth_inputField.text = panelDepth.ToString();
@@ -4194,13 +4202,14 @@ public class Stereo3D : MonoBehaviour
     void HDRPSettings_Set()
     {
 #if HDRP
-        Debug.Log("HDRPSettings_Set");
+        if (debug) Debug.Log("HDRPSettings_Set");
 
         //if (GUIAsOverlay)
         //if (GUIAsOverlay || additionalS3DCameras.Count != 0)
         //{
             //if (GUIVisible || additionalS3DCameras.Count != 0)
-            if (GUIAsOverlay && GUIVisible || additionalS3DCameras.Count != 0)
+            //if (GUIAsOverlay && GUIVisible || additionalS3DCameras.Count != 0)
+            if (GUIAsOverlay && GUIVisible || additionalS3DTopmostCameraIndex != -1)
             {
                 HDRPSettings.colorBufferFormat = RenderPipelineSettings.ColorBufferFormat.R16G16B16A16;
                 //cam.targetTexture = renderTexture;
@@ -4245,7 +4254,7 @@ public class Stereo3D : MonoBehaviour
 
     public void OnGUIAction(InputAction.CallbackContext context)
     {
-        //Debug.Log("OnGUIAction value.isPressed " + value.isPressed);
+        //if (debug) Debug.Log("OnGUIAction value.isPressed " + value.isPressed);
         GUIOpened = !GUIOpened;
     }
 
@@ -4273,35 +4282,35 @@ public class Stereo3D : MonoBehaviour
     //    //    GUI_Autoshow();
     //    //}
 
-    //    //Debug.Log(FOVAction.ReadValue<float>());
+    //    //if (debug) Debug.Log(FOVAction.ReadValue<float>());
     //    ////virtualIPD += context.ReadValue<float>();
     //    //virtualIPD += FOVAction.ReadValue<float>();
     //}
 
     //public void OnModifier1Action(InputAction.CallbackContext context)
     //{
-    //    //Debug.Log("modifier1Action");
-    //    //Debug.Log(modifier1Action.ReadValue<float>());
+    //    //if (debug) Debug.Log("modifier1Action");
+    //    //if (debug) Debug.Log(modifier1Action.ReadValue<float>());
     //}
 
     //public void OnModifier2Action(InputAction.CallbackContext context)
     //{
-    //    //Debug.Log("modifier2Action");
+    //    //if (debug) Debug.Log("modifier2Action");
     //}
 
     //public void OnMove(InputValue value)
     //{
-    //    //Debug.Log("OnMove value " + value.Get<Vector2>());
+    //    //if (debug) Debug.Log("OnMove value " + value.Get<Vector2>());
     //}
 
     //public void Test()
     //{
-    //    //Debug.Log("Test");
+    //    //if (debug) Debug.Log("Test");
     //}
 
     void AnyKeyPress(InputControl key)
     {
-        Debug.Log("AnyKeyPress key.ToString() " + key.name);
+        if (debug) Debug.Log("AnyKeyPress key.ToString() " + key.name);
         string keyName = key.name.Replace("numpad", "");
 
         if (displaySelectWaitInput)
@@ -4330,10 +4339,10 @@ public class Stereo3D : MonoBehaviour
 #if CINEMACHINE
     void GetVCam()
     {
-        //Debug.Log("GetVCam");
+        //if (debug) Debug.Log("GetVCam");
         //defaultVCam = vCam = GetComponent<Cinemachine.CinemachineBrain>().ActiveVirtualCamera;
         vCam = GetComponent<Cinemachine.CinemachineBrain>().ActiveVirtualCamera;
-        Debug.Log("GetVCam() " + vCam);
+        if (debug) Debug.Log("GetVCam() " + vCam);
 
         //if (vCam == null)
         //    Invoke("GetVCam", Time.deltaTime);
@@ -4367,7 +4376,7 @@ public class Stereo3D : MonoBehaviour
 
         //Invoke("VCamActivate", 1);
         //Cinemachine.CinemachineBrain.SoloCamera = vCam;
-        //Debug.Log("GetVCam sceneNearClip " + sceneNearClip);
+        //if (debug) Debug.Log("GetVCam sceneNearClip " + sceneNearClip);
     }
 
     //void VCamActivate()
@@ -4377,15 +4386,15 @@ public class Stereo3D : MonoBehaviour
 
     void VCamCullingOff()
     {
-        Debug.Log("VCamCullingOff");
+        if (debug) Debug.Log("VCamCullingOff");
 
         //if (vCam != null)
         if (vCam != null && vCam.ToString() != "null")
         {
-            //Debug.Log("vCam != null vCam " + vCam);
+            //if (debug) Debug.Log("vCam != null vCam " + vCam);
             //cam.cullingMask = 2147483647;
             cam.cullingMask = 0;
-            //Debug.Log(cam.cullingMask);
+            //if (debug) Debug.Log(cam.cullingMask);
             //cam.Reset();
             //cam.nearClipPlane = -1; //Hack for more fps in SRP(Scriptable Render Pipeline)
             //((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = -1;
@@ -4397,7 +4406,7 @@ public class Stereo3D : MonoBehaviour
 
     //void VCamFOVSet()
     //{
-    //    Debug.Log("VCamFOVSet");
+    //    if (debug) Debug.Log("VCamFOVSet");
     //    //FOVSetInProcess = true;
 
     //    if (vCam != null)
@@ -4413,7 +4422,7 @@ public class Stereo3D : MonoBehaviour
 
     //void VCamSceneClipSet()
     //{
-    //    Debug.Log("VCamSceneClipSet cam.nearClipPlane " + cam.nearClipPlane);
+    //    if (debug) Debug.Log("VCamSceneClipSet cam.nearClipPlane " + cam.nearClipPlane);
     //    //vCamSceneClipSetInProcess = true;
     //    //vCamSceneClipIsReady = false;
 
@@ -4421,7 +4430,7 @@ public class Stereo3D : MonoBehaviour
     //    //if (vCam != null && !nearClipHackApplyed && !vCamSceneClipRestoreInProcess)
     //    //{
     //        sceneNearClip = ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane;
-    //        Debug.Log("VCamSceneClipSet sceneNearClip " + sceneNearClip);
+    //        if (debug) Debug.Log("VCamSceneClipSet sceneNearClip " + sceneNearClip);
     //        sceneFarClip = ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.FarClipPlane;
     //        //vCamSceneClipSetInProcess = false;
     //        vCamSceneClipIsReady = true;
@@ -4437,7 +4446,7 @@ public class Stereo3D : MonoBehaviour
 
     //void VCamClipSet()
     //{
-    //    Debug.Log("VCamClipSet");
+    //    if (debug) Debug.Log("VCamClipSet");
     //    //vCamClipSetInProcess = true;
     //    nearClipHackApplyed = false;
 
@@ -4451,7 +4460,7 @@ public class Stereo3D : MonoBehaviour
     //    {
     //        ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = cam.nearClipPlane = nearClip; //todo
     //        ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.FarClipPlane = cam.farClipPlane = farClip;
-    //        Debug.Log("VCamClipSet nearClip " + nearClip + " ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane);
+    //        if (debug) Debug.Log("VCamClipSet nearClip " + nearClip + " ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane);
     //        //vCamClipSetInProcess = false;
     //        ViewSet();
     //    }
@@ -4464,15 +4473,15 @@ public class Stereo3D : MonoBehaviour
 
     //void VCamNearClipHack()
     //{
-    //    //Debug.Log("VCamNearClipHack " + nearClipHackApplyed);
-    //    Debug.Log("VCamNearClipHack");
+    //    //if (debug) Debug.Log("VCamNearClipHack " + nearClipHackApplyed);
+    //    if (debug) Debug.Log("VCamNearClipHack");
     //    //nearClipHackApplyed = true;
 
     //    //if (vCam != null && !vCamSceneClipSetInProcess && !vCamSceneClipRestoreInProcess)
     //    //if (vCamSceneClipIsReady)
     //    //{
     //        ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = cam.nearClipPlane = -1;
-    //        Debug.Log("VCamNearClipHack ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane + " " + Time.time);
+    //        if (debug) Debug.Log("VCamNearClipHack ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane + " " + Time.time);
     //        //nearClipHackApplyed = true;
     //        ViewSet();
     //    //}
@@ -4482,7 +4491,7 @@ public class Stereo3D : MonoBehaviour
 
     //void VCamClipRestore()
     //{
-    //    Debug.Log("VCamClipRestore sceneNearClip " + sceneNearClip);
+    //    if (debug) Debug.Log("VCamClipRestore sceneNearClip " + sceneNearClip);
     //    //vCamSceneClipRestoreInProcess = true;
     //    //nearClipHackApplyed = false;
 
@@ -4498,7 +4507,7 @@ public class Stereo3D : MonoBehaviour
     //        ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = sceneNearClip; //restore vCam default NearClipPlane todo
     //        ClosestCamera_SceneNearClipSet();
     //        ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.FarClipPlane = cam.farClipPlane = sceneFarClip; //restore vCam default FarClipPlane
-    //        Debug.Log("VCamClipRestore ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane);
+    //        if (debug) Debug.Log("VCamClipRestore ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane);
     //        //vCamSceneClipRestoreInProcess = false;
     //        ViewSet();
     //    }
@@ -4531,7 +4540,7 @@ public class Stereo3D : MonoBehaviour
 
     void MouseDrag()
     {
-        //Debug.Log(cursorLocalPos);
+        //if (debug) Debug.Log(cursorLocalPos);
         //panel.GetComponent<RectTransform>().anchoredPosition = cursorLocalPos + posDiff;
         lastPanelPosition = panel.GetComponent<RectTransform>().anchoredPosition = cursorLocalPos + posDiff;
     }
@@ -4580,7 +4589,7 @@ public class Stereo3D : MonoBehaviour
 
     void SlotName_DropdownSelect()
     {
-        //Debug.Log("SlotName_DropdownSelect");
+        //if (debug) Debug.Log("SlotName_DropdownSelect");
         //SlotName_Dropdown(0);
         slotName = slotName_dropdown.captionText.text;
 
@@ -4643,7 +4652,7 @@ public class Stereo3D : MonoBehaviour
 
                 //if (canvasCamera.targetTexture == null)
                 //{
-                //    Debug.Log("canvasCamera.targetTexture == null");
+                //    if (debug) Debug.Log("canvasCamera.targetTexture == null");
                 //    canvasCamera.targetTexture = renderTexture_left; //required to clear the screen window when the main camera viewport rectangle is not fully occupied
                 //}
 
@@ -4707,7 +4716,7 @@ public class Stereo3D : MonoBehaviour
                 canvasCamera_left.projectionMatrix = canvasCamMatrix_left;
                 canvasCamera_right.projectionMatrix = canvasCamMatrix_right;
 
-                //Debug.Log(canvasCamMatrix);
+                //if (debug) Debug.Log(canvasCamMatrix);
             }
             else
             {
@@ -4733,7 +4742,7 @@ public class Stereo3D : MonoBehaviour
                 //canvas.GetComponent<CanvasScaler>().scaleFactor = windowSize.y / canvasSize.y * cam.rect.height;
                 //canvas.GetComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
                 //canvas.GetComponent<CanvasScaler>().referenceResolution = canvasSize;
-                //Debug.Log("canvasSize " + canvasSize + " windowSize " + windowSize);
+                //if (debug) Debug.Log("canvasSize " + canvasSize + " windowSize " + windowSize);
                 //canvas.planeDistance = cam.farClipPlane * .5f;
                 canvas.planeDistance = canvasCamera.farClipPlane;
             }
@@ -4743,12 +4752,12 @@ public class Stereo3D : MonoBehaviour
             //canvasLocalPosZ = screenDistance * panelDepth * virtualIPD / userIPD * 0.001f;
             float panelDepthAsScreenDistance = 1 / (1 - panelDepth);
             panelDepthAsScreenDistance = Mathf.Min(panelDepthAsScreenDistance, 100);
-            //Debug.Log("panelDepthAsScreenDistance " + panelDepthAsScreenDistance);
+            //if (debug) Debug.Log("panelDepthAsScreenDistance " + panelDepthAsScreenDistance);
             canvasLocalPosZ = screenDistance * panelDepthAsScreenDistance * virtualIPD / userIPD * 0.001f;
-            Debug.Log("virtualIPD " + virtualIPD + " userIPD " + userIPD);
-            Debug.Log("canvasLocalPosZ " + canvasLocalPosZ);
+            if (debug) Debug.Log("virtualIPD " + virtualIPD + " userIPD " + userIPD);
+            if (debug) Debug.Log("canvasLocalPosZ " + canvasLocalPosZ);
             float canvasScale = canvasLocalPosZ * Mathf.Tan(FOV * Mathf.PI / 360) * 2 / canvasSize.x;
-            //Debug.Log("canvasScale " + canvasScale);
+            //if (debug) Debug.Log("canvasScale " + canvasScale);
             //canvas.GetComponent<RectTransform>().localPosition = new Vector3(0, 0, canvasLocalPosZ);
             //canvas.GetComponent<RectTransform>().localPosition = new Vector3(virtualIPD * .0005f * -((int)eyePriority - 1) * (S3DEnabled ? 1 : 0), 0, canvasLocalPosZ);
             canvas.GetComponent<RectTransform>().localPosition = new Vector3(virtualIPD * .0005f * -((int)eyePriority - 1) * (S3DEnabled ? 1 : 0) + camVanishPoint.x * .5f * canvasSize.x * canvas.transform.lossyScale.x, camVanishPoint.y * .5f * canvasSize.y * canvas.transform.lossyScale.y, canvasLocalPosZ);
@@ -4760,7 +4769,7 @@ public class Stereo3D : MonoBehaviour
             //    CanvasOffset_Set();
         }
 
-        Debug.Log("canvas.transform.lossyScale.y " + canvas.transform.lossyScale.y);
+        if (debug) Debug.Log("canvas.transform.lossyScale.y " + canvas.transform.lossyScale.y);
         canvasRayCam.orthographicSize = canvasSize.y * canvas.transform.lossyScale.y * .5f;
         //canvasHalfSizeY = canvasSize.y * canvas.transform.lossyScale.y * .5f;
         //canvasRayCam.orthographicSize = canvasHalfSizeY;
@@ -4769,9 +4778,9 @@ public class Stereo3D : MonoBehaviour
         if (!panelDepth_sliderIsDragging) //prevent flatter due canvas resize while slided dragging by pointer
             CanvasOffset_Set();
 
-        //Debug.Log(canvas.GetComponent<RectTransform>().localPosition);
-        //Debug.Log("Canvas_Set canvasLocalPosZ " + canvasLocalPosZ);
-        //Debug.Log("Canvas_Set canvasRayCam.orthographicSize " + canvasRayCam.orthographicSize);
+        //if (debug) Debug.Log(canvas.GetComponent<RectTransform>().localPosition);
+        //if (debug) Debug.Log("Canvas_Set canvasLocalPosZ " + canvasLocalPosZ);
+        //if (debug) Debug.Log("Canvas_Set canvasRayCam.orthographicSize " + canvasRayCam.orthographicSize);
     }
 
     float canvasWidthWithOffset;
@@ -4813,15 +4822,15 @@ public class Stereo3D : MonoBehaviour
         canvas.GetComponent<RectTransform>().sizeDelta = new Vector2(canvasWidthWithOffset, canvasSize.y);
         canvasRayCam.aspect = canvas.GetComponent<RectTransform>().sizeDelta.x / canvasSize.y;
 
-        //Debug.Log(canvasRayCam.aspect);
-        Debug.Log("Canvas_Set canvasEdgeOffset " + canvasWidthWithOffset);
+        //if (debug) Debug.Log(canvasRayCam.aspect);
+        if (debug) Debug.Log("Canvas_Set canvasEdgeOffset " + canvasWidthWithOffset);
     }
 
     float aspect;
 
     void Resize()
     {
-        //Debug.Log("Resize");
+        //if (debug) Debug.Log("Resize");
         windowSize = new Vector2(Screen.width, Screen.height);
         //viewportSize = new Vector2(windowSize.x * cam.rect.width, windowSize.y * cam.rect.height);
         //viewportSize = new Vector2(cam.pixelWidth, cam.pixelHeight);
@@ -4867,9 +4876,9 @@ public class Stereo3D : MonoBehaviour
         else
             canvasSize = new Vector2(canvasDefaultSize.y * aspect, canvasDefaultSize.y);
 
-        //Debug.Log("Aspect_Set Resize cam.rect " + cam.rect);
-        Debug.Log("Aspect_Set aspect " + aspect);
-        //Debug.Log("Aspect_Set cam.pixelWidth " + cam.pixelWidth + " cam.pixelHeight " + cam.pixelHeight);
+        //if (debug) Debug.Log("Aspect_Set Resize cam.rect " + cam.rect);
+        if (debug) Debug.Log("Aspect_Set aspect " + aspect);
+        //if (debug) Debug.Log("Aspect_Set cam.pixelWidth " + cam.pixelWidth + " cam.pixelHeight " + cam.pixelHeight);
 
         //ViewSet();
         FOV_Set();
@@ -4881,14 +4890,14 @@ public class Stereo3D : MonoBehaviour
     void S3DKeyHold()
     {
         S3DKeyTimer += Time.deltaTime;
-        //Debug.Log(S3DKeyTimer);
+        //if (debug) Debug.Log(S3DKeyTimer);
 
         if (S3DKeyTimer > 1 && !S3DKeyLoaded)
         {
             Load(slotName);
             //S3DKeyTimer = 0;
             S3DKeyLoaded = true;
-            //Debug.Log("S3DKeyLoaded");
+            //if (debug) Debug.Log("S3DKeyLoaded");
         }
 
         GUI_Autoshow();
@@ -4899,7 +4908,7 @@ public class Stereo3D : MonoBehaviour
         if (S3DKeyTimer < 1)
             //if (modifier1 != 0 && modifier2 != 0 && method == Method.Two_Displays)
             if (modifier1 != 0 && modifier2 != 0 && (method == Method.Two_Displays || method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY))
-                //Debug.Log("modifier1 != 0 & modifier2 != 0");
+                //if (debug) Debug.Log("modifier1 != 0 & modifier2 != 0");
                 TargetDisplays_Select();
             else
                 if (modifier1 != 0)
@@ -4960,11 +4969,11 @@ public class Stereo3D : MonoBehaviour
 
     void GUI_Set()
     {
-        Debug.Log("GUI_Set");
+        if (debug) Debug.Log("GUI_Set");
 
         //if (canvas)
         //{
-        //    Debug.Log("GUI_Set canvas");
+        //    if (debug) Debug.Log("GUI_Set canvas");
             //lastGUIOpened = GUIOpened;
             Cursor.visible = false;
             //CursorLockMode cursorLockMode = Cursor.lockState;
@@ -5018,6 +5027,17 @@ public class Stereo3D : MonoBehaviour
                 //else
                 //    Invoke("GUI_Set", Time.deltaTime); //try to get Caret in the next frame
                 GUIMaterial_Set();
+#if HDRP
+                //if (method == Method.Two_Displays && (additionalS3DTopmostCameraIndex != -1 || GUIAsOverlay))
+                if (GUIAsOverlay)
+                {
+                    if (!S3DEnabled)
+                        cam.targetTexture = renderTexture;
+
+                    camera_left.targetTexture = renderTexture_left;
+                    camera_right.targetTexture = renderTexture_right;
+                }
+#endif
             }
             else
             {
@@ -5051,13 +5071,19 @@ public class Stereo3D : MonoBehaviour
 #endif
 
 ////#if URP
-//#if HDRP
-//                if (method == Method.Two_Displays)
-//                {
-//                    camera_left.targetTexture = null;
-//                    camera_right.targetTexture = null;
-//                }
-//#endif
+#if HDRP
+                //if (method == Method.Two_Displays && additionalS3DTopmostCameraIndex == -1)
+                if (GUIAsOverlay && additionalS3DTopmostCameraIndex == -1)
+                {
+                    cam.targetTexture = null;
+
+                    if (!S3DEnabled || method == Method.Two_Displays)
+                    {
+                        camera_left.targetTexture = null;
+                        camera_right.targetTexture = null;
+                    }
+                }
+#endif
             }
 
             TopMostCamera_Set();
@@ -5065,7 +5091,7 @@ public class Stereo3D : MonoBehaviour
             HDRPSettings_Set();
             //Render_Set();
 
-            if (S3DEnabled)
+            //if (S3DEnabled)
                 RenderTextureContextSet();
         //}
     }
@@ -5096,7 +5122,7 @@ public class Stereo3D : MonoBehaviour
         }
         else
         {
-            //Debug.Log(field + " Input Caret is not set");
+            //if (debug) Debug.Log(field + " Input Caret is not set");
             //Invoke("GUI_Set", Time.deltaTime); //try to get Caret in the next frame
             Invoke("GUIMaterial_Set", Time.deltaTime); //try to get Caret in the next frame
         }
@@ -5117,13 +5143,13 @@ public class Stereo3D : MonoBehaviour
 
     void Clip_Set()
     {
-        //Debug.Log("Clip_Set canvasLocalPosZ " + canvasLocalPosZ);
+        //if (debug) Debug.Log("Clip_Set canvasLocalPosZ " + canvasLocalPosZ);
 
         //if (canvasLocalPosZ < nearClip * 2)
         if (!GUIAsOverlay && GUIVisible && canvasLocalPosZ < sceneNearClip * 2)
         {
             nearClip = canvasLocalPosZ * .5f;
-            //Debug.Log("Clip_Set canvasLocalPosZ < nearClip");
+            //if (debug) Debug.Log("Clip_Set canvasLocalPosZ < nearClip");
         }
         else
             //if (!cineBrain || cineBrain && vCam != null)
@@ -5139,14 +5165,14 @@ public class Stereo3D : MonoBehaviour
             farClip = canvasLocalPosZ * 1.25f;
             //farClip = canvasLocalPosZ * 2f;
             //farClip = canvasLocalPosZ;
-            //Debug.Log("Clip_Set canvasLocalPosZ < nearClip");
+            //if (debug) Debug.Log("Clip_Set canvasLocalPosZ < nearClip");
         }
         else
             farClip = sceneFarClip;
 
-        //Debug.Log("Clip_Set sceneNearClip " + sceneNearClip);
-        //Debug.Log("Clip_Set sceneFarClip " + sceneFarClip);
-        Debug.Log("Clip_Set sceneNearClip " + sceneNearClip + " sceneFarClip " + sceneFarClip);
+        //if (debug) Debug.Log("Clip_Set sceneNearClip " + sceneNearClip);
+        //if (debug) Debug.Log("Clip_Set sceneFarClip " + sceneFarClip);
+        if (debug) Debug.Log("Clip_Set sceneNearClip " + sceneNearClip + " sceneFarClip " + sceneFarClip);
 
         //if (S3DEnabled)
         //{
@@ -5165,10 +5191,10 @@ public class Stereo3D : MonoBehaviour
         //camera_left.nearClipPlane = camera_right.nearClipPlane = nearClip;
 
         //if (additionalS3DCameras.Count != 0)
-        if (closestCameraIndex != -1)
+        if (additionalS3DTopmostCameraIndex != -1)
         {
             //additionalS3DCamerasStruct[additionalS3DCameras.Count - 1].camera_left.nearClipPlane = additionalS3DCamerasStruct[additionalS3DCameras.Count - 1].camera_right.nearClipPlane = nearClip;
-            additionalS3DCamerasStruct[closestCameraIndex].camera_left.nearClipPlane = additionalS3DCamerasStruct[closestCameraIndex].camera_right.nearClipPlane = additionalS3DCamerasStruct[closestCameraIndex].camera.nearClipPlane = nearClip;
+            additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].camera_left.nearClipPlane = additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].camera_right.nearClipPlane = additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].camera.nearClipPlane = nearClip;
             cam.nearClipPlane = cameraNearClip; //restore camera original nearClipPlane if additionalS3DCameras.Count != 0
         }
         else
@@ -5262,19 +5288,19 @@ public class Stereo3D : MonoBehaviour
         //if (S3DEnabled)
         //    if (nearClipHack)
         //        if (cineBrain)
-        //            Debug.Log("S3DEnabled nearClipHack cineBrain");
+        //            if (debug) Debug.Log("S3DEnabled nearClipHack cineBrain");
         //        else
-        //            Debug.Log("S3DEnabled nearClipHack !cineBrain");
+        //            if (debug) Debug.Log("S3DEnabled nearClipHack !cineBrain");
         //    else
         //        if (cineBrain)
-        //            Debug.Log("S3DEnabled !nearClipHack cineBrain");
+        //            if (debug) Debug.Log("S3DEnabled !nearClipHack cineBrain");
         //        else
-        //            Debug.Log("S3DEnabled !nearClipHack !cineBrain");
+        //            if (debug) Debug.Log("S3DEnabled !nearClipHack !cineBrain");
         //else
         //    if (cineBrain)
-        //        Debug.Log("!S3DEnabled cineBrain");
+        //        if (debug) Debug.Log("!S3DEnabled cineBrain");
         //    else
-        //        Debug.Log("!S3DEnabled !cineBrain");
+        //        if (debug) Debug.Log("!S3DEnabled !cineBrain");
         //#else
         //if (S3DEnabled)
         //    if (nearClipHack)
@@ -5391,7 +5417,7 @@ public class Stereo3D : MonoBehaviour
     {
         ////float value = Convert.ToSingle(fieldString);
         ////value = Mathf.Clamp(value, 1, 1000);
-        ////Debug.Log(value);
+        ////if (debug) Debug.Log(value);
         ////PPI_inputField.text = value.ToString();
         ////PPI = Mathf.Clamp(Convert.ToSingle(fieldString), 1, 1000);
         ////PPI = Convert.ToSingle(fieldString);
@@ -5461,13 +5487,13 @@ public class Stereo3D : MonoBehaviour
 
     void PanelDepth_Slider(float value)
     {
-        //Debug.Log("PanelDepth_Slider " + value);
+        //if (debug) Debug.Log("PanelDepth_Slider " + value);
         panelDepth = value;
     }
 
     void PanelDepth_InputField(string fieldString)
     {
-        //Debug.Log("PanelDepth_InputField " + fieldString);
+        //if (debug) Debug.Log("PanelDepth_InputField " + fieldString);
         //panelDepth = Convert.ToSingle(fieldString);
         //panelDepth = float.Parse(fieldString);
 
@@ -5489,7 +5515,7 @@ public class Stereo3D : MonoBehaviour
 
     void SlotName_Dropdown(int itemNumber)
     {
-        //Debug.Log(itemNumber);
+        //if (debug) Debug.Log(itemNumber);
         //slotName = slotName_dropdown.options[itemNumber].text;
         slotName = slotName_dropdown.captionText.text;
         //Load(slotName);
@@ -5497,7 +5523,7 @@ public class Stereo3D : MonoBehaviour
 
     void OutputMethod_Dropdown(int itemNumber)
     {
-       //Debug.Log("OutputMethod_Dropdown");
+       //if (debug) Debug.Log("OutputMethod_Dropdown");
         method = (Method)itemNumber;
     }
 
@@ -5514,19 +5540,19 @@ public class Stereo3D : MonoBehaviour
 
     void FieldPointerEnter(InputField field)
     {
-       //Debug.Log("Pointer Enter");
+       //if (debug) Debug.Log("Pointer Enter");
         field.ActivateInputField();
     }
 
     void FieldPointerExit(InputField field)
     {
-       //Debug.Log("Pointer Exit");
+       //if (debug) Debug.Log("Pointer Exit");
         field.DeactivateInputField();
     }
 
     //void PointerClick(Dropdown dropdown)
     //{
-    //   //Debug.Log("Pointer Click");
+    //   //if (debug) Debug.Log("Pointer Click");
     //    trigger = dropdown.transform.Find("Dropdown List").gameObject.AddComponent<EventTrigger>();
     //    EventTrigger.Entry entry = new EventTrigger.Entry();
     //    entry.eventID = EventTriggerType.PointerExit;
@@ -5536,7 +5562,7 @@ public class Stereo3D : MonoBehaviour
 
     //void ListPointerExit(Dropdown dropdown)
     //{
-    //   //Debug.Log("Dropdown Pointer Exit");
+    //   //if (debug) Debug.Log("Dropdown Pointer Exit");
     //    dropdown.Hide();
     //}
 
@@ -5548,7 +5574,7 @@ public class Stereo3D : MonoBehaviour
         //int targetFPS = vSync ? Screen.currentResolution.refreshRate : -1;
         //Application.targetFrameRate = targetFPS;
         Application.targetFrameRate = vSync ? Screen.currentResolution.refreshRate : -1;
-        //Debug.Log("VSyncSet " + Application.targetFrameRate);
+        //if (debug) Debug.Log("VSyncSet " + Application.targetFrameRate);
     }
 
     void PPISet()
@@ -5627,7 +5653,7 @@ public class Stereo3D : MonoBehaviour
             vFOV = 360 * Mathf.Atan(1 / scaleY) / Mathf.PI;
 
             //cam.fieldOfView = vFOV;
-            //Debug.Log("FOV_Set FOVControl && !camFOVChangedExternal FOV " + FOV + " vFOV " + vFOV);
+            //if (debug) Debug.Log("FOV_Set FOVControl && !camFOVChangedExternal FOV " + FOV + " vFOV " + vFOV);
 
 //#if CINEMACHINE
 //            if (cineBrain)
@@ -5636,7 +5662,7 @@ public class Stereo3D : MonoBehaviour
 //#endif
                 cam.fieldOfView = vFOV;
 
-            //Debug.Log("FOV_Set FOVControl && !camFOVChangedExternal FOV " + FOV + " vFOV " + vFOV + " cineBrain " + cineBrain + " cam.fieldOfView " + cam.fieldOfView);
+            //if (debug) Debug.Log("FOV_Set FOVControl && !camFOVChangedExternal FOV " + FOV + " vFOV " + vFOV + " cineBrain " + cineBrain + " cam.fieldOfView " + cam.fieldOfView);
         }
         else
         {
@@ -5645,12 +5671,12 @@ public class Stereo3D : MonoBehaviour
             FOV = Mathf.Atan(aspect * Mathf.Tan(vFOV * Mathf.PI / 360)) * 360 / Mathf.PI;
             scaleX = 1 / Mathf.Tan(FOV * Mathf.PI / 360);
             scaleY = scaleX * aspect;
-            //Debug.Log("!(FOV_Set FOVControl && !camFOVChangedExternal) FOV " + FOV + " vFOV " + vFOV);
+            //if (debug) Debug.Log("!(FOV_Set FOVControl && !camFOVChangedExternal) FOV " + FOV + " vFOV " + vFOV);
         }
 
-        Debug.Log("FOV_Set " + FOV + " vFOV " + vFOV);
+        if (debug) Debug.Log("FOV_Set " + FOV + " vFOV " + vFOV);
         //Debug.Break();
-        //Debug.Log("FOV_Set cam.fieldOfView " + cam.fieldOfView + " vFOV " + vFOV);
+        //if (debug) Debug.Log("FOV_Set cam.fieldOfView " + cam.fieldOfView + " vFOV " + vFOV);
         //camera_left.fieldOfView = camera_right.fieldOfView = vFOV;
 
         FOV_slider.value = FOV;
@@ -5663,7 +5689,7 @@ public class Stereo3D : MonoBehaviour
 
     //void CheckCamFOVSet()
     //{
-    //    Debug.Log("CheckCamFOVSet");
+    //    if (debug) Debug.Log("CheckCamFOVSet");
 
     //    if (cam.fieldOfView == vFOV)
     //        FOVSetInProcess = false;
@@ -5673,7 +5699,7 @@ public class Stereo3D : MonoBehaviour
 
     //void GetFOVFromCam()
     //{
-    //    //Debug.Log("GetFOVFromCam");
+    //    //if (debug) Debug.Log("GetFOVFromCam");
     //    vFOV = cam.fieldOfView;
     //    FOV = Mathf.Atan(aspect * Mathf.Tan(vFOV * Mathf.PI / 360)) * 360 / Mathf.PI;
     //    scaleX = 1 / Mathf.Tan(FOV * Mathf.PI / 360);
@@ -5737,7 +5763,7 @@ public class Stereo3D : MonoBehaviour
     //void CamRect_Set()
     //{
     //    camera_left.rect = camera_right.rect = new Rect(0, 0, Mathf.Max(1 / cam.rect.width * (1 - cam.rect.x), 1), Mathf.Max(1 / cam.rect.height * (1 - cam.rect.y), 1));
-    //    //Debug.Log("CamRect_Set");
+    //    //if (debug) Debug.Log("CamRect_Set");
 
     //    //if (cam.rect.x > 0 || cam.rect.xMax > 1 || cam.rect.y > 0 || cam.rect.yMax > 1)
     //    //{
@@ -5794,7 +5820,7 @@ public class Stereo3D : MonoBehaviour
         else
             oneRowShift = 0;
 
-        //Debug.Log(oneRowShift);
+        //if (debug) Debug.Log(oneRowShift);
 
         screenDistance = scaleX * imageWidth * .5f; //calculated distance to screen from user eyes where real FOV will match to virtual for realistic view
         screenDistance_inputField.text = screenDistance.ToString();
@@ -5810,7 +5836,7 @@ public class Stereo3D : MonoBehaviour
         {
             //if (cam.projectionMatrix != Matrix4x4.zero)
             //{
-            //    Debug.Log("cam.projectionMatrix != Matrix4x4.zero");
+            //    if (debug) Debug.Log("cam.projectionMatrix != Matrix4x4.zero");
             //    camMatrix = cam.projectionMatrix;
 
             //    if (S3DEnabled && matrixKillHack)
@@ -5819,9 +5845,9 @@ public class Stereo3D : MonoBehaviour
 
             //if (matrixKillHack && S3DEnabled && cam.projectionMatrix != Matrix4x4.zero)
             //{
-            //    Debug.Log("cam.projectionMatrix != Matrix4x4.zero");
+            //    if (debug) Debug.Log("cam.projectionMatrix != Matrix4x4.zero");
             //    camMatrix = cam.projectionMatrix;
-            //    Debug.Log(camMatrix);
+            //    if (debug) Debug.Log(camMatrix);
             //    cam.projectionMatrix = Matrix4x4.zero;
             //}
 
@@ -5830,10 +5856,10 @@ public class Stereo3D : MonoBehaviour
             //    //if (cam.projectionMatrix != Matrix4x4.zero)
             //    if (cam.projectionMatrix[3, 2] != 0)
             //    {
-            //        //Debug.Log("cam.projectionMatrix != Matrix4x4.zero");
-            //        Debug.Log("cam.projectionMatrix[3, 2] != 0");
+            //        //if (debug) Debug.Log("cam.projectionMatrix != Matrix4x4.zero");
+            //        if (debug) Debug.Log("cam.projectionMatrix[3, 2] != 0");
             //        //camMatrix = cam.projectionMatrix;
-            //        Debug.Log("camMatrix\n" + camMatrix);
+            //        if (debug) Debug.Log("camMatrix\n" + camMatrix);
             //        cam.projectionMatrix = Matrix4x4.zero;
             //    }
             //}
@@ -5917,7 +5943,7 @@ public class Stereo3D : MonoBehaviour
 
                 Matrix_Set(cam, 0, 0);
                 camMatrix = cam.projectionMatrix;
-                Debug.Log("ViewSet camMatrix\n" + camMatrix);
+                if (debug) Debug.Log("ViewSet camMatrix\n" + camMatrix);
                 //CamMatrix_Reset();
             }
 
@@ -5988,7 +6014,7 @@ public class Stereo3D : MonoBehaviour
                 }
         }
 
-        ////Debug.Log("ViewSet vFOV " + vFOV);
+        ////if (debug) Debug.Log("ViewSet vFOV " + vFOV);
         ////camera_left.fieldOfView = camera_right.fieldOfView = cam.fieldOfView = vFOV;
         //camera_left.fieldOfView = camera_right.fieldOfView = vFOV;
 
@@ -5999,7 +6025,7 @@ public class Stereo3D : MonoBehaviour
 
         CameraDataStruct_Change();
         Canvas_Set();
-        Debug.Log("ViewSet cam.projectionMatrix\n" + cam.projectionMatrix);
+        if (debug) Debug.Log("ViewSet cam.projectionMatrix\n" + cam.projectionMatrix);
     }
 
     //Matrix4x4 Matrix_Set(Matrix4x4 matrix, float shiftX, float shiftY)
@@ -6016,7 +6042,7 @@ public class Stereo3D : MonoBehaviour
 
     void Matrix_Set(Camera c, float shiftX, float shiftY)
     {
-        //Debug.Log("Matrix_Set");
+        //if (debug) Debug.Log("Matrix_Set");
         Matrix4x4 matrix;
 
         if (c.name.Contains("_left") || c.name.Contains("_right"))
@@ -6048,8 +6074,8 @@ public class Stereo3D : MonoBehaviour
                 //float farClip = c.farClipPlane;
                 //matrix[2, 2] = -(farClip + nearClip) / (farClip - nearClip);
                 //matrix[2, 3] = -(2 * farClip * nearClip) / (farClip - nearClip);
-                ////Debug.Log("nearClip " + nearClip + " farClip " + farClip);
-                //Debug.Log(c.name + " Matrix_Set " + matrix);
+                ////if (debug) Debug.Log("nearClip " + nearClip + " farClip " + farClip);
+                //if (debug) Debug.Log(c.name + " Matrix_Set " + matrix);
             }
             else
             {
@@ -6074,10 +6100,10 @@ public class Stereo3D : MonoBehaviour
           //      if (method == Method.Two_Displays_MirrorY && c.name.Contains("_right"))
 		        //    matrix *= Matrix4x4.Scale(new Vector3(1, -1, 1));
 
-            //Debug.Log("Matrix_Set parent " + parent);
-            //Debug.Log("nearClip " + nearClip + " farClip " + farClip);
-            //Debug.Log(c.name + " Matrix_Set\n" + matrix);
-            //Debug.Log(matrix[0, 2] + " " + matrix[1, 2]);
+            //if (debug) Debug.Log("Matrix_Set parent " + parent);
+            //if (debug) Debug.Log("nearClip " + nearClip + " farClip " + farClip);
+            //if (debug) Debug.Log(c.name + " Matrix_Set\n" + matrix);
+            //if (debug) Debug.Log(matrix[0, 2] + " " + matrix[1, 2]);
             c.projectionMatrix = matrix;
         }
         else
@@ -6134,9 +6160,9 @@ public class Stereo3D : MonoBehaviour
             //}
 
             //if (c == cam)
-            //    Debug.Log("Matrix_Set c == cam " + matrix);
+            //    if (debug) Debug.Log("Matrix_Set c == cam " + matrix);
             //else
-            //    Debug.Log(c.name + " Matrix_Set c != cam " + matrix);
+            //    if (debug) Debug.Log(c.name + " Matrix_Set c != cam " + matrix);
         }
 
         //c.projectionMatrix = matrix;
@@ -6161,19 +6187,19 @@ public class Stereo3D : MonoBehaviour
             matrix[2, 3] = -(2 * c.farClipPlane * c.nearClipPlane) / (c.farClipPlane - c.nearClipPlane);
         }
 
-        Debug.Log("Matrix_Set " + c.name + "\n" + matrix);
+        if (debug) Debug.Log("Matrix_Set " + c.name + "\n" + matrix);
     }
 
     //void CamMatrix_Reset()
     //{
-    //    Debug.Log("CamMatrix_Reset camMatrix\n" + camMatrix);
-    //    Debug.Log("CamMatrix_Reset cam.projectionMatrix\n" + cam.projectionMatrix);
+    //    if (debug) Debug.Log("CamMatrix_Reset camMatrix\n" + camMatrix);
+    //    if (debug) Debug.Log("CamMatrix_Reset cam.projectionMatrix\n" + cam.projectionMatrix);
     //    if (cam.projectionMatrix == Matrix4x4.zero) //restore cam.projectionMatrix when return from matrixKillHack
     //        cam.projectionMatrix = camMatrix;
 
     //    Matrix_Set(cam, 0, 0);
     //    camMatrix = cam.projectionMatrix;
-    //    Debug.Log("CamMatrix_Reset Matrix_Set camMatrix\n" + camMatrix);
+    //    if (debug) Debug.Log("CamMatrix_Reset Matrix_Set camMatrix\n" + camMatrix);
     //}
 
     RenderTexture renderTexture;
@@ -6199,12 +6225,13 @@ public class Stereo3D : MonoBehaviour
     bool displaySelectWaitInput;
     int rtWidth;
     int rtHeight;
+    Camera topmostCamera;
     Camera topmostCamera_left;
     Camera topmostCamera_right;
 
     void Render_Set()
     {
-        Debug.Log("Render_Set");
+        if (debug) Debug.Log("Render_Set");
         Render_Release(); //remove RT before adding new to avoid duplication
         //cam.enabled = true;
 
@@ -6492,8 +6519,8 @@ public class Stereo3D : MonoBehaviour
                 break;
             }
 
-            //Debug.Log("Render_Set Width: " + rtWidth + " Height: " + rtHeight);
-            //Debug.Log("Render_Set columns: " + columns + " rows: " + rows);
+            //if (debug) Debug.Log("Render_Set Width: " + rtWidth + " Height: " + rtHeight);
+            //if (debug) Debug.Log("Render_Set columns: " + columns + " rows: " + rows);
 
             //if (!(method == Method.Two_Displays))
             //if (method == Method.Two_Displays)
@@ -6557,7 +6584,7 @@ public class Stereo3D : MonoBehaviour
                             //    //displays.Insert(0, i.ToString());
                             //    displays += " " + i.ToString();
 
-                            //Debug.Log("fakeDisplays[0].active " + fakeDisplays[0].active);
+                            //if (debug) Debug.Log("fakeDisplays[0].active " + fakeDisplays[0].active);
                             //StaticTooltip_Make("Press the number key to select the display for Left camera:" + displays);
                             //displaySelectWaitInput = true;
                             TargetDisplays_Select();
@@ -6621,9 +6648,9 @@ public class Stereo3D : MonoBehaviour
                 //                    canvasCamera_right.targetDisplay = displayIndex_right;
                 //                }
 
-                //Debug.Log("Display.displays[0].systemWidth: " + Display.displays[0].systemWidth + " Display.displays[0].systemHeight: " + Display.displays[0].systemHeight);
-                //Debug.Log("Display.displays[0].renderingWidth: " + Display.displays[0].renderingWidth + " Display.displays[0].renderingHeight: " + Display.displays[0].renderingHeight);
-                //Debug.Log("Display.displays[0]: " + Display.displays[0]);
+                //if (debug) Debug.Log("Display.displays[0].systemWidth: " + Display.displays[0].systemWidth + " Display.displays[0].systemHeight: " + Display.displays[0].systemHeight);
+                //if (debug) Debug.Log("Display.displays[0].renderingWidth: " + Display.displays[0].renderingWidth + " Display.displays[0].renderingHeight: " + Display.displays[0].renderingHeight);
+                //if (debug) Debug.Log("Display.displays[0]: " + Display.displays[0]);
 
 //#if !(URP || HDRP)
 //                if (method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
@@ -6680,7 +6707,9 @@ public class Stereo3D : MonoBehaviour
 #if HDRP
                 //|| method == Method.Two_Displays && (GUIAsOverlay && GUIVisible || additionalS3DCamerasStruct.Length != 0)
                 //|| GUIAsOverlay && GUIVisible || additionalS3DCamerasStruct != null //not working as not null even with additionalS3DCamerasStruct.Length == 0
-                || GUIAsOverlay && GUIVisible || additionalS3DCamerasStruct.Length != 0
+                //|| GUIAsOverlay && GUIVisible || additionalS3DCamerasStruct.Length != 0
+                //|| GUIAsOverlay && GUIVisible || additionalS3DTopmostCameraIndex != -1
+                || GUIAsOverlay || additionalS3DTopmostCameraIndex != -1
 #endif
                 )
             {
@@ -6695,9 +6724,16 @@ public class Stereo3D : MonoBehaviour
                 //camera_left.targetDisplay = camera_right.targetDisplay = 0;
                 //camera_left.rect = camera_right.rect = Rect.MinMaxRect(0, 0, 1, 1);
 
-                //cam.targetTexture = renderTexture;
-                camera_left.targetTexture = renderTexture_left;
-                camera_right.targetTexture = renderTexture_right;
+            if (method != Method.Two_Displays
+#if HDRP
+                || additionalS3DTopmostCameraIndex != -1
+#endif
+            )
+                {
+                    //cam.targetTexture = renderTexture;
+                    camera_left.targetTexture = renderTexture_left;
+                    camera_right.targetTexture = renderTexture_right;
+                }
 
                 ////if (additionalS3DCamerasStruct != null)
                 //    foreach (var c in additionalS3DCamerasStruct)
@@ -6796,7 +6832,7 @@ public class Stereo3D : MonoBehaviour
                     S3DMaterial.SetTexture("_LeftTex", renderTexture_left);
                     S3DMaterial.SetTexture("_RightTex", renderTexture_right);
 
-                    //Debug.Log("Render_Set renderTexture_left.height: " + renderTexture_left.height + " renderTexture_left.width: " + renderTexture_left.width);
+                    //if (debug) Debug.Log("Render_Set renderTexture_left.height: " + renderTexture_left.height + " renderTexture_left.width: " + renderTexture_left.width);
 
                     verticesPosBuffer = new ComputeBuffer(4, Marshal.SizeOf(typeof(Vector2)));
                     verticesPosBuffer.SetData(verticesPos);
@@ -6829,6 +6865,8 @@ public class Stereo3D : MonoBehaviour
                     //Camera.onPostRender += PostRender;
 #endif
                 }
+
+                TopMostCamera_Set();
 #if URP || HDRP
                 //if (method == Method.Two_Displays && GUIVisible || method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
                 //    RenderPipelineManager.beginCameraRendering += RenderTexture_Reset; //add render context
@@ -6866,8 +6904,6 @@ public class Stereo3D : MonoBehaviour
                 //    topmostCamera_left.gameObject.AddComponent<OnRenderImageDelegate>().RenderImageEvent += OnRenderImageEvent;
                 //    topmostCamera_right.gameObject.AddComponent<OnRenderImageDelegate>().RenderImageEvent += OnRenderImageEvent;
                 //}
-
-                TopMostCamera_Set();
             }
 
 #if !(URP || HDRP)
@@ -6917,13 +6953,18 @@ public class Stereo3D : MonoBehaviour
             //if (additionalS3DCameras.Count != 0 || GUIAsOverlay)
             if (
 //#if HDRP
-                additionalS3DCameras.Count != 0 || 
+                //additionalS3DCameras.Count != 0 || 
+                additionalS3DTopmostCameraIndex != -1 ||
 //#endif
-                canvasCamera && canvasCamera.isActiveAndEnabled)
+                //canvasCamera && canvasCamera.isActiveAndEnabled
+                GUIAsOverlay
+                )
             {
-                //Debug.Log("Canvas1");
+                //if (debug) Debug.Log("Canvas1");
                 renderTexture = RT_Make();
-                cam.targetTexture = renderTexture;
+
+                if (additionalS3DTopmostCameraIndex != -1)
+                    cam.targetTexture = renderTexture;
 
                 //if (additionalS3DCameras.Count != 0 || canvasCamera && canvasCamera.isActiveAndEnabled)
                 //    cam.targetTexture = renderTexture;
@@ -6947,10 +6988,11 @@ public class Stereo3D : MonoBehaviour
 //#if HDRP
 //#if HDRP || URP
 
-                if (canvasCamera && canvasCamera.isActiveAndEnabled)
+                //if (canvasCamera && canvasCamera.isActiveAndEnabled)
+                if (GUIAsOverlay)
 //#endif
                 {
-                    //Debug.Log("Canvas2");
+                    //if (debug) Debug.Log("Canvas2");
                     //canvasCamera.rect = Rect.MinMaxRect(0, 0, 1, 1);
 //#if HDRP
 //#if HDRP || URP
@@ -6963,14 +7005,16 @@ public class Stereo3D : MonoBehaviour
                     canvasCamera.targetTexture = canvasRenderTexture;
                 }
 
-                //RenderPipelineManager.beginContextRendering += RenderTexture_Reset; //add render context
-                RenderPipelineManager.beginCameraRendering += RenderTexture_Reset; //add render context
+                ////RenderPipelineManager.beginContextRendering += RenderTexture_Reset; //add render context
+                //RenderPipelineManager.beginCameraRendering += RenderTexture_Reset; //add render context
+                TopMostCamera_Set();
+                RenderTextureContextSet();
             }
 //#if HDRP
 //            for (int i = 0; i < additionalS3DCamerasStruct.Length; i++)
 //                if (additionalS3DCamerasStruct[i].camera)
 //                {
-//                    //Debug.Log("Render_Set additionalS3DCamerasStruct[i].camera ==================================================================" + additionalS3DCamerasStruct[i].camera);
+//                    //if (debug) Debug.Log("Render_Set additionalS3DCamerasStruct[i].camera ==================================================================" + additionalS3DCamerasStruct[i].camera);
 //                    //additionalS3DCamerasStruct[i].camera.rect = Rect.MinMaxRect(0, 0, 1, 1);
 ////#if HDRP
 //                    additionalS3DCamerasStruct[i].renderTexture = RT_Make();
@@ -6983,7 +7027,7 @@ public class Stereo3D : MonoBehaviour
 
 //            if (canvasCamera && canvasCamera.isActiveAndEnabled)
 //            {
-//                Debug.Log("Canvas2");
+//                if (debug) Debug.Log("Canvas2");
 ////#if URP
 ////                    canvasCamera.GetUniversalAdditionalCameraData().renderType = CameraRenderType.Base;
 ////                    cameraStack.Remove(canvasCamera);
@@ -6998,17 +7042,17 @@ public class Stereo3D : MonoBehaviour
 //            }
             //if (method != Method.Two_Displays
             //if (method != Method.Two_Displays && method != Method.Two_Displays_MirrorX && method != Method.Two_Displays_MirrorY //for MirrorX & MirrorY by camera matrix but not working with physical camera and HDRP skybox
-            if (method != Method.Two_Displays
-//#if URP
-//                //|| method == Method.Two_Displays && GUIAsOverlay && GUIVisible
-//                || GUIAsOverlay && GUIVisible
-//#elif HDRP
-                //|| method == Method.Two_Displays && (GUIAsOverlay && GUIVisible || additionalS3DCamerasStruct.Length != 0)
-                || GUIAsOverlay && GUIVisible || additionalS3DCamerasStruct.Length != 0
-//#endif
-            )
-                //RenderPipelineManager.endContextRendering += PostRenderContext; //add render context
-                RenderPipelineManager.endCameraRendering += PostRenderContext; //add render context
+//            if (method != Method.Two_Displays
+////#if URP
+////                //|| method == Method.Two_Displays && GUIAsOverlay && GUIVisible
+////                || GUIAsOverlay && GUIVisible
+////#elif HDRP
+//                //|| method == Method.Two_Displays && (GUIAsOverlay && GUIVisible || additionalS3DCamerasStruct.Length != 0)
+//                || GUIAsOverlay && GUIVisible || additionalS3DCamerasStruct.Length != 0
+////#endif
+//            )
+//                //RenderPipelineManager.endContextRendering += PostRenderContext; //add render context
+//                RenderPipelineManager.endCameraRendering += PostRenderContext; //add render context
 #endif
         }
 
@@ -7034,28 +7078,6 @@ public class Stereo3D : MonoBehaviour
         CameraDataStruct_Change();
     }
 
-    void RenderTextureContextSet()
-    {
-#if URP || HDRP
-            RenderPipelineManager.endCameraRendering -= RenderQuad;
-            RenderPipelineManager.beginCameraRendering -= RenderTexture_Reset; //remove render context if exist before add to avoid duplication
-            RenderPipelineManager.endCameraRendering -= RenderTexture_BlitToScreen;
-
-            if (
-#if HDRP
-            method == Method.Two_Displays && (additionalS3DCamerasStruct.Length != 0 || GUIAsOverlay && GUIVisible) || 
-#endif
-            method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
-            {
-                RenderPipelineManager.endCameraRendering += RenderTexture_BlitToScreen; //blit Render Texture to scren after render is finished
-                RenderPipelineManager.beginCameraRendering += RenderTexture_Reset; //required reset Render Texture after set it to null for blit to screen
-            }
-            else
-                if (method != Method.Two_Displays)
-                    RenderPipelineManager.endCameraRendering += RenderQuad; //draw fullscreen quad at main camera with S3D combined output by S3D shader
-#endif
-    }
-
     void TopMostCamera_Set()
     {
 #if !(URP || HDRP)
@@ -7075,25 +7097,32 @@ public class Stereo3D : MonoBehaviour
         }
 #endif
 
-        if (canvasCamera_left && canvasCamera_left.isActiveAndEnabled)
+        //if (canvasCamera_left && canvasCamera_left.isActiveAndEnabled)
+        if (GUIAsOverlay && GUIVisible)
         {
             //canvasCamera_left.gameObject.AddComponent<OnRenderImageDelegate>().RenderImageEvent += OnRenderImageEvent;
             //canvasCamera_right.gameObject.AddComponent<OnRenderImageDelegate>().RenderImageEvent += OnRenderImageEvent;
+            topmostCamera = canvasCamera;
             topmostCamera_left = canvasCamera_left;
             topmostCamera_right = canvasCamera_right;
         }
         else
-            if (additionalS3DCamerasStruct.Length != 0)
+            //if (additionalS3DCamerasStruct.Length != 0)
+            if (additionalS3DTopmostCameraIndex != -1)
             {
                 //additionalS3DCamerasStruct[additionalS3DCamerasStruct.Length - 1].camera_left.gameObject.AddComponent<OnRenderImageDelegate>().RenderImageEvent += OnRenderImageEvent;
                 //additionalS3DCamerasStruct[additionalS3DCamerasStruct.Length - 1].camera_right.gameObject.AddComponent<OnRenderImageDelegate>().RenderImageEvent += OnRenderImageEvent;
-                topmostCamera_left = additionalS3DCamerasStruct[additionalS3DCamerasStruct.Length - 1].camera_left;
-                topmostCamera_right = additionalS3DCamerasStruct[additionalS3DCamerasStruct.Length - 1].camera_right;
+                //topmostCamera_left = additionalS3DCamerasStruct[additionalS3DCamerasStruct.Length - 1].camera_left;
+                //topmostCamera_right = additionalS3DCamerasStruct[additionalS3DCamerasStruct.Length - 1].camera_right;
+                topmostCamera = additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].camera;
+                topmostCamera_left = additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].camera_left;
+                topmostCamera_right = additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].camera_right;
             }
             else
             {
                 //camera_left.gameObject.AddComponent<OnRenderImageDelegate>().RenderImageEvent += OnRenderImageEvent;
                 //camera_right.gameObject.AddComponent<OnRenderImageDelegate>().RenderImageEvent += OnRenderImageEvent;
+                topmostCamera = cam;
                 topmostCamera_left = camera_left;
                 topmostCamera_right = camera_right;
             }
@@ -7104,6 +7133,52 @@ public class Stereo3D : MonoBehaviour
             topmostCamera_left.gameObject.AddComponent<OnRenderImageDelegate>().RenderImageEvent += OnRenderImageEvent;
             topmostCamera_right.gameObject.AddComponent<OnRenderImageDelegate>().RenderImageEvent += OnRenderImageEvent;
         }
+#endif
+
+        //if (debug) Debug.Log("TopMostCamera_Set left: " + topmostCamera_left + " right: " + topmostCamera_right);
+        if (debug) Debug.Log("TopMostCamera_Set: " + topmostCamera + " left: " + topmostCamera_left + " right: " + topmostCamera_right);
+    }
+
+    void RenderTextureContextSet()
+    {
+        if (debug) Debug.Log("RenderTextureContextSet");
+#if URP || HDRP
+        RenderPipelineManager.endCameraRendering -= RenderQuad;
+        RenderPipelineManager.beginCameraRendering -= RenderTexture_Reset; //remove render context if exist before add to avoid duplication
+        RenderPipelineManager.endCameraRendering -= RenderTexture_BlitToScreen;
+        RenderPipelineManager.endCameraRendering -= RenderTexture_BlitToRenderTexture;
+
+        if (
+#if HDRP
+        //method == Method.Two_Displays && (additionalS3DCamerasStruct.Length != 0 || GUIAsOverlay && GUIVisible) || 
+        method == Method.Two_Displays && (additionalS3DTopmostCameraIndex != -1 || GUIAsOverlay && GUIVisible) || 
+#endif
+        method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
+        {
+            if (additionalS3DTopmostCameraIndex != -1 || GUIAsOverlay && GUIVisible)
+                RenderPipelineManager.endCameraRendering += RenderTexture_BlitToRenderTexture; //blit Render Texture to main Render Texture(required for HDRP overlay cameras) after render is finished
+
+            RenderPipelineManager.endCameraRendering += RenderTexture_BlitToScreen; //blit Render Texture to scren after render is finished
+            RenderPipelineManager.beginCameraRendering += RenderTexture_Reset; //required reset Render Texture after set it to null for blit to screen
+        }
+        else
+            if (method != Method.Two_Displays)
+            {
+                if (S3DEnabled)
+                    RenderPipelineManager.endCameraRendering += RenderQuad; //draw fullscreen quad at main camera with S3D combined output by S3D shader
+#if HDRP
+                //if (topmostCamera_left != camera_left)
+                if (additionalS3DTopmostCameraIndex != -1 || GUIAsOverlay && GUIVisible)
+                    RenderPipelineManager.endCameraRendering += RenderTexture_BlitToRenderTexture; //blit Render Texture to main Render Texture(required for HDRP overlay cameras) after render is finished
+
+                if (!S3DEnabled)
+                    if (additionalS3DTopmostCameraIndex != -1 || GUIAsOverlay && GUIVisible)
+                    {
+                        RenderPipelineManager.endCameraRendering += RenderTexture_BlitToScreen; //blit Render Texture to scren after render is finished
+                        RenderPipelineManager.beginCameraRendering += RenderTexture_Reset; //required reset Render Texture after set it to null for blit to screen
+                    }
+#endif
+            }
 #endif
     }
 
@@ -7127,7 +7202,7 @@ public class Stereo3D : MonoBehaviour
         //desc.msaaSamples = QualitySettings.antiAliasing;
         //desc.bindMS = true;
         //RenderTexture rt = new RenderTexture(desc);
-        //Debug.Log(rt.descriptor.flags);
+        //if (debug) Debug.Log(rt.descriptor.flags);
 
         rt.filterMode = FilterMode.Point;
         rt.wrapMode = TextureWrapMode.Repeat;
@@ -7135,6 +7210,9 @@ public class Stereo3D : MonoBehaviour
 #if URP
         if (URPAsset.msaaSampleCount != 0)
             rt.antiAliasing = URPAsset.msaaSampleCount;
+#elif HDRP
+        if (HDRPSettings.msaaSampleCount != 0)
+            rt.antiAliasing = (int)HDRPSettings.msaaSampleCount;
 #else
         if (QualitySettings.antiAliasing != 0)
             rt.antiAliasing = QualitySettings.antiAliasing;
@@ -7146,8 +7224,8 @@ public class Stereo3D : MonoBehaviour
     //void TargetDisplays_Input()
     void TargetDisplays_Input(string inputString)
     {
-        //Debug.Log("Input.inputString " + Input.inputString);
-        Debug.Log("inputString " + inputString);
+        //if (debug) Debug.Log("Input.inputString " + Input.inputString);
+        if (debug) Debug.Log("inputString " + inputString);
 
         if (display_left == null)
         {
@@ -7158,25 +7236,25 @@ public class Stereo3D : MonoBehaviour
             //if (Input.inputString != "" && displays.Contains(Input.inputString))
             if (inputString != "" && displays.Contains(inputString))
             {
-                //Debug.Log("displays.Contains(Input.inputString) " + Input.inputString);
-                //Debug.Log("displays.Contains(Input.inputString)" + Input.inputString + "end");
-                Debug.Log("displays.Contains(inputString) " + inputString);
+                //if (debug) Debug.Log("displays.Contains(Input.inputString) " + Input.inputString);
+                //if (debug) Debug.Log("displays.Contains(Input.inputString)" + Input.inputString + "end");
+                if (debug) Debug.Log("displays.Contains(inputString) " + inputString);
                 displayIndex_left = Convert.ToInt32(inputString);
                 //display_left = Display.displays[Convert.ToInt32(inputString)];
                 //display_left = fakeDisplays[Convert.ToInt32(inputString)];
                 display_left = Display.displays[displayIndex_left];
                 ////display_left = fakeDisplays[displayIndex_left];
                 //display_left.Activate();
-                //Debug.Log("display_left " + display_left);
+                //if (debug) Debug.Log("display_left " + display_left);
                 //DisplayRight_Set();
                 displays = displays.Replace(inputString, "");
-                //Debug.Log("displays " + displays);
+                //if (debug) Debug.Log("displays " + displays);
                 //Destroy(staticTooltip);
                 StaticTooltip_Make("Press the number key to select the display for Right camera:" + displays);
             }
             else
-                //Debug.Log("!displays.Contains(Input.inputString) " + Input.inputString);
-                Debug.Log("!displays.Contains(inputString) " + inputString);
+                //if (debug) Debug.Log("!displays.Contains(Input.inputString) " + Input.inputString);
+                if (debug) Debug.Log("!displays.Contains(inputString) " + inputString);
         }
         else
         {
@@ -7185,15 +7263,15 @@ public class Stereo3D : MonoBehaviour
 
             if (inputString != "" && displays.Contains(inputString))
             {
-                //Debug.Log("displays.Contains(Input.inputString) " + Input.inputString);
-                Debug.Log("displays.Contains(inputString) " + inputString);
+                //if (debug) Debug.Log("displays.Contains(Input.inputString) " + Input.inputString);
+                if (debug) Debug.Log("displays.Contains(inputString) " + inputString);
                 displayIndex_right = Convert.ToInt32(inputString);
                 //display_right = Display.displays[Convert.ToInt32(inputString)];
                 //display_right = fakeDisplays[Convert.ToInt32(inputString)];
                 display_right = Display.displays[displayIndex_right];
                 ////display_right = fakeDisplays[displayIndex_right];
                 //display_right.Activate();
-                //Debug.Log("display_right " + display_right);
+                //if (debug) Debug.Log("display_right " + display_right);
                 displays = displays.Replace(inputString, "");
                 //Destroy(staticTooltip);
                 //displaySelectWaitInput = false;
@@ -7229,7 +7307,7 @@ public class Stereo3D : MonoBehaviour
             //displays.Insert(0, i.ToString());
             displays += " " + i.ToString();
 
-        //Debug.Log("fakeDisplays[0].active " + fakeDisplays[0].active);
+        //if (debug) Debug.Log("fakeDisplays[0].active " + fakeDisplays[0].active);
         StaticTooltip_Make("Press the number key to select the display for Left camera:" + displays);
         displaySelectWaitInput = true;
 #if ENABLE_INPUT_SYSTEM
@@ -7240,7 +7318,7 @@ public class Stereo3D : MonoBehaviour
     void TargetDisplays_Set()
     //void TargetDisplays_Set(int displayIndex_left, int displayIndex_right)
     {
-        Debug.Log("TargetDisplays_Set displayIndex_left " + displayIndex_left + " displayIndex_right " + displayIndex_right);
+        if (debug) Debug.Log("TargetDisplays_Set displayIndex_left " + displayIndex_left + " displayIndex_right " + displayIndex_right);
         camera_left.targetDisplay = displayIndex_left;
         camera_right.targetDisplay = displayIndex_right;
 
@@ -7349,17 +7427,21 @@ public class Stereo3D : MonoBehaviour
 #if URP || HDRP
     CommandBuffer commandBuffer;
     //float frameTime;
+    //Camera cameraToResetLeft;
+    //Camera cameraToResetRight;
+    //RenderTexture renderTextureToResetLeft;
+    //RenderTexture renderTextureToResetRight;
 
     //void RenderTexture_Reset(ScriptableRenderContext context, List<Camera> cameraList)
     void RenderTexture_Reset(ScriptableRenderContext context, Camera camera)
     {
-        //Debug.Log(camera + " RenderTexture_Reset " + Time.time);
+        if (debug) Debug.Log(camera + " RenderTexture_Reset " + Time.time);
         //        commandBuffer = new CommandBuffer();
         //        //commandBuffer.name = "S3DPreRenderReset";
 
         //        //if (camera == camera_left)
         //        //{
-        //        //    //Debug.Log("camera = camera_left");
+        //        //    //if (debug) Debug.Log("camera = camera_left");
         //        //    camera_left.targetTexture = renderTexture_left;
         //        //    //            commandBuffer = new CommandBuffer();
         //        //    //            commandBuffer.name = "left";
@@ -7372,7 +7454,7 @@ public class Stereo3D : MonoBehaviour
 
         //        //    //            if (canvasCamera && canvasCamera_left.isActiveAndEnabled)
         //        //    //            {
-        //        //    //                //Debug.Log("========================================================================== ");
+        //        //    //                //if (debug) Debug.Log("========================================================================== ");
         //        //    //                commandBuffer.Blit(canvasRenderTexture_left, renderTexture_left, S3DPanelMaterial);
         //        //    //                commandBuffer.Blit(canvasRenderTexture_right, renderTexture_right, S3DPanelMaterial);
         //        //    //            }
@@ -7399,7 +7481,7 @@ public class Stereo3D : MonoBehaviour
         //                if (GUIAsOverlay && GUIVisible || method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
         //                //if (GUIAsOverlay && GUIVisible || method == Method.Sequential && !optimize && oddFrame)
         //                {
-        //                    //Debug.Log("RenderTexture_Reset camera_left.targetTexture = renderTexture_left " + Time.time);
+        //                    //if (debug) Debug.Log("RenderTexture_Reset camera_left.targetTexture = renderTexture_left " + Time.time);
         //                    camera_left.targetTexture = renderTexture_left;
         //                }
         //            }
@@ -7464,7 +7546,7 @@ public class Stereo3D : MonoBehaviour
         //#if HDRP
         //                            else
         //                                //if (additionalS3DCameras.Count != 0)
-        //                                if (closestCameraIndex != -1)
+        //                                if (additionalS3DTopmostCameraIndex != -1)
         //                                    if (camera == additionalS3DCamerasStruct[additionalS3DCamerasStruct.Length - 1].camera)
         //                                        additionalS3DCamerasStruct[additionalS3DCamerasStruct.Length - 1].camera.targetTexture = additionalS3DCamerasStruct[additionalS3DCamerasStruct.Length - 1].renderTexture;
         //                                    else
@@ -7484,6 +7566,47 @@ public class Stereo3D : MonoBehaviour
         else
             if (camera == camera_right)
                 camera_right.targetTexture = renderTexture_right;
+#elif HDRP
+        if (camera == cam)
+            camera.targetTexture = renderTexture;
+        else
+            if (camera == camera_left)
+                camera.targetTexture = renderTexture_left;
+            else
+                if (camera == camera_right)
+                    camera.targetTexture = renderTexture_right;
+                else
+                    if (camera == canvasCamera)
+                        camera.targetTexture = canvasRenderTexture;
+                    else
+                        if (camera == canvasCamera_left)
+                            camera.targetTexture = canvasRenderTexture_left;
+                        else
+                            if (camera == canvasCamera_right)
+                                camera.targetTexture = canvasRenderTexture_right;
+                            else
+                                //for (int i = 0; i < additionalS3DCamerasStruct.Length; i++)
+                                //    if (additionalS3DCamerasStruct[i].camera)
+                                //        if (camera == additionalS3DCamerasStruct[i].camera_left)
+                                //            additionalS3DCamerasStruct[i].camera_left.targetTexture = additionalS3DCamerasStruct[i].renderTexture_left;
+                                //        else
+                                //            if (camera == additionalS3DCamerasStruct[i].camera_right)
+                                //                additionalS3DCamerasStruct[i].camera_right.targetTexture = additionalS3DCamerasStruct[i].renderTexture_right;
+                                if (additionalS3DTopmostCameraIndex != -1)
+                                        if (camera == additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].camera)
+                                            additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].camera.targetTexture = additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].renderTexture;
+                                        else
+                                            if (camera == additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].camera_left)
+                                                additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].camera_left.targetTexture = additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].renderTexture_left;
+                                            else
+                                                if (camera == additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].camera_right)
+                                                    additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].camera_right.targetTexture = additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].renderTexture_right;
+
+        //if (camera == cameraToResetLeft)
+        //    camera.targetTexture = renderTextureToResetLeft;
+        //else
+        //    if (camera == cameraToResetRight)
+        //        camera.targetTexture = renderTextureToResetRight;
 #endif
     }
 //#endif
@@ -7550,18 +7673,18 @@ public class Stereo3D : MonoBehaviour
 
     void RenderQuad(ScriptableRenderContext context, Camera camera)
     {
-        //Debug.Log(camera + " RenderQuad " + Time.time);
+        if (debug) Debug.Log(camera + " RenderQuad " + Time.time);
 
         if (camera == cam)
         {
             commandBuffer = new CommandBuffer();
             //commandBuffer.name = "S3DRenderQuad";
 
-            RenderTexture.active = null; //fixes rect in rect duplication
+            //RenderTexture.active = null; //fixes rect in rect duplication
             //render clip space screen quad using S3DMaterial preset vertices buffer with:
-            commandBuffer.DrawProcedural(Matrix4x4.identity, S3DMaterial, pass, MeshTopology.Quads, 4); //this need "nearClipPlane = -1" for same quad position as using Blit with custom camera Rect coordinates
+            //commandBuffer.DrawProcedural(Matrix4x4.identity, S3DMaterial, pass, MeshTopology.Quads, 4); //this need "nearClipPlane = -1" for same quad position as using Blit with custom camera Rect coordinates
             //commandBuffer.Blit(null, cam.activeTexture, S3DMaterial, pass); //or this
-            //commandBuffer.Blit(null, null as RenderTexture, S3DMaterial, pass); //or this
+            commandBuffer.Blit(null, null as RenderTexture, S3DMaterial, pass); //or this
 
             //below works without commandBuffer
             //Graphics.Blit(null, null, S3DMaterial, pass);
@@ -7576,8 +7699,8 @@ public class Stereo3D : MonoBehaviour
 
     void RenderTexture_BlitToScreen(ScriptableRenderContext context, Camera camera)
     {
-        //Debug.Log(camera + " RenderTexture_BlitToScreen " + Time.time);
-
+        if (debug) Debug.Log(camera + " RenderTexture_BlitToScreen " + Time.time);
+        commandBuffer = new CommandBuffer();
 #if URP
         if (camera == camera_left)
         {
@@ -7599,15 +7722,131 @@ public class Stereo3D : MonoBehaviour
                 commandBuffer.Release();
                 context.Submit();
             }
+#elif HDRP
+        if (camera == topmostCamera)
+        {
+            camera.targetTexture = null;
+            commandBuffer.Blit(renderTexture, null as RenderTexture);
+        }
+        else
+            if (camera == topmostCamera_left)
+            {
+                //cameraToResetLeft = camera;
+                //renderTextureToResetLeft = camera.targetTexture;
+                camera.targetTexture = null;
+                commandBuffer.Blit(renderTexture_left, null as RenderTexture);
+            }
+            else
+                if (camera == topmostCamera_right)
+                {
+                    //cameraToResetRight = camera;
+                    //renderTextureToResetRight = camera.targetTexture;
+                    camera.targetTexture = null;
+                    //commandBuffer.Blit(renderTexture_right, null as RenderTexture, RenderTextureFlipMaterial);
+
+                    if (method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
+                        commandBuffer.Blit(renderTexture_right, null as RenderTexture, S3DMaterial, pass);
+                    else
+                        commandBuffer.Blit(renderTexture_right, null as RenderTexture);
+                }
+
+        //if (camera == camera_left && camera == topmostCamera_left)
+        //{
+        //    cameraToResetLeft = camera_left;
+        //    renderTextureToResetLeft = renderTexture_left;
+        //    camera_left.targetTexture = null;
+        //    commandBuffer.Blit(renderTexture_left, null as RenderTexture);
+        //}
+        //else
+        //if (camera == camera_right && camera == topmostCamera_right)
+        //{
+        //    cameraToResetRight = camera_right;
+        //    renderTextureToResetRight = renderTexture_right;
+        //    camera_right.targetTexture = null;
+
+        //    if (method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
+        //        commandBuffer.Blit(renderTexture_right, null as RenderTexture, S3DMaterial, pass);
+        //    else
+        //        commandBuffer.Blit(renderTexture_right, null as RenderTexture);
+        //}
+        //else
+        //if (camera == canvasCamera_left)
+        //{
+        //    cameraToResetLeft = canvasCamera_left;
+        //    renderTextureToResetLeft = canvasRenderTexture_left;
+        //    canvasCamera_left.targetTexture = null;
+        //    //RenderTexture.active = null;
+        //    commandBuffer.Blit(renderTexture_left, null as RenderTexture);
+        //}
+        //else
+        //    if (camera == canvasCamera_right)
+        //    {
+        //        cameraToResetRight = canvasCamera_right;
+        //        renderTextureToResetRight = canvasRenderTexture_right;
+        //        canvasCamera_right.targetTexture = null;
+        //    //RenderTexture.active = null;
+        //        //commandBuffer.Blit(renderTexture_right, null as RenderTexture, RenderTextureFlipMaterial);
+
+        //        if (method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
+        //            commandBuffer.Blit(renderTexture_right, null as RenderTexture, S3DMaterial, pass);
+        //        else
+        //            commandBuffer.Blit(renderTexture_right, null as RenderTexture);
+        //    }
 #endif
+
+        context.ExecuteCommandBuffer(commandBuffer);
+        commandBuffer.Release();
+        context.Submit();
+    }
+
+    void RenderTexture_BlitToRenderTexture(ScriptableRenderContext context, Camera camera)
+    {
+        if (debug) Debug.Log(camera + " RenderTexture_BlitToRenderTexture " + Time.time);
+        commandBuffer = new CommandBuffer();
+#if HDRP
+        if (camera == topmostCamera)
+        {
+            foreach (var c in additionalS3DCamerasStruct)
+                if (c.camera && topmostCamera != c.camera)
+                    commandBuffer.Blit(c.camera.targetTexture, renderTexture, S3DPanelMaterial);
+
+            commandBuffer.Blit(topmostCamera.targetTexture, renderTexture, S3DPanelMaterial);
+        }
+        else
+            if (camera == topmostCamera_left)
+            {
+                //camera.targetTexture = null;
+
+                foreach (var c in additionalS3DCamerasStruct)
+                    if (c.camera && topmostCamera_left != c.camera_left)
+                        commandBuffer.Blit(c.camera_left.targetTexture, renderTexture_left, S3DPanelMaterial);
+
+                commandBuffer.Blit(topmostCamera_left.targetTexture, renderTexture_left, S3DPanelMaterial);
+            }
+            else
+                if (camera == topmostCamera_right)
+                {
+                    commandBuffer = new CommandBuffer();
+                    //camera.targetTexture = null;
+
+                    foreach (var c in additionalS3DCamerasStruct)
+                        if (c.camera && topmostCamera_right != c.camera_right)
+                            commandBuffer.Blit(c.camera_right.targetTexture, renderTexture_right, S3DPanelMaterial);
+
+                    commandBuffer.Blit(topmostCamera_right.targetTexture, renderTexture_right, S3DPanelMaterial);
+                }
+#endif
+        context.ExecuteCommandBuffer(commandBuffer);
+        commandBuffer.Release();
+        context.Submit();
     }
 
 //    //void PostRenderContext(ScriptableRenderContext context, List<Camera> cameraList)
 //    void PostRenderContext(ScriptableRenderContext context, Camera camera)
 //    {
-//        //Debug.Log(camera + " PostRenderContext " + Time.time);
+//        //if (debug) Debug.Log(camera + " PostRenderContext " + Time.time);
 //        //foreach (Camera camera in cameraList)
-//            //Debug.Log("cameraList.Count " + cameraList.Count + " " + Time.time);
+//            //if (debug) Debug.Log("cameraList.Count " + cameraList.Count + " " + Time.time);
 
 //        commandBuffer = new CommandBuffer();
 //        //commandBuffer.name = "S3DCamera";
@@ -7618,7 +7857,7 @@ public class Stereo3D : MonoBehaviour
 //            {
 //                if (S3DEnabled)
 //                {
-//                    //Debug.Log("camera == cam " + Time.time);
+//                    //if (debug) Debug.Log("camera == cam " + Time.time);
 //                    //commandBuffer = new CommandBuffer();
 //                    //commandBuffer.name = "screenQuad";
 
@@ -7642,7 +7881,7 @@ public class Stereo3D : MonoBehaviour
 
 //                    //                if (canvasCamera && canvasCamera_left.isActiveAndEnabled)
 //                    //                {
-//                    //                    //Debug.Log("========================================================================== ");
+//                    //                    //if (debug) Debug.Log("========================================================================== ");
 //                    //                    commandBuffer.Blit(canvasRenderTexture_left, renderTexture_left, S3DPanelMaterial);
 //                    //                    commandBuffer.Blit(canvasRenderTexture_right, renderTexture_right, S3DPanelMaterial);
 //                    //                }
@@ -7700,7 +7939,7 @@ public class Stereo3D : MonoBehaviour
 //                    //            //{
 //                    //            //    commandBuffer.Blit(null, renderTexture_left, S3DPanelMaterial);
 //                    //            //    commandBuffer.Blit(null, renderTexture_right, S3DPanelMaterial);
-//                    //            //    Debug.Log("!S3DEnabled && canvasCamera ////////////////////////////////////////////////////////////////////////////");
+//                    //            //    if (debug) Debug.Log("!S3DEnabled && canvasCamera ////////////////////////////////////////////////////////////////////////////");
 //                    //            //}
 
 //                    RenderTexture.active = null; //fixes rect in rect duplication
@@ -7715,7 +7954,7 @@ public class Stereo3D : MonoBehaviour
 //                //else
 //                ////if (additionalS3DCameras.Count != 0 || canvasCamera && canvasCamera.isActiveAndEnabled)
 //                //{
-//                //    //Debug.Log("PostRenderContext additionalS3DCameras.Count != 0");
+//                //    //if (debug) Debug.Log("PostRenderContext additionalS3DCameras.Count != 0");
 //                //    //#if UNITY_EDITOR
 //                //    if (additionalS3DCameras.Count != 0 || canvasCamera && canvasCamera.isActiveAndEnabled)
 //                //    {
@@ -7746,20 +7985,20 @@ public class Stereo3D : MonoBehaviour
 //                //if (!cam.enabled)
 //                if (camera == camera_left)
 //                {
-//                //Debug.Log("camera = camera_left");
+//                //if (debug) Debug.Log("camera = camera_left");
 //                //commandBuffer = new CommandBuffer();
 //                //commandBuffer.name = "camera_left";
 ////#if HDRP
 //                    //                    foreach (var c in additionalS3DCamerasStruct)
 //                    //                    {
-//                    //                        //Debug.Log("foreach (var c in additionalS3DCamerasStruct)");
+//                    //                        //if (debug) Debug.Log("foreach (var c in additionalS3DCamerasStruct)");
 //                    //                        commandBuffer.Blit(c.renderTexture_left, renderTexture_left, S3DPanelMaterial);
 //                    //                        //commandBuffer.Blit(c.renderTexture_right, renderTexture_right, S3DPanelMaterial);
 //                    //                    }
 
 //                    //                    if (canvasCamera && canvasCamera_left.isActiveAndEnabled)
 //                    //                    {
-//                    //                        //Debug.Log("========================================================================== ");
+//                    //                        //if (debug) Debug.Log("========================================================================== ");
 //                    //                        commandBuffer.Blit(canvasRenderTexture_left, renderTexture_left, S3DPanelMaterial);
 //                    //                        //commandBuffer.Blit(canvasRenderTexture_right, renderTexture_right, S3DPanelMaterial);
 //                    //                    }
@@ -7791,7 +8030,7 @@ public class Stereo3D : MonoBehaviour
 //                    //else
 //                    //    if (method == Method.Sequential && !optimize && !oddFrame)
 //                    //    {
-//                    //        //Debug.Log("camera_left.targetTexture = nullRT " + Time.time);
+//                    //        //if (debug) Debug.Log("camera_left.targetTexture = nullRT " + Time.time);
 //                    //        camera_left.targetTexture = nullRT;
 //                    //    }
 
@@ -7804,7 +8043,7 @@ public class Stereo3D : MonoBehaviour
 //                else
 //                    if (camera == camera_right)
 //                    {
-//                //Debug.Log("camera = camera_right");
+//                //if (debug) Debug.Log("camera = camera_right");
 //                //commandBuffer = new CommandBuffer();
 //                //commandBuffer.name = "camera_right";
 ////#if HDRP
@@ -7862,11 +8101,11 @@ public class Stereo3D : MonoBehaviour
 //                //if (canvasCamera)
 //                if (camera == canvasCamera)
 //                {
-//                    //Debug.Log("camera == canvasCamera");
+//                    //if (debug) Debug.Log("camera == canvasCamera");
 
 //                    //if (canvasCamera.isActiveAndEnabled)
 //                    //{
-//                    //Debug.Log("blit2");
+//                    //if (debug) Debug.Log("blit2");
 //                    //#if HDRP
 ////#if HDRP || URP
 ////#if URP
@@ -7886,7 +8125,7 @@ public class Stereo3D : MonoBehaviour
 //                else
 //                    if (camera == canvasCamera_left)
 //                    {
-//                        //Debug.Log("camera == canvasCamera_left " + camera + " " + Time.time);
+//                        //if (debug) Debug.Log("camera == canvasCamera_left " + camera + " " + Time.time);
 ////#if HDRP
 ////#if HDRP || URP
 ////#if URP
@@ -7910,7 +8149,7 @@ public class Stereo3D : MonoBehaviour
 //                    else
 //                        if (camera == canvasCamera_right)
 //                        {
-//                            //Debug.Log("camera == canvasCamera_right " + camera + " " + Time.time);
+//                            //if (debug) Debug.Log("camera == canvasCamera_right " + camera + " " + Time.time);
 ////#if HDRP
 ////#if HDRP || URP
 ////#if URP
@@ -7966,7 +8205,7 @@ public class Stereo3D : MonoBehaviour
 ////#if !UNITY_EDITOR
 //                        if (i == additionalS3DCamerasStruct.Length - 1 && !(canvasCamera && canvasCamera.isActiveAndEnabled))
 //                        {
-//                            //Debug.Log("blit1");
+//                            //if (debug) Debug.Log("blit1");
 //                            additionalS3DCamerasStruct[i].camera.targetTexture = null;
 //                            commandBuffer.Blit(renderTexture, null as RenderTexture);
 //                        }
@@ -8023,7 +8262,7 @@ public class Stereo3D : MonoBehaviour
 ////        foreach (Camera camera in cameraList)
 ////            if (camera == canvasCamera_left)
 ////                {
-////                    Debug.Log("camera == canvasCamera_left " + camera + " " + Time.time);
+////                    if (debug) Debug.Log("camera == canvasCamera_left " + camera + " " + Time.time);
 ////                    commandBuffer.Blit(canvasRenderTexture_left, renderTexture_left, S3DPanelMaterial);
 ////#if !UNITY_EDITOR
 ////                    if (method == Method.Two_Displays)
@@ -8033,7 +8272,7 @@ public class Stereo3D : MonoBehaviour
 ////                else
 ////                    if (camera == canvasCamera_right)
 ////                    {
-////                        Debug.Log("camera == canvasCamera_right " + camera + " " + Time.time);
+////                        if (debug) Debug.Log("camera == canvasCamera_right " + camera + " " + Time.time);
 ////                        commandBuffer.Blit(canvasRenderTexture_right, renderTexture_right, S3DPanelMaterial);
 ////#if !UNITY_EDITOR
 ////                    if (method == Method.Two_Displays)
@@ -8051,7 +8290,7 @@ public class Stereo3D : MonoBehaviour
 //        //        if (S3DEnabled && camera == canvasCamera)
 //        //        {
 //        //#if URP
-//        //            //Debug.Log(Time.time);
+//        //            //if (debug) Debug.Log(Time.time);
 //        //            //canvasCamera.enabled = true;
 //        //            //canvasCamera.enabled = false;
 
@@ -8070,7 +8309,7 @@ public class Stereo3D : MonoBehaviour
 //        //            if (frameTime != Time.time) //set targetTexture cause call this 5 times per frame so use condition to execute below commands only once per frame
 //        //            {
 //        //                frameTime = Time.time;
-//        //                //Debug.Log("frameTime != Time.time " + frameTime);
+//        //                //if (debug) Debug.Log("frameTime != Time.time " + frameTime);
 //        //                //Matrix4x4 canvasCamMatrix = canvasCamera.projectionMatrix;
 //        //                //canvasCamMatrix = canvasCamera.projectionMatrix;
 
@@ -8128,8 +8367,8 @@ public class Stereo3D : MonoBehaviour
 //        //            //canvasCamera.Render();
 //        //            //Debug.Break();
 //        //            //canvasCamera.enabled = false;
-//        //            //Debug.Log(camera);
-//        //            //Debug.Log(oddFrame + " PostRenderContext camera == canvasCamera " + Time.time);
+//        //            //if (debug) Debug.Log(camera);
+//        //            //if (debug) Debug.Log(oddFrame + " PostRenderContext camera == canvasCamera " + Time.time);
 //        //            //UniversalRenderPipeline.RenderSingleCamera(context, canvasCamera);
 //        ////#elif HDRP
 //        ////            //Graphics.Blit(leftCamAdditionalRT, renderTexture_left, S3DPanelMaterial);
@@ -8164,7 +8403,7 @@ public class Stereo3D : MonoBehaviour
     //void OnPreCull()
     void RenderTexture_Reset(Camera c)
     {
-        //Debug.Log(c + " RenderTexture_Reset " + Time.time);
+        //if (debug) Debug.Log(c + " RenderTexture_Reset " + Time.time);
 
         //if (c == canvasCamera_right)
         //    canvasCamera_right.targetTexture = renderTexture_right;
@@ -8221,24 +8460,24 @@ public class Stereo3D : MonoBehaviour
 
         if (c.name.Contains("_left")) //restore all textures at once here works better(same performance but no black blinks) than restore individual last topmost Cameras before it changes in TopMostCamera_Set()
         {
-            //Debug.Log(c + " RenderTexture_Reset_left " + Time.time);
+            //if (debug) Debug.Log(c + " RenderTexture_Reset_left " + Time.time);
             c.targetTexture = renderTexture_left;
         }
         else
         {
-            //Debug.Log(c + " RenderTexture_Reset_right " + Time.time);
+            //if (debug) Debug.Log(c + " RenderTexture_Reset_right " + Time.time);
             c.targetTexture = renderTexture_right;
         }
 
         //if (c == topmostCamera_left)
         //{
-        //    Debug.Log(c + " RenderTexture_Reset_left " + Time.time);
+        //    if (debug) Debug.Log(c + " RenderTexture_Reset_left " + Time.time);
         //    c.targetTexture = renderTexture_left;
         //}
         //else
         //    if (c == topmostCamera_right)
         //    {
-        //        Debug.Log(c + " RenderTexture_Reset_right " + Time.time);
+        //        if (debug) Debug.Log(c + " RenderTexture_Reset_right " + Time.time);
         //        c.targetTexture = renderTexture_right;
         //    }
     }
@@ -8253,7 +8492,7 @@ public class Stereo3D : MonoBehaviour
             verticesPos[1] = new Vector2(-1, 1);
             verticesPos[2] = new Vector2(1, 1);
             verticesPos[3] = new Vector2(1, -1);
-           //Debug.Log("defaultRender");
+           //if (debug) Debug.Log("defaultRender");
         //}
         //else
         //{
@@ -8267,8 +8506,8 @@ public class Stereo3D : MonoBehaviour
 //            verticesPos[2] = new Vector2(clipRect.z, clipRect.w);
 //            verticesPos[3] = new Vector2(clipRect.z, clipRect.y);
 
-//        //Debug.Log("Vertices() cam.rect.max.y " + cam.rect.max.y);
-//        //Debug.Log("Vertices() clipRect " + clipRect);
+//        //if (debug) Debug.Log("Vertices() cam.rect.max.y " + cam.rect.max.y);
+//        //if (debug) Debug.Log("Vertices() clipRect " + clipRect);
 //        //}
 //#endif
 
@@ -8282,7 +8521,7 @@ public class Stereo3D : MonoBehaviour
     {
         if (!name.Contains("(Clone)"))
         {
-            Debug.Log("OnDisable");
+            if (debug) Debug.Log("OnDisable");
             GUIClose();
             Render_Release();
             cameraRestore();
@@ -8328,21 +8567,22 @@ public class Stereo3D : MonoBehaviour
             //#endif
 
             //{
-            //Debug.Log("OnDisable !cineBrain");
+            //if (debug) Debug.Log("OnDisable !cineBrain");
             //cam.nearClipPlane = sceneNearClip;
-            //Debug.Log("OnDisable sceneNearClip " + sceneNearClip + " sceneFarClip " + sceneFarClip);
+            //if (debug) Debug.Log("OnDisable sceneNearClip " + sceneNearClip + " sceneFarClip " + sceneFarClip);
             //ClosestCamera_SceneNearClipSet();
 
             ////if (additionalS3DCameras.Count != 0)
-            //if (closestCameraIndex != -1)
-            //    additionalS3DCameras[closestCameraIndex].nearClipPlane = sceneNearClip;
+            //if (additionalS3DTopmostCameraIndex != -1)
+            //    additionalS3DCameras[additionalS3DTopmostCameraIndex].nearClipPlane = sceneNearClip;
 
-            if (lastAdditionalClosestCamera != null)
-                    lastAdditionalClosestCamera.nearClipPlane = sceneNearClip;
+            //if (lastAdditionalS3DTopmostCamera != null)
+            if (lastAdditionalS3DTopmostCamera)
+                    lastAdditionalS3DTopmostCamera.nearClipPlane = sceneNearClip;
 
                 //cam.nearClipPlane = camera_left.nearClipPlane; //restore camera original nearClipPlane if additionalS3DCameras.Count != 0
                 cam.nearClipPlane = cameraNearClip; //restore camera original nearClipPlane if additionalS3DCameras.Count != 0
-                Debug.Log("OnDisable sceneNearClip " + sceneNearClip + " sceneFarClip " + sceneFarClip);
+                if (debug) Debug.Log("OnDisable sceneNearClip " + sceneNearClip + " sceneFarClip " + sceneFarClip);
                 cam.farClipPlane = sceneFarClip;
                 VCamClip_Sync();
 
@@ -8357,7 +8597,7 @@ public class Stereo3D : MonoBehaviour
 
 #if CINEMACHINE
             //if (vCam != null)
-            //    Debug.Log("OnDisable ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane + " cam.nearClipPlane " + cam.nearClipPlane);
+            //    if (debug) Debug.Log("OnDisable ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane " + ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane + " cam.nearClipPlane " + cam.nearClipPlane);
 
             if (cineBrain)
             {
@@ -8427,7 +8667,7 @@ public class Stereo3D : MonoBehaviour
 //            //#endif
 //            cameraDataStructIsReady = false;
             //cam.ResetProjectionMatrix();
-            //Debug.Log("OnDisable camMatrix\n" + camMatrix);
+            //if (debug) Debug.Log("OnDisable camMatrix\n" + camMatrix);
 
             if (!cam.usePhysicalProperties)
             {
@@ -8436,14 +8676,14 @@ public class Stereo3D : MonoBehaviour
                 //CamMatrix_Reset();
             }
 
-            Debug.Log("OnDisable cam.projectionMatrix\n" + cam.projectionMatrix);
+            if (debug) Debug.Log("OnDisable cam.projectionMatrix\n" + cam.projectionMatrix);
             CancelInvoke(); //kill all Invoke processes
         }
     }
 
     void OnApplicationQuit()
     {
-        Debug.Log("OnApplicationQuit");
+        if (debug) Debug.Log("OnApplicationQuit");
 
 #if CINEMACHINE
         if (cineBrain)
@@ -8453,11 +8693,11 @@ public class Stereo3D : MonoBehaviour
 
     //    void ClosestCamera_SceneNearClipSet()
     //    {
-    //        Debug.Log("closestCameraIndex " + closestCameraIndex);
+    //        if (debug) Debug.Log("additionalS3DTopmostCameraIndex " + additionalS3DTopmostCameraIndex);
 
     //        if (additionalS3DCameras.Count != 0)
     //            //additionalS3DCameras[additionalS3DCameras.Count - 1].nearClipPlane = sceneNearClip;
-    //            additionalS3DCameras[closestCameraIndex].nearClipPlane = sceneNearClip;
+    //            additionalS3DCameras[additionalS3DTopmostCameraIndex].nearClipPlane = sceneNearClip;
     //        else
     //        {
     //            cam.nearClipPlane = sceneNearClip;
@@ -8473,7 +8713,7 @@ public class Stereo3D : MonoBehaviour
     void VCamClip_Sync()
     {
 #if CINEMACHINE
-        Debug.Log("VCamClip_Sync");
+        if (debug) Debug.Log("VCamClip_Sync");
 
         if (cineBrain)
             if (vCam != null)
@@ -8490,14 +8730,14 @@ public class Stereo3D : MonoBehaviour
     //void ClosestCamera_NearClipSet()
     //{
     //    if (additionalS3DCameras.Count != 0)
-    //        additionalS3DCameras[closestCameraIndex].nearClipPlane = nearClip;
+    //        additionalS3DCameras[additionalS3DTopmostCameraIndex].nearClipPlane = nearClip;
     //    else
     //        cam.nearClipPlane = nearClip;
     //}
 
     void Render_Release()
     {
-        //Debug.Log("Render_Release " + name);
+        //if (debug) Debug.Log("Render_Release " + name);
         //#if UNITY_2019_1_OR_NEWER
         //if (!defaultRender)
         //{
@@ -8512,6 +8752,7 @@ public class Stereo3D : MonoBehaviour
             //RenderPipelineManager.endCameraRendering -= RenderBlit; //remove render context
             //RenderPipelineManager.endContextRendering -= RenderBlit; //remove render context
             RenderPipelineManager.endCameraRendering -= RenderTexture_BlitToScreen;
+            RenderPipelineManager.endCameraRendering -= RenderTexture_BlitToRenderTexture;
         //}
 #else
         //clearScreen = true;
@@ -8578,7 +8819,7 @@ public class Stereo3D : MonoBehaviour
 //        //CameraDataStruct_Change();
 //#endif
         //cam.nearClipPlane = nearClip;
-        //Debug.Log("Render_Release nearClip " + nearClip);
+        //if (debug) Debug.Log("Render_Release nearClip " + nearClip);
 
         //if (cineBrain)
         //    VCamClipRestore();
@@ -8645,7 +8886,7 @@ public class Stereo3D : MonoBehaviour
 
     void CameraDataStruct_Change()
     {
-        Debug.Log("CameraDataStruct_Change");
+        if (debug) Debug.Log("CameraDataStruct_Change");
         CameraDataStruct_Set();
         //lastCameraDataStruct = cameraDataStruct;
         SetLastCameraDataStruct();
@@ -8661,7 +8902,7 @@ public class Stereo3D : MonoBehaviour
 
     //void PreCull(Camera c)
     //{
-    //    //Debug.Log(c + " PreCull " + Time.time);
+    //    //if (debug) Debug.Log(c + " PreCull " + Time.time);
 
     //    if (c == camera_right)
     //    {
@@ -8682,7 +8923,7 @@ public class Stereo3D : MonoBehaviour
 #endif
         Camera c)
     {
-        //Debug.Log(c + " PreRenderClearScreen " + Time.time);
+        //if (debug) Debug.Log(c + " PreRenderClearScreen " + Time.time);
 
         //if (method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
         //{
@@ -8721,7 +8962,7 @@ public class Stereo3D : MonoBehaviour
     void ClearScreen(Camera c)
     {
         clearFrameCount++;
-        Debug.Log(c + " clearScreen clearFrameCount " + clearFrameCount);
+        if (debug) Debug.Log(c + " clearScreen clearFrameCount " + clearFrameCount);
 
         //if (clearFrameCount <= 4) //2 is enought in Player but min 3 is required in Editor
         //{
@@ -8757,8 +8998,8 @@ public class Stereo3D : MonoBehaviour
     //void OnPostRender() //works only in the default render pipeline //not working if antialiasing set in quality settings
     //void PostRender(Camera c) //works only in the default render pipeline
     {
-        //Debug.Log("OnRenderImage");
-        //Debug.Log("OnRenderImage Camera.current: " + Camera.current);
+        //if (debug) Debug.Log("OnRenderImage");
+        //if (debug) Debug.Log("OnRenderImage Camera.current: " + Camera.current);
 
         //if (defaultRender) //commented till SRP don't go here
         if (S3DEnabled)
@@ -8825,7 +9066,7 @@ public class Stereo3D : MonoBehaviour
 
     //void PostRender(Camera c) //Graphics.Blit & Graphics.DrawProceduralNow not working with antialiasing in quality settings and working OK with OnRenderImage
     //{
-    //    //Debug.Log(c + " PostRender " + Time.time);
+    //    //if (debug) Debug.Log(c + " PostRender " + Time.time);
 
     //    //if (c == canvasCamera_right)
     //    //    canvasCamera_right.targetTexture = null;
@@ -8833,7 +9074,7 @@ public class Stereo3D : MonoBehaviour
     //    if (method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
     //        if (!(canvasCamera_left && canvasCamera_left.isActiveAndEnabled))
     //        {
-    //            //Debug.Log(c + " !(canvasCamera_left && canvasCamera_left.isActiveAndEnabled) " + Time.time);
+    //            //if (debug) Debug.Log(c + " !(canvasCamera_left && canvasCamera_left.isActiveAndEnabled) " + Time.time);
 
     //            if (c == camera_left)
     //            {
@@ -8882,7 +9123,7 @@ public class Stereo3D : MonoBehaviour
     //                {
     //                    //renderTextureTarget = canvasCamera_right.targetTexture;
     //                    //renderTextureActive = RenderTexture.active;
-    //                    //Debug.Log(c + " !(canvasCamera_left && canvasCamera_left.isActiveAndEnabled) " + Time.time);
+    //                    //if (debug) Debug.Log(c + " !(canvasCamera_left && canvasCamera_left.isActiveAndEnabled) " + Time.time);
     //                    //canvasCamera_left.targetTexture = renderTexture_left;
     //                    //cam.targetTexture = renderTexture;
     //                    //GL.invertCulling = false;
@@ -8916,12 +9157,12 @@ public class Stereo3D : MonoBehaviour
 
     void OnRenderImageEvent(RenderTexture src, RenderTexture dest, Camera c)
     {
-        //Debug.Log(c + " OnRenderImageEvent " + Time.time);
+        //if (debug) Debug.Log(c + " OnRenderImageEvent " + Time.time);
 
         //if (method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
         //    if (!(canvasCamera_left && canvasCamera_left.isActiveAndEnabled))
         //    {
-        //        //Debug.Log(c + " !(canvasCamera_left && canvasCamera_left.isActiveAndEnabled) " + Time.time);
+        //        //if (debug) Debug.Log(c + " !(canvasCamera_left && canvasCamera_left.isActiveAndEnabled) " + Time.time);
 
         //        if (c == camera_left)
         //            BlitToScreen(c, null);
@@ -9189,7 +9430,7 @@ public class Stereo3D : MonoBehaviour
 
     void Save(string name)
     {
-        //Debug.Log(Application.persistentDataPath);
+        //if (debug) Debug.Log(Application.persistentDataPath);
         string filePath = Application.persistentDataPath + "/S3D_Settings_" + name;
         FileStream file = File.Create(filePath);
         //SaveLoad data = new SaveLoad(swapLR, optimize, vSync, method, PPI, userIPD, virtualIPD, matchUserIPD, FOV, panelDepth, panel.GetComponent<RectTransform>().anchoredPosition);
@@ -9207,7 +9448,7 @@ public class Stereo3D : MonoBehaviour
 
     void Load(string name)
     {
-       //Debug.Log("Load");
+       if (debug) Debug.Log("Load");
 
         string filePath = Application.persistentDataPath + "/S3D_Settings_" + name;
 
@@ -9218,7 +9459,7 @@ public class Stereo3D : MonoBehaviour
             SaveLoad data = (SaveLoad)binF.Deserialize(file);
             file.Close();
 
-            //Debug.Log(data.PPI);
+            //if (debug) Debug.Log(data.PPI);
             swapLR = data.swapLR;
             optimize = data.optimize;
             vSync = data.vSync;
@@ -9259,11 +9500,14 @@ public class Stereo3D : MonoBehaviour
             SaveLoadUserName data = (SaveLoadUserName)binF.Deserialize(file);
             file.Close();
 
-            //Debug.Log(data.userName);
+            //if (debug) Debug.Log(data.userName);
             slotName = data.userName;
+            Load(slotName);
         }
+        else
+            lastPanelPosition = panel.GetComponent<RectTransform>().anchoredPosition;
 
-        Load(slotName);
+        //Load(slotName);
     }
 
     void DropdownSet()
@@ -9283,7 +9527,7 @@ public class Stereo3D : MonoBehaviour
             //if (itemName != slotName && itemName != "LastSaveUserName")
             if (itemName != "LastSaveUserName")
             {
-                //Debug.Log(itemName);
+                //if (debug) Debug.Log(itemName);
                 optionData.text = itemName;
                 slotNames.Add(optionData);
             }
@@ -9296,7 +9540,7 @@ public class Stereo3D : MonoBehaviour
     {
         //for (int i = 0; i < slotName_dropdown.options.Count; i++)
         //{
-        //   //Debug.Log(slotName_dropdown.options[i].text);
+        //   //if (debug) Debug.Log(slotName_dropdown.options[i].text);
 
         //    if (slotName_dropdown.options[i].text == name)
         //    {
@@ -9306,7 +9550,7 @@ public class Stereo3D : MonoBehaviour
 
         foreach (Dropdown.OptionData optionData in slotName_dropdown.options)
         {
-           //Debug.Log(optionData.text);
+           //if (debug) Debug.Log(optionData.text);
 
             if (optionData.text == name)
             {
@@ -10362,16 +10606,16 @@ public class Stereo3D : MonoBehaviour
     {
         static Startup()
         {
-            //Debug.Log("Up and running");
+            //if (debug) Debug.Log("Up and running");
 
 #if UNITY_2021_2_OR_NEWER
             foreach (var package in UnityEditor.PackageManager.PackageInfo.GetAllRegisteredPackages())
                 if (package.name == "com.unity.cinemachine")
                 {
-                    ////Debug.Log(UnityEditor.EditorUserBuildSettings.selectedStandaloneTarget);
+                    ////if (debug) Debug.Log(UnityEditor.EditorUserBuildSettings.selectedStandaloneTarget);
                     //var buildTarget = UnityEditor.Build.NamedBuildTarget.FromBuildTargetGroup(UnityEditor.EditorUserBuildSettings.selectedBuildTargetGroup);
                     //UnityEditor.PlayerSettings.GetScriptingDefineSymbols(buildTarget, out string[] defines);
-                    ////Debug.Log(defines.Length);
+                    ////if (debug) Debug.Log(defines.Length);
 
                     //bool cinemachineDefine = false;
 
@@ -10387,7 +10631,7 @@ public class Stereo3D : MonoBehaviour
                     //    UnityEditor.PlayerSettings.SetScriptingDefineSymbols(buildTarget, newDefines);
 
                     //    //foreach (string define in newDefines)
-                    //        //Debug.Log(define);
+                    //        //if (debug) Debug.Log(define);
                     //}
 
                     AddDefine("CINEMACHINE");
@@ -10428,15 +10672,15 @@ public class Stereo3D : MonoBehaviour
                         AddDefine("HDRP");
             }
 
-            //Debug.Log(GraphicsSettings.defaultRenderPipeline.GetType().ToString());
-            //Debug.Log(GraphicsSettings.defaultRenderPipeline);
+            //if (debug) Debug.Log(GraphicsSettings.defaultRenderPipeline.GetType().ToString());
+            //if (debug) Debug.Log(GraphicsSettings.defaultRenderPipeline);
         }
     }
 
     static void AddDefine(string defineName)
     {
 #if UNITY_2021_2_OR_NEWER
-        //Debug.Log("AddDefine");
+        //if (debug) Debug.Log("AddDefine");
         var buildTarget = UnityEditor.Build.NamedBuildTarget.FromBuildTargetGroup(UnityEditor.EditorUserBuildSettings.selectedBuildTargetGroup);
         UnityEditor.PlayerSettings.GetScriptingDefineSymbols(buildTarget, out string[] defines);
 
@@ -10445,7 +10689,7 @@ public class Stereo3D : MonoBehaviour
         foreach (string define in defines)
             if (define.Contains(defineName))
             {
-                //Debug.Log(defineName + " already Defined");
+                //if (debug) Debug.Log(defineName + " already Defined");
                 alreadyDefined = true;
             }
 
@@ -10456,7 +10700,7 @@ public class Stereo3D : MonoBehaviour
             newDefines.SetValue(defineName, defines.Length);
 
             //foreach(var def in newDefines)
-            //    Debug.Log(def);
+            //    if (debug) Debug.Log(def);
 
             UnityEditor.PlayerSettings.SetScriptingDefineSymbols(buildTarget, newDefines);
         }
