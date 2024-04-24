@@ -315,6 +315,9 @@ public class Stereo3D : MonoBehaviour
     ScriptableRenderer lastScriptableRenderer;
     //int lastMSAASampleCount;
     bool URPAssetIsReady;
+    List<Camera> cameraStack;
+    List<Camera> leftCameraStack;
+    List<Camera> rightCameraStack;
 #elif HDRP
     //public HDAdditionalCameraData canvasCamData;
     //HDAdditionalCameraData HDCamData;
@@ -333,25 +336,22 @@ public class Stereo3D : MonoBehaviour
     HDAdditionalCameraData canvasCamData;
     HDAdditionalCameraData canvasCamData_left;
     HDAdditionalCameraData canvasCamData_right;
-    bool GUIAsOverlayState;
+    //bool GUIAsOverlayState;
     //RenderTexture canvasRenderTexture;
     //RenderTexture canvasRenderTexture_left;
     //RenderTexture canvasRenderTexture_right;
+    LayerMask volumeLayerMask;
+    LayerMask probeLayerMask;
 #endif
     //UniversalAdditionalCameraData camCloneData;
     //List<UniversalAdditionalCameraData> oldList;
     //List<UniversalAdditionalCameraData> newList;
     CameraDataStruct cameraDataStruct;
-    List<Camera> cameraStack;
-    List<Camera> leftCameraStack;
-    List<Camera> rightCameraStack;
     //List<Camera> leftRightCameraStack;
     //Vector2 panel3DdepthMinMax;
     //Vector2 panelOverlayDepthMinMax;
     AdditionalS3DCamera[] additionalS3DCamerasStruct;
     //bool loaded;
-    LayerMask volumeLayerMask;
-    LayerMask probeLayerMask;
 
 #if UNITY_POST_PROCESSING_STACK_V2
     PostProcessLayer PPLayer;
@@ -1604,8 +1604,8 @@ public class Stereo3D : MonoBehaviour
                 canvasCamData_left = canvasCamera_left.gameObject.AddComponent<HDAdditionalCameraData>();
                 canvasCamData_right = canvasCamera_right.gameObject.AddComponent<HDAdditionalCameraData>();
                 canvasCamData.volumeLayerMask = canvasCamData_left.volumeLayerMask = canvasCamData_right.volumeLayerMask = 0;
-                canvasCamData.backgroundColorHDR = canvasCamData_left.backgroundColorHDR = canvasCamData_right.backgroundColorHDR = Color.clear;
                 canvasCamData.probeLayerMask = canvasCamData_left.probeLayerMask = canvasCamData_right.probeLayerMask = 0;
+                canvasCamData.backgroundColorHDR = canvasCamData_left.backgroundColorHDR = canvasCamData_right.backgroundColorHDR = Color.clear;
                 canvasCamData.clearColorMode = canvasCamData_left.clearColorMode = canvasCamData_right.clearColorMode = HDAdditionalCameraData.ClearColorMode.Color;
 //#else
 //#if URP
@@ -7143,10 +7143,14 @@ public class Stereo3D : MonoBehaviour
     {
         if (debug) Debug.Log("RenderTextureContextSet");
 #if URP || HDRP
-        RenderPipelineManager.endCameraRendering -= RenderQuad;
-        RenderPipelineManager.beginCameraRendering -= RenderTexture_Reset; //remove render context if exist before add to avoid duplication
-        RenderPipelineManager.endCameraRendering -= RenderTexture_BlitToScreen;
-        RenderPipelineManager.endCameraRendering -= RenderTexture_BlitToRenderTexture;
+        //RenderPipelineManager.endCameraRendering -= RenderQuad;
+        RenderPipelineManager.endFrameRendering -= RenderQuad;
+        //RenderPipelineManager.beginCameraRendering -= RenderTexture_Reset; //remove render context if exist before add to avoid duplication
+        RenderPipelineManager.beginFrameRendering -= RenderTexture_Reset; //remove render context if exist before add to avoid duplication
+        //RenderPipelineManager.endCameraRendering -= RenderTexture_BlitToScreen;
+        RenderPipelineManager.endFrameRendering -= RenderTexture_BlitToScreen;
+        //RenderPipelineManager.endCameraRendering -= RenderTexture_BlitToRenderTexture;
+        RenderPipelineManager.endFrameRendering -= RenderTexture_BlitToRenderTexture;
 
         if (
 #if HDRP
@@ -7156,26 +7160,33 @@ public class Stereo3D : MonoBehaviour
         method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
         {
             if (additionalS3DTopmostCameraIndex != -1 || GUIAsOverlay && GUIVisible)
-                RenderPipelineManager.endCameraRendering += RenderTexture_BlitToRenderTexture; //blit Render Texture to main Render Texture(required for HDRP overlay cameras) after render is finished
+                //RenderPipelineManager.endCameraRendering += RenderTexture_BlitToRenderTexture; //blit Render Texture to main Render Texture(required for HDRP overlay cameras) after render is finished
+                RenderPipelineManager.endFrameRendering += RenderTexture_BlitToRenderTexture; //blit Render Texture to main Render Texture(required for HDRP overlay cameras) after render is finished
 
-            RenderPipelineManager.endCameraRendering += RenderTexture_BlitToScreen; //blit Render Texture to scren after render is finished
-            RenderPipelineManager.beginCameraRendering += RenderTexture_Reset; //required reset Render Texture after set it to null for blit to screen
+            //RenderPipelineManager.endCameraRendering += RenderTexture_BlitToScreen; //blit Render Texture to scren after render is finished
+            RenderPipelineManager.endFrameRendering += RenderTexture_BlitToScreen; //blit Render Texture to scren after render is finished
+            //RenderPipelineManager.beginCameraRendering += RenderTexture_Reset; //required reset Render Texture after set it to null for blit to screen
+            RenderPipelineManager.beginFrameRendering += RenderTexture_Reset; //required reset Render Texture after set it to null for blit to screen
         }
         else
             if (method != Method.Two_Displays)
             {
                 if (S3DEnabled)
-                    RenderPipelineManager.endCameraRendering += RenderQuad; //draw fullscreen quad at main camera with S3D combined output by S3D shader
+                    //RenderPipelineManager.endCameraRendering += RenderQuad; //draw fullscreen quad at main camera with S3D combined output by S3D shader
+                    RenderPipelineManager.endFrameRendering += RenderQuad; //draw fullscreen quad at main camera with S3D combined output by S3D shader
 #if HDRP
                 //if (topmostCamera_left != camera_left)
                 if (additionalS3DTopmostCameraIndex != -1 || GUIAsOverlay && GUIVisible)
-                    RenderPipelineManager.endCameraRendering += RenderTexture_BlitToRenderTexture; //blit Render Texture to main Render Texture(required for HDRP overlay cameras) after render is finished
+                    //RenderPipelineManager.endCameraRendering += RenderTexture_BlitToRenderTexture; //blit Render Texture to main Render Texture(required for HDRP overlay cameras) after render is finished
+                    RenderPipelineManager.endFrameRendering += RenderTexture_BlitToRenderTexture; //blit Render Texture to main Render Texture(required for HDRP overlay cameras) after render is finished
 
-                if (!S3DEnabled)
+            if (!S3DEnabled)
                     if (additionalS3DTopmostCameraIndex != -1 || GUIAsOverlay && GUIVisible)
                     {
-                        RenderPipelineManager.endCameraRendering += RenderTexture_BlitToScreen; //blit Render Texture to scren after render is finished
-                        RenderPipelineManager.beginCameraRendering += RenderTexture_Reset; //required reset Render Texture after set it to null for blit to screen
+                        //RenderPipelineManager.endCameraRendering += RenderTexture_BlitToScreen; //blit Render Texture to scren after render is finished
+                        RenderPipelineManager.endFrameRendering += RenderTexture_BlitToScreen; //blit Render Texture to scren after render is finished
+                        //RenderPipelineManager.beginCameraRendering += RenderTexture_Reset; //required reset Render Texture after set it to null for blit to screen
+                        RenderPipelineManager.beginFrameRendering += RenderTexture_Reset; //required reset Render Texture after set it to null for blit to screen
                     }
 #endif
             }
@@ -7433,9 +7444,13 @@ public class Stereo3D : MonoBehaviour
     //RenderTexture renderTextureToResetRight;
 
     //void RenderTexture_Reset(ScriptableRenderContext context, List<Camera> cameraList)
-    void RenderTexture_Reset(ScriptableRenderContext context, Camera camera)
+    //void RenderTexture_Reset(ScriptableRenderContext context, Camera camera)
+    void RenderTexture_Reset(ScriptableRenderContext context, Camera[] cameraList)
     {
-        if (debug) Debug.Log(camera + " RenderTexture_Reset " + Time.time);
+        if (debug)
+        foreach (Camera camera in cameraList)
+            Debug.Log(camera + " RenderTexture_Reset " + Time.time);
+
         //        commandBuffer = new CommandBuffer();
         //        //commandBuffer.name = "S3DPreRenderReset";
 
@@ -7567,6 +7582,7 @@ public class Stereo3D : MonoBehaviour
             if (camera == camera_right)
                 camera_right.targetTexture = renderTexture_right;
 #elif HDRP
+        foreach (Camera camera in cameraList)
         if (camera == cam)
             camera.targetTexture = renderTexture;
         else
@@ -7671,13 +7687,19 @@ public class Stereo3D : MonoBehaviour
 //#endif
 //    }
 
-    void RenderQuad(ScriptableRenderContext context, Camera camera)
+    //void RenderQuad(ScriptableRenderContext context, Camera camera)
+    void RenderQuad(ScriptableRenderContext context, Camera[] cameraList)
     {
-        if (debug) Debug.Log(camera + " RenderQuad " + Time.time);
+        if (debug)
+        foreach (Camera camera in cameraList)
+            Debug.Log(camera + " RenderQuad " + Time.time);
 
+        commandBuffer = new CommandBuffer();
+
+        foreach (Camera camera in cameraList)
         if (camera == cam)
         {
-            commandBuffer = new CommandBuffer();
+            //commandBuffer = new CommandBuffer();
             //commandBuffer.name = "S3DRenderQuad";
 
             //RenderTexture.active = null; //fixes rect in rect duplication
@@ -7691,15 +7713,23 @@ public class Stereo3D : MonoBehaviour
             //S3DMaterial.SetPass(pass);
             //Graphics.DrawProceduralNow(MeshTopology.Quads, 4);
 
-            context.ExecuteCommandBuffer(commandBuffer);
-            commandBuffer.Release();
-            context.Submit();
+            //context.ExecuteCommandBuffer(commandBuffer);
+            //commandBuffer.Release();
+            //context.Submit();
         }
+
+        context.ExecuteCommandBuffer(commandBuffer);
+        commandBuffer.Release();
+        context.Submit();
     }
 
-    void RenderTexture_BlitToScreen(ScriptableRenderContext context, Camera camera)
+    //void RenderTexture_BlitToScreen(ScriptableRenderContext context, Camera camera)
+    void RenderTexture_BlitToScreen(ScriptableRenderContext context, Camera[] cameraList)
     {
-        if (debug) Debug.Log(camera + " RenderTexture_BlitToScreen " + Time.time);
+        if (debug)
+        foreach (Camera camera in cameraList)
+            Debug.Log(camera + " RenderTexture_BlitToScreen " + Time.time);
+
         commandBuffer = new CommandBuffer();
 #if URP
         if (camera == camera_left)
@@ -7723,6 +7753,7 @@ public class Stereo3D : MonoBehaviour
                 context.Submit();
             }
 #elif HDRP
+        foreach (Camera camera in cameraList)
         if (camera == topmostCamera)
         {
             camera.targetTexture = null;
@@ -7799,16 +7830,22 @@ public class Stereo3D : MonoBehaviour
         context.Submit();
     }
 
-    void RenderTexture_BlitToRenderTexture(ScriptableRenderContext context, Camera camera)
+    //void RenderTexture_BlitToRenderTexture(ScriptableRenderContext context, Camera camera)
+    void RenderTexture_BlitToRenderTexture(ScriptableRenderContext context, Camera[] cameraList)
     {
-        if (debug) Debug.Log(camera + " RenderTexture_BlitToRenderTexture " + Time.time);
+        //if (debug) Debug.Log(camera + " RenderTexture_BlitToRenderTexture " + Time.time);
+        if (debug)
+        foreach (Camera camera in cameraList)
+            Debug.Log(camera + " RenderTexture_BlitToRenderTexture " + Time.time);
+
         commandBuffer = new CommandBuffer();
 #if HDRP
+        foreach (Camera camera in cameraList)
         if (camera == topmostCamera)
         {
-            foreach (var c in additionalS3DCamerasStruct)
-                if (c.camera && topmostCamera != c.camera)
-                    commandBuffer.Blit(c.camera.targetTexture, renderTexture, S3DPanelMaterial);
+            //foreach (var c in additionalS3DCamerasStruct)
+            //    if (c.camera && topmostCamera != c.camera)
+            //        commandBuffer.Blit(c.camera.targetTexture, renderTexture, S3DPanelMaterial);
 
             commandBuffer.Blit(topmostCamera.targetTexture, renderTexture, S3DPanelMaterial);
         }
@@ -7817,24 +7854,33 @@ public class Stereo3D : MonoBehaviour
             {
                 //camera.targetTexture = null;
 
-                foreach (var c in additionalS3DCamerasStruct)
-                    if (c.camera && topmostCamera_left != c.camera_left)
-                        commandBuffer.Blit(c.camera_left.targetTexture, renderTexture_left, S3DPanelMaterial);
+                //foreach (var c in additionalS3DCamerasStruct)
+                //    if (c.camera && topmostCamera_left != c.camera_left)
+                //        commandBuffer.Blit(c.camera_left.targetTexture, renderTexture_left, S3DPanelMaterial);
 
                 commandBuffer.Blit(topmostCamera_left.targetTexture, renderTexture_left, S3DPanelMaterial);
             }
             else
                 if (camera == topmostCamera_right)
                 {
-                    commandBuffer = new CommandBuffer();
                     //camera.targetTexture = null;
 
-                    foreach (var c in additionalS3DCamerasStruct)
-                        if (c.camera && topmostCamera_right != c.camera_right)
-                            commandBuffer.Blit(c.camera_right.targetTexture, renderTexture_right, S3DPanelMaterial);
+                    //foreach (var c in additionalS3DCamerasStruct)
+                    //    if (c.camera && topmostCamera_right != c.camera_right)
+                    //        commandBuffer.Blit(c.camera_right.targetTexture, renderTexture_right, S3DPanelMaterial);
 
                     commandBuffer.Blit(topmostCamera_right.targetTexture, renderTexture_right, S3DPanelMaterial);
                 }
+                else
+                    foreach (var c in additionalS3DCamerasStruct)
+                        if (camera == c.camera && topmostCamera != c.camera)
+                            commandBuffer.Blit(c.camera.targetTexture, renderTexture, S3DPanelMaterial);
+                        else
+                            if (camera == c.camera_left && topmostCamera_left != c.camera_left)
+                                commandBuffer.Blit(c.camera_left.targetTexture, renderTexture_left, S3DPanelMaterial);
+                            else
+                                if (camera == c.camera_right && topmostCamera_right != c.camera_right)
+                                    commandBuffer.Blit(c.camera_right.targetTexture, renderTexture_right, S3DPanelMaterial);
 #endif
         context.ExecuteCommandBuffer(commandBuffer);
         commandBuffer.Release();
@@ -8529,7 +8575,6 @@ public class Stereo3D : MonoBehaviour
             //Destroy(camera_right.gameObject);
 #if URP
             CameraStackRestore();
-#endif
 
             if (cameraStack != null)
                 cameraStack.Remove(canvasCamera);
@@ -8541,7 +8586,7 @@ public class Stereo3D : MonoBehaviour
 
             //foreach (var c in leftCameraStack)
             //    cameraStack.Add(c);
-
+#endif
             ////if (additionalS3DCamerasStruct != null)
             //    foreach (var c in additionalS3DCamerasStruct)
             //        if (c.camera)
@@ -8743,16 +8788,20 @@ public class Stereo3D : MonoBehaviour
         //{
 //#if HDRP
 #if URP || HDRP
-            RenderPipelineManager.endCameraRendering -= RenderQuad;
+            //RenderPipelineManager.endCameraRendering -= RenderQuad;
+            RenderPipelineManager.endFrameRendering -= RenderQuad;
             //RenderPipelineManager.beginContextRendering -= RenderTexture_Reset; //remove render context
-            RenderPipelineManager.beginCameraRendering -= RenderTexture_Reset; //remove render context
+            //RenderPipelineManager.beginCameraRendering -= RenderTexture_Reset; //remove render context
+            RenderPipelineManager.beginFrameRendering -= RenderTexture_Reset; //remove render context
 //#endif
             //RenderPipelineManager.endContextRendering -= PostRenderContext; //remove render context
             //RenderPipelineManager.endCameraRendering -= PostRenderContext; //remove render context
             //RenderPipelineManager.endCameraRendering -= RenderBlit; //remove render context
             //RenderPipelineManager.endContextRendering -= RenderBlit; //remove render context
-            RenderPipelineManager.endCameraRendering -= RenderTexture_BlitToScreen;
-            RenderPipelineManager.endCameraRendering -= RenderTexture_BlitToRenderTexture;
+            //RenderPipelineManager.endCameraRendering -= RenderTexture_BlitToScreen;
+            RenderPipelineManager.endFrameRendering -= RenderTexture_BlitToScreen;
+            //RenderPipelineManager.endCameraRendering -= RenderTexture_BlitToRenderTexture;
+            RenderPipelineManager.endFrameRendering -= RenderTexture_BlitToRenderTexture;
         //}
 #else
         //clearScreen = true;

@@ -42,6 +42,33 @@ Shader "Stereo3D Screen Quad"
 				vertData o;
 				o.pos = float4(verticesPosBuffer[vertexID], 0, 1);
 				o.uv = verticesUVBuffer[vertexID];
+
+				//o.pos = float4(0, 0, 0, 1);
+
+				//if (vertexID == 0)
+				//{
+				//	o.pos.xy = float2(-1, -1);
+				//	o.uv = float2(0, 0);
+				//}
+				//else
+				//	if (vertexID == 1)
+				//	{
+				//		o.pos.xy = float2(-1, 1);
+				//		o.uv = float2(0, 1);
+				//	}
+				//	else
+				//		if (vertexID == 2)
+				//		{
+				//			o.pos.xy = float2(1, 1);
+				//			o.uv = float2(1, 1);
+				//		}
+				//		else
+				//			if (vertexID == 3)
+				//			{
+				//				o.pos.xy = float2(1, -1);
+				//				o.uv = float2(1, 0);
+				//			}
+
 				return o;
 			}
 
@@ -325,38 +352,38 @@ Shader "Stereo3D Screen Quad"
 			int _FlipX;
 			int _FlipY;
 
-			//float4 vert(uint id : SV_VertexID, out float3 color : COL, out float2 uv : TEX) : SV_POSITION
-			float4 vert(uint id : SV_VertexID, out float2 uv : TEX) : SV_POSITION
-			//Output main(uint id : SV_VertexID)
+			//float4 vert(uint vertexID : SV_VertexID, out float3 color : COL, out float2 uv : TEX) : SV_POSITION
+			float4 vert(uint vertexID : SV_VertexID, out float2 uv : TEX) : SV_POSITION
+			//Output main(uint vertexID : SV_VertexID)
 			{
 				//uv = float2(
-				//	id & 1 ? 0 : 1,  // x: 0 | 1 | 0 | 1
-				//	id & 2 ? 1 : 0); // y: 1 | 1 | 0 | 0
+				//	vertexID & 1 ? 0 : 1,  // x: 0 | 1 | 0 | 1
+				//	vertexID & 2 ? 1 : 0); // y: 1 | 1 | 0 | 0
 
 				float2 pos;
 
-				if (id == 0)
+				if (vertexID == 0)
 				{
 					pos = float2(-1, -1);
 					uv = float2(0, 0);
 					//uv = float2(1, 0);
 				}
 				else
-					if (id == 1)
+					if (vertexID == 1)
 					{
 						pos = float2(-1, 1);
 						uv = float2(0, 1);
 						//uv = float2(1, 1);
 					}
 					else
-						if (id == 2)
+						if (vertexID == 2)
 						{
 							pos = float2(1, 1);
 							uv = float2(1, 1);
 							//uv = float2(0, 1);
 						}
 						else
-							if (id == 3)
+							if (vertexID == 3)
 							{
 								pos = float2(1, -1);
 								uv = float2(1, 0);
@@ -376,8 +403,8 @@ Shader "Stereo3D Screen Quad"
 
 				//Output output;
 				//output.uv = float2(
-				//	id & 1 ? 0 : 1,  // x: 0 | 1 | 0 | 1
-				//	id & 2 ? 1 : 0); // y: 1 | 1 | 0 | 0
+				//	vertexID & 1 ? 0 : 1,  // x: 0 | 1 | 0 | 1
+				//	vertexID & 2 ? 1 : 0); // y: 1 | 1 | 0 | 0
 				//output.color = float4(output.uv, 1, 1);
 				//output.pos = float4(output.uv, 0, 1);
 				//return output;
