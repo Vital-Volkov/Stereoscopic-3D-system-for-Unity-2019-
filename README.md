@@ -1,5 +1,5 @@
-# Stereoscopic 3D system for Unity 2019 and 2020 with default render + Post Processing Stack v2, URP, and HDRP
-![Stereo3D](https://forum.unity.com/attachments/8xmsaa-taa-png.768466/)
+# Stereoscopic 3D system for Unity 2019 and above, URP, and HDRP
+![Stereo3D](Screenshot.png)
 
 I spent thousands of hours in virtual reality using the horizontal interleaved Stereo3D method with my Zalman polarized glasses and LG D2342P monitor, sometimes more than 12 hours per day without any problems with eyes. Stereo 3D even more healthy for the eyes as they not holding constant geometry focus on the screen plane like with mono image - in S3D eyes geometry focus dynamically changes in the full depth range dependent where you looking at from before a screen objects to infinity far behind a screen on distant objects, same as watching through a window to outdoor distant mountains or Starsky in a reality where eyes relaxing being on parallel axes. :sunglasses:
 
@@ -41,3 +41,6 @@ When launch, Monitor's Pixels Per Inch(PPI) should be autodetected and precision
 Set `User IPD` to your own interpupillary distance(IPD) for a realistic view with infinity S3D depth.  
 Uncheck `Match user IPD` and set `Virtual IPD`(Cameras IPD in the virtual world) larger than your own IPD for toy world effect and vise versa.  
 `Screen Distance` will show how far from the screen your eyes should be(camera's point) where Real and Virtual FOV will match and you get a 100% realistic view. (Very important for Vehicle Simulators).
+
+## Donate
+<a href="https://paypal.me/VitalVolkov/"><img src="PayPal.svg" height="40"></a>
