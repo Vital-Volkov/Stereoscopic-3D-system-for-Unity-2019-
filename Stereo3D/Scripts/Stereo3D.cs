@@ -4415,21 +4415,21 @@ public class Stereo3D : MonoBehaviour
     //        Invoke("VCamCullingOff", Time.deltaTime);
     //}
 
-    //void VCamFOVSet()
-    //{
-    //    if (debug) Debug.Log("VCamFOVSet");
-    //    //FOVSetInProcess = true;
+    void VCamFOVSet()
+    {
+        if (debug) Debug.Log("VCamFOVSet");
+        //FOVSetInProcess = true;
 
-    //    if (vCam != null)
-    //    {
-    //        //((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.FieldOfView = vFOV;
-    //        ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.FieldOfView = cam.fieldOfView = vFOV;
-    //        ////FOVSetInProcess = false;
-    //        //CheckCamFOVSet();
-    //    }
-    //    else
-    //        Invoke("VCamFOVSet", Time.deltaTime);
-    //}
+        if (vCam != null)
+        {
+            //((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.FieldOfView = vFOV;
+            ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.FieldOfView = cam.fieldOfView = vFOV;
+            ////FOVSetInProcess = false;
+            //CheckCamFOVSet();
+        }
+        else
+            Invoke("VCamFOVSet", Time.deltaTime);
+    }
 
     //void VCamSceneClipSet()
     //{
@@ -5586,7 +5586,20 @@ public class Stereo3D : MonoBehaviour
         //int targetFPS = -1 + (vSync ? Screen.currentResolution.refreshRate + 1 : 0);
         //int targetFPS = vSync ? Screen.currentResolution.refreshRate : -1;
         //Application.targetFrameRate = targetFPS;
-        Application.targetFrameRate = vSync ? Screen.currentResolution.refreshRate : -1;
+//#if UNITY_2022_1_OR_NEWER
+//        Application.targetFrameRate = vSync ? (int)Screen.currentResolution.refreshRateRatio.value : -1;
+//#else
+//        Application.targetFrameRate = vSync ? Screen.currentResolution.refreshRate : -1;
+//#endif
+
+        Application.targetFrameRate = vSync ? 
+#if UNITY_2022_1_OR_NEWER
+            (int)Screen.currentResolution.refreshRateRatio.value 
+#else
+            Screen.currentResolution.refreshRate
+#endif
+            : -1;
+
         //if (debug) Debug.Log("VSyncSet " + Application.targetFrameRate);
     }
 
@@ -5668,11 +5681,11 @@ public class Stereo3D : MonoBehaviour
             //cam.fieldOfView = vFOV;
             //if (debug) Debug.Log("FOV_Set FOVControl && !camFOVChangedExternal FOV " + FOV + " vFOV " + vFOV);
 
-//#if CINEMACHINE
-//            if (cineMachineEnabled)
-//                VCamFOVSet();
-//            else
-//#endif
+#if CINEMACHINE
+            if (cineMachineEnabled)
+                VCamFOVSet();
+            else
+#endif
                 cam.fieldOfView = vFOV;
 
             //if (debug) Debug.Log("FOV_Set FOVControl && !camFOVChangedExternal FOV " + FOV + " vFOV " + vFOV + " cineMachineEnabled " + cineMachineEnabled + " cam.fieldOfView " + cam.fieldOfView);
@@ -9775,7 +9788,9 @@ public class Stereo3D : MonoBehaviour
 #if UNITY_2020_2_OR_NEWER
             cd.exposureTarget,
 #endif
+#if !UNITY_2022_1_OR_NEWER
             cd.physicalParameters,
+#endif
             cd.renderingPathCustomFrameSettings,
             cd.renderingPathCustomFrameSettingsOverrideMask,
             cd.defaultFrameSettings,
@@ -10176,7 +10191,9 @@ public class Stereo3D : MonoBehaviour
 #if UNITY_2020_2_OR_NEWER
         public GameObject exposureTarget;
 #endif
+#if !UNITY_2022_1_OR_NEWER
         public HDPhysicalCamera physicalParameters;
+#endif
         public FrameSettings renderingPathCustomFrameSettings;
         public FrameSettingsOverrideMask renderingPathCustomFrameSettingsOverrideMask;
         public FrameSettingsRenderType defaultFrameSettings;
@@ -10330,7 +10347,9 @@ public class Stereo3D : MonoBehaviour
 #if UNITY_2020_2_OR_NEWER
             GameObject exposureTarget,
 #endif
+#if !UNITY_2022_1_OR_NEWER
             HDPhysicalCamera physicalParameters,
+#endif
             FrameSettings renderingPathCustomFrameSettings,
             FrameSettingsOverrideMask renderingPathCustomFrameSettingsOverrideMask,
             FrameSettingsRenderType defaultFrameSettings,
@@ -10484,7 +10503,9 @@ public class Stereo3D : MonoBehaviour
 #if UNITY_2020_2_OR_NEWER
             this.exposureTarget = exposureTarget;
 #endif
+#if !UNITY_2022_1_OR_NEWER
             this.physicalParameters = physicalParameters;
+#endif
             this.renderingPathCustomFrameSettings = renderingPathCustomFrameSettings;
             this.renderingPathCustomFrameSettingsOverrideMask = renderingPathCustomFrameSettingsOverrideMask;
             this.defaultFrameSettings = defaultFrameSettings;
