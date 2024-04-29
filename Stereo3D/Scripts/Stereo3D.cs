@@ -84,7 +84,8 @@ using UnityEngine.InputSystem.Utilities;
 //}
 #endif
 
-#if STARTER_ASSETS_PACKAGES_CHECKED
+//#if STARTER_ASSETS_PACKAGES_CHECKED
+#if ENABLE_INPUT_SYSTEM
 using StarterAssets;
 #endif
 
@@ -153,6 +154,7 @@ public class Stereo3D : MonoBehaviour
     public bool matrixKillHack; //Hack for FPS gain from 308 to 328 and required to fix terrain gaps caused by nearClipHack(Test Track Demo in Unity 2021)
     //public Canvas canvas;
     //public CameraDataStruct cameraDataStruct;
+    public bool detectCameraSettingChange = true;
     public bool debug;
 
 #if ENABLE_INPUT_SYSTEM
@@ -187,7 +189,8 @@ public class Stereo3D : MonoBehaviour
     public List<Camera> additionalS3DCameras;
     //public AdditionalS3DCamera[] additionalS3DCamerasStruct;
 
-#if STARTER_ASSETS_PACKAGES_CHECKED
+//#if STARTER_ASSETS_PACKAGES_CHECKED
+#if ENABLE_INPUT_SYSTEM
     StarterAssetsInputs starterAssetsInputs;
 #endif
 
@@ -1283,7 +1286,8 @@ public class Stereo3D : MonoBehaviour
             //cullingMask = cam.cullingMask;
 
             //if (inputSystem)
-#if STARTER_ASSETS_PACKAGES_CHECKED
+//#if STARTER_ASSETS_PACKAGES_CHECKED
+#if ENABLE_INPUT_SYSTEM
             {
                 //if (debug) Debug.Log(FindObjectOfType<StarterAssetsInputs>());
                 starterAssetsInputs = FindObjectOfType<StarterAssetsInputs>();
@@ -3162,7 +3166,8 @@ public class Stereo3D : MonoBehaviour
             if (!lastGUIOpened)
             {
                 //if (inputSystem)
-#if STARTER_ASSETS_PACKAGES_CHECKED
+//#if STARTER_ASSETS_PACKAGES_CHECKED
+#if ENABLE_INPUT_SYSTEM
                 {
                     cursorLockedDefault = starterAssetsInputs.cursorLocked;
                     cursorInputForLookDefault = starterAssetsInputs.cursorInputForLook;
@@ -3830,7 +3835,8 @@ public class Stereo3D : MonoBehaviour
 
         //if (Time.time > setLastCameraDataStructTime)
         //if (cameraDataStructIsReady)
-        if (cameraDataStructIsReady
+        //if (cameraDataStructIsReady
+        if (detectCameraSettingChange && cameraDataStructIsReady
 //#if CINEMACHINE
 //            && vCamSceneClipIsReady
 //#endif
@@ -3959,6 +3965,7 @@ public class Stereo3D : MonoBehaviour
                     //onOffToggle = false;
                     }
 
+#if !CINEMACHINE
                 if (lastCameraDataStruct.projectionMatrix != cameraDataStruct.projectionMatrix)
                 //{
                     //if (debug) Debug.Log("lastCameraDataStruct.projectionMatrix != cameraDataStruct.projectionMatrix");
@@ -3967,7 +3974,7 @@ public class Stereo3D : MonoBehaviour
                             if (lastCameraDataStruct.projectionMatrix[i, j] != cameraDataStruct.projectionMatrix[i, j])
                                 //if (debug) Debug.Log("i " + i + " j " + j);
                                 camMatrix[i, j] = cameraDataStruct.projectionMatrix[i, j]; //add external changes in projectionMatrix to camMatrix while current projectionMatrix can be zero and then restore from camMatrix on disable.
-
+#endif
                 //    if (S3DEnabled && matrixKillHack)
                 //        cam.projectionMatrix = Matrix4x4.zero;
                 //}
@@ -4997,7 +5004,8 @@ public class Stereo3D : MonoBehaviour
 #endif
 
                     //if (inputSystem)
-#if STARTER_ASSETS_PACKAGES_CHECKED
+//#if STARTER_ASSETS_PACKAGES_CHECKED
+#if ENABLE_INPUT_SYSTEM
                     {
                         starterAssetsInputs.cursorLocked = false;
                         starterAssetsInputs.cursorInputForLook = false;
@@ -5135,7 +5143,8 @@ public class Stereo3D : MonoBehaviour
     void GUIClose()
     {
         //if (inputSystem)
-#if STARTER_ASSETS_PACKAGES_CHECKED
+//#if STARTER_ASSETS_PACKAGES_CHECKED
+#if ENABLE_INPUT_SYSTEM
         {
             starterAssetsInputs.cursorLocked = cursorLockedDefault;
             starterAssetsInputs.cursorInputForLook = cursorInputForLookDefault;
@@ -9826,10 +9835,12 @@ public class Stereo3D : MonoBehaviour
         //     field of view and the frustum.
         c.usePhysicalProperties, // { get; set; }
         //
+#if !CINEMACHINE
         // Summary:
         //     The size of the camera sensor, expressed in millimeters.
         c.sensorSize, // { get; set; }
         //
+#endif
         // Summary:
         //     Per-layer culling distances.
         //c.layerCullDistances, // { get; set; }
@@ -10018,6 +10029,7 @@ public class Stereo3D : MonoBehaviour
         //[NativeProperty("UseJitteredProjectionMatrixForTransparent")]
         c.useJitteredProjectionMatrixForTransparentRendering, // { get; set; }
         //
+#if !CINEMACHINE
         // Summary:
         //     Get or set the raw projection matrix with no camera offset (no jittering).
         c.nonJitteredProjectionMatrix, // { get; set; }
@@ -10026,6 +10038,7 @@ public class Stereo3D : MonoBehaviour
         //     Set a custom projection matrix.
         c.projectionMatrix, // { get; set; }
         //
+#endif
         // Summary:
         //     Matrix that transforms from world to camera space.
         //c.worldToCameraMatrix, // { get; set; }
@@ -10071,21 +10084,23 @@ public class Stereo3D : MonoBehaviour
         //[NativeProperty("ScreenViewportRect")]
         c.pixelRect, // { get; set; }
         //
+#if !CINEMACHINE
         // Summary:
         //     There are two gates for a camera, the sensor gate and the resolution gate. The
         //     physical camera sensor gate is defined by the sensorSize property, the resolution
         //     gate is defined by the render target area.
         c.gateFit, // { get; set; }
         //
+#endif
         // Summary:
         //     The distance of the near clipping plane from the the Camera, in world units.
         //[NativeProperty("Near")]
-        c.nearClipPlane, // { get; set; }
+        c.nearClipPlane // { get; set; }
         //
         // Summary:
         //     The vertical field of view of the Camera, in degrees.
         //[NativeProperty("VerticalFieldOfView")]
-        c.fieldOfView // { get; set; }
+        //c.fieldOfView // { get; set; }
             );
 
         return cds;
@@ -10184,7 +10199,9 @@ public class Stereo3D : MonoBehaviour
         //public Matrix4x4 cullingMatrix;
         public bool useOcclusionCulling;
         public bool usePhysicalProperties;
+#if !CINEMACHINE
         public Vector2 sensorSize;
+#endif
         //public float[] layerCullDistances;
         public ulong overrideSceneCullingMask;
         public CameraType cameraType;
@@ -10225,8 +10242,10 @@ public class Stereo3D : MonoBehaviour
         public UnityEngine.SceneManagement.Scene scene;
         public Matrix4x4 previousViewProjectionMatrix;
         public bool useJitteredProjectionMatrixForTransparentRendering;
+#if !CINEMACHINE
         public Matrix4x4 nonJitteredProjectionMatrix;
         public Matrix4x4 projectionMatrix;
+#endif
         //public Matrix4x4 worldToCameraMatrix;
         //public Matrix4x4 cameraToWorldMatrix;
         public int targetDisplay;
@@ -10237,9 +10256,11 @@ public class Stereo3D : MonoBehaviour
         public float farClipPlane;
         public int pixelWidth;
         public Rect pixelRect;
+#if !CINEMACHINE
         public Camera.GateFitMode gateFit;
+#endif
         public float nearClipPlane;
-        public float fieldOfView;
+        //public float fieldOfView;
 
         public CameraDataStruct(
 #if URP
@@ -10332,7 +10353,9 @@ public class Stereo3D : MonoBehaviour
             //Matrix4x4 cullingMatrix,
             bool useOcclusionCulling,
             bool usePhysicalProperties,
+#if !CINEMACHINE
             Vector2 sensorSize,
+#endif
             //float[] layerCullDistances,
             ulong overrideSceneCullingMask,
             CameraType cameraType,
@@ -10373,8 +10396,10 @@ public class Stereo3D : MonoBehaviour
             UnityEngine.SceneManagement.Scene scene,
             Matrix4x4 previousViewProjectionMatrix,
             bool useJitteredProjectionMatrixForTransparentRendering,
+#if !CINEMACHINE
             Matrix4x4 nonJitteredProjectionMatrix,
             Matrix4x4 projectionMatrix,
+#endif
             //Matrix4x4 worldToCameraMatrix,
             //Matrix4x4 cameraToWorldMatrix,
             int targetDisplay,
@@ -10385,9 +10410,11 @@ public class Stereo3D : MonoBehaviour
             float farClipPlane,
             int pixelWidth,
             Rect pixelRect,
+#if !CINEMACHINE
             Camera.GateFitMode gateFit,
-            float nearClipPlane,
-            float fieldOfView
+#endif
+            float nearClipPlane
+            //float fieldOfView
             )
         {
 #if URP
@@ -10480,7 +10507,9 @@ public class Stereo3D : MonoBehaviour
             //this.cullingMatrix = cullingMatrix;
             this.useOcclusionCulling = useOcclusionCulling;
             this.usePhysicalProperties = usePhysicalProperties;
+#if !CINEMACHINE
             this.sensorSize = sensorSize;
+#endif
             //this.layerCullDistances = layerCullDistances;
             this.overrideSceneCullingMask = overrideSceneCullingMask;
             this.cameraType = cameraType;
@@ -10521,8 +10550,10 @@ public class Stereo3D : MonoBehaviour
             this.scene = scene;
             this.previousViewProjectionMatrix = previousViewProjectionMatrix;
             this.useJitteredProjectionMatrixForTransparentRendering = useJitteredProjectionMatrixForTransparentRendering;
+#if !CINEMACHINE
             this.nonJitteredProjectionMatrix = nonJitteredProjectionMatrix;
             this.projectionMatrix = projectionMatrix;
+#endif
             //this.worldToCameraMatrix = worldToCameraMatrix;
             //this.cameraToWorldMatrix = cameraToWorldMatrix;
             this.targetDisplay = targetDisplay;
@@ -10533,9 +10564,11 @@ public class Stereo3D : MonoBehaviour
             this.farClipPlane = farClipPlane;
             this.pixelWidth = pixelWidth;
             this.pixelRect = pixelRect;
+#if !CINEMACHINE
             this.gateFit = gateFit;
+#endif
             this.nearClipPlane = nearClipPlane;
-            this.fieldOfView = fieldOfView;
+            //this.fieldOfView = fieldOfView;
         }
     }
 
