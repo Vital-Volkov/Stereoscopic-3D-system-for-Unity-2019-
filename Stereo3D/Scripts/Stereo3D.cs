@@ -1108,6 +1108,7 @@ public class Stereo3D : MonoBehaviour
                         //cloneLeft.allowMSAA = cloneRight.allowMSAA = false;
 
                         cloneLeft.transform.parent = cloneRight.transform.parent = c.transform;
+                        c.tag = cloneLeft.tag = cloneRight.tag = "MainCamera";
 
                         additionalS3DCamerasStruct[i].camera = c;
                         additionalS3DCamerasStruct[i].camera_left = cloneLeft;
@@ -1565,6 +1566,7 @@ public class Stereo3D : MonoBehaviour
                 //canvasCamera_right.transform.SetParent(canvas.transform);
                 //canvasCamera_left.transform.parent = canvasCamera_right.transform.parent = canvas.transform;
                 canvasCamera_left.transform.parent = canvasCamera_right.transform.parent = canvasCamera.transform;
+                canvasCamera.tag = canvasCamera_left.tag = canvasCamera_right.tag = "MainCamera";
 
                 ////canvasCamera.cullingMask = canvasCamera.cullingMask | (1 << 5); //add UI layer
                 ////canvasCamera_left.cullingMask = canvasCamera_left.cullingMask | (1 << 5); //add UI layer
