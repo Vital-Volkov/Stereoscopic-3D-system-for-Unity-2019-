@@ -150,8 +150,6 @@ public class Stereo3D : MonoBehaviour
     //public bool setMatrixDirectly = true; //shift image Vanish points to User IPD directly via camera Matrix(gives fps boost) or via camera's "physically" settings "lensShift"(required for Post Processing Stack V2 pack as it resets matrix and yields incorrect aspect)
     public string slotName = "User1";
     public bool loadSettingsFromFile = true; //autoload settings at start from last saved file
-    public bool nearClipHack; //Hack for FPS gain in SRP(Scriptable Render Pipeline) and required for custom Viewport Rect but can cause terrain gaps(Test Track Demo in Unity 2021)
-    public bool matrixKillHack; //Hack for FPS gain from 308 to 328 and required to fix terrain gaps caused by nearClipHack(Test Track Demo in Unity 2021)
     //public Canvas canvas;
     //public CameraDataStruct cameraDataStruct;
     public bool detectCameraSettingChange = true;
@@ -178,6 +176,7 @@ public class Stereo3D : MonoBehaviour
     string modifier3ActionPath;
     //ReadOnlyArray<InputBinding> GUIActionBindings;
     IDisposable inputSystem_KeyListener;
+    StarterAssetsInputs starterAssetsInputs;
 #else
     public KeyCode GUIKey = KeyCode.Tab; //GUI window show/hide Key
     public KeyCode S3DKey = KeyCode.KeypadMultiply; //S3D enable/disable shortcut Key and hold "LeftControl" Key to swap left-right cameras
@@ -189,10 +188,10 @@ public class Stereo3D : MonoBehaviour
     public List<Camera> additionalS3DCameras;
     //public AdditionalS3DCamera[] additionalS3DCamerasStruct;
 
-//#if STARTER_ASSETS_PACKAGES_CHECKED
-#if ENABLE_INPUT_SYSTEM
-    StarterAssetsInputs starterAssetsInputs;
-#endif
+    [Header("FPS Boost")]
+    public bool disableCullingMask; //disable CullingMask for main camera in S3D mode to FPS boost
+    public bool nearClipHack; //Hack for FPS gain in SRP(Scriptable Render Pipeline) and required for custom Viewport Rect but can cause terrain gaps(Test Track Demo in Unity 2021)
+    public bool matrixKillHack; //Hack for FPS gain from 308 to 328 and required to fix terrain gaps caused by nearClipHack(Test Track Demo in Unity 2021)
 
     [Header("Info")]
     public Material S3DMaterial; //generated material
@@ -245,6 +244,7 @@ public class Stereo3D : MonoBehaviour
     //Color lastAnaglyphRightColor;
     string lastSlotName;
     Rect lastCamRect;
+    bool lastDisableCullingMask;
     bool lastNearClipHack;
     bool lastMatrixKillHack;
     float lastCanvasLocalPosZ;
@@ -383,6 +383,10 @@ public class Stereo3D : MonoBehaviour
 #if SimpleCameraController
     UnityTemplateProjects.SimpleCameraController simpleCameraControllerScript;
 #endif
+
+//#if STARTER_ASSETS_PACKAGES_CHECKED
+//    StarterAssetsInputs starterAssetsInputs;
+//#endif
 
     float GUI_Set_delay;
     //float setLastCameraDataStructTime;
@@ -567,7 +571,7 @@ public class Stereo3D : MonoBehaviour
             {
                 cineMachineBrain = GetComponent<Cinemachine.CinemachineBrain>();
                 cineMachineEnabled = true;
-                nearClipHack = true; //required to kill main camera rendering in S3D mode instead of using cam.cullingMask = 0 via VCamCullingOff which cause Cinemachine not working
+                //nearClipHack = true; //required to kill main camera rendering in S3D mode instead of using cam.cullingMask = 0 via VCamCullingOff which cause Cinemachine not working
                 //vCamSceneClipSetInProcess = true;
                 //vCamSceneClipIsReady = false;
                 Invoke("GetVCam", Time.deltaTime);
@@ -671,11 +675,11 @@ public class Stereo3D : MonoBehaviour
 
                     //camera_left = Instantiate(cam.gameObject, transform.position, transform.rotation).GetComponent<Camera>();
                     camera_left = Instantiate(cam, transform.position, transform.rotation);
-                    camera_left.tag = "Untagged";
+                    //camera_left.tag = "Untagged";
                     camera_left.name += "_left";
                     //camera_right = Instantiate(cam.gameObject, transform.position, transform.rotation).GetComponent<Camera>();
                     camera_right = Instantiate(cam, transform.position, transform.rotation);
-                    camera_right.tag = "Untagged";
+                    //camera_right.tag = "Untagged";
                     camera_right.name += "_right";
 
                     //for (int child = 0; child < camera_left.transform.childCount; child++)
@@ -766,6 +770,8 @@ public class Stereo3D : MonoBehaviour
                     //camera_left.rect = camera_right.rect = Rect.MinMaxRect(0, 0, 1, 1);
                 }
             }
+
+            camera_left.tag = camera_right.tag = "MainCamera";
 
             //DestroyImmediate(Instantiate(cam.gameObject, transform.position, transform.rotation).GetComponent<Stereo3D>());
             //GameObject go = cam.transform.Find("Plane").gameObject;
@@ -1707,6 +1713,7 @@ public class Stereo3D : MonoBehaviour
             //lastAnaglyphRightColor = anaglyphRightColor;
             lastSlotName = slotName;
             lastCamRect = cam.rect;
+            lastDisableCullingMask = disableCullingMask;
             lastNearClipHack = nearClipHack;
             lastMatrixKillHack = matrixKillHack;
             lastCanvasLocalPosZ = canvasLocalPosZ;
@@ -1997,10 +2004,19 @@ public class Stereo3D : MonoBehaviour
                     }
             }
 
-            if (GUIAsOverlay)
+            //if (GUIAsOverlay)
+            if (GUIAsOverlay && GUIVisible)
             {
-                leftCameraStack.Add(canvasCamera_left);
-                rightCameraStack.Add(canvasCamera_right);
+                if (!leftCameraStack.Contains(canvasCamera_left))
+                {
+                    leftCameraStack.Add(canvasCamera_left);
+                    rightCameraStack.Add(canvasCamera_right);
+                }
+            }
+            else
+            {
+                leftCameraStack.Remove(canvasCamera_left);
+                rightCameraStack.Remove(canvasCamera_right);
             }
 
             //for (int i = 0; i < cameraStack.Count; i++)
@@ -2089,8 +2105,14 @@ public class Stereo3D : MonoBehaviour
             //    //canvasCamera.targetTexture = null;
             //    //canvasCamera.GetUniversalAdditionalCameraData().renderType = CameraRenderType.Overlay;
 
-            if (GUIAsOverlay && !cameraStack.Contains(canvasCamera))
-                cameraStack.Add(canvasCamera);
+            //if (GUIAsOverlay && !cameraStack.Contains(canvasCamera))
+            if (GUIAsOverlay && GUIVisible)
+            {
+                if (!cameraStack.Contains(canvasCamera))
+                    cameraStack.Add(canvasCamera);
+            }
+            else
+                cameraStack.Remove(canvasCamera);
 
             //    //cameraStack.Remove(canvasCamera);
             //    //cameraStack.Add(canvasCamera);
@@ -3457,6 +3479,12 @@ public class Stereo3D : MonoBehaviour
             //Render_Set();
         }
 
+        if (lastDisableCullingMask != disableCullingMask)
+        {
+            lastDisableCullingMask = disableCullingMask;
+            onOffToggle = true;
+        }
+
         if (lastNearClipHack != nearClipHack)
         {
             lastNearClipHack = nearClipHack;
@@ -4394,26 +4422,26 @@ public class Stereo3D : MonoBehaviour
     //    //Cinemachine.CinemachineBrain.SoloCamera = vCam;
     //}
 
-    //void VCamCullingOff()
-    //{
-    //    if (debug) Debug.Log("VCamCullingOff");
+    void VCamCullingOff()
+    {
+        if (debug) Debug.Log("VCamCullingOff");
 
-    //    //if (vCam != null)
-    //    if (vCam != null && vCam.ToString() != "null")
-    //    {
-    //        //if (debug) Debug.Log("vCam != null vCam " + vCam);
-    //        //cam.cullingMask = 2147483647;
-    //        cam.cullingMask = 0;
-    //        //cam.cullingMask = 1;
-    //        //if (debug) Debug.Log(cam.cullingMask);
-    //        //cam.Reset();
-    //        //cam.nearClipPlane = -1; //Hack for more fps in SRP(Scriptable Render Pipeline)
-    //        //((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = -1;
-    //        CameraDataStruct_Change();
-    //    }
-    //    else
-    //        Invoke("VCamCullingOff", Time.deltaTime);
-    //}
+        //if (vCam != null)
+        if (vCam != null && vCam.ToString() != "null")
+        {
+            //if (debug) Debug.Log("vCam != null vCam " + vCam);
+            //cam.cullingMask = 2147483647;
+            cam.cullingMask = 0;
+            //cam.cullingMask = 1;
+            //if (debug) Debug.Log(cam.cullingMask);
+            //cam.Reset();
+            //cam.nearClipPlane = -1; //Hack for more fps in SRP(Scriptable Render Pipeline)
+            //((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = -1;
+            CameraDataStruct_Change();
+        }
+        else
+            Invoke("VCamCullingOff", Time.deltaTime);
+    }
 
     void VCamFOVSet()
     {
@@ -5106,6 +5134,9 @@ public class Stereo3D : MonoBehaviour
             //if (S3DEnabled)
                 RenderTextureContextSet();
         //}
+#if URP
+        CameraStackSet();
+#endif
     }
 
     void GUIMaterial_Set()
@@ -5814,17 +5845,17 @@ public class Stereo3D : MonoBehaviour
 
     void ViewSet()
     {
-        if (cam.tag == "MainCamera" && (method == Method.Two_Displays || method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY))
-            if (eyePriority == EyePriority.Left)
-            {
-                camera_left.tag = "MainCamera"; //prevent TerrainsVisibilityUpdater(in "Test Track" sample) throw errors while the main camera disabled and no other camera with "MainCamera" tag in the scene
-                camera_right.tag = "Untagged";
-            }
-            else
-            {
-                camera_left.tag = "Untagged";
-                camera_right.tag = "MainCamera"; //prevent TerrainsVisibilityUpdater(in "Test Track" sample) throw errors while the main camera disabled and no other camera with "MainCamera" tag in the scene
-            }
+        //if (cam.tag == "MainCamera" && (method == Method.Two_Displays || method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY))
+        //    if (eyePriority == EyePriority.Left)
+        //    {
+        //        camera_left.tag = "MainCamera"; //prevent TerrainsVisibilityUpdater(in "Test Track" sample) throw errors while the main camera disabled and no other camera with "MainCamera" tag in the scene
+        //        camera_right.tag = "Untagged";
+        //    }
+        //    else
+        //    {
+        //        camera_left.tag = "Untagged";
+        //        camera_right.tag = "MainCamera"; //prevent TerrainsVisibilityUpdater(in "Test Track" sample) throw errors while the main camera disabled and no other camera with "MainCamera" tag in the scene
+        //    }
 
         //imageWidth = cam.pixelWidth * pixelPitch; //real size of rendered image on screen
         imageWidth = cam.pixelWidth * 25.4f / PPI; //real size of rendered image on screen
@@ -6315,14 +6346,15 @@ public class Stereo3D : MonoBehaviour
             //cam.cullingMask = 0;
             //cam.targetTexture = null;
 
+            if (disableCullingMask)
 #if CINEMACHINE
-            //if (cineMachineEnabled)
-            //    //VCamCullingOff();
-            //    nearClipHack = true;
-            //else
-            if (!cineMachineEnabled)
+                if (cineMachineEnabled)
+                    VCamCullingOff();
+                    //nearClipHack = true;
+                else
+                //if (!cineMachineEnabled)
 #endif
-                cam.cullingMask = 0;
+                    cam.cullingMask = 0;
 
 #if HDRP
             camData.volumeLayerMask = 0;
@@ -6700,8 +6732,8 @@ public class Stereo3D : MonoBehaviour
                     inputSystem_KeyListener.Dispose();
 #endif
                 cam.enabled = true;
-                camera_left.tag = "Untagged";
-                camera_right.tag = "Untagged";
+                //camera_left.tag = "Untagged";
+                //camera_right.tag = "Untagged";
                 ////GUIAsOverlay = GUIAsOverlayState;
 //#if HDRP
 //                GUIAsOverlayState = GUIAsOverlay;
@@ -7427,8 +7459,8 @@ public class Stereo3D : MonoBehaviour
         //camera_right.enabled = false;
         camera_left.enabled = camera_right.enabled = false;
         cam.enabled = true;
-        camera_left.tag = "Untagged";
-        camera_right.tag = "Untagged";
+        //camera_left.tag = "Untagged";
+        //camera_right.tag = "Untagged";
 
         //if (additionalS3DCamerasStruct != null)
         foreach (var c in additionalS3DCamerasStruct)
@@ -7604,10 +7636,10 @@ public class Stereo3D : MonoBehaviour
         //        context.Submit();
 
 #if URP
-        if (camera == camera_left)
+        if (GetComponent<Camera>() == camera_left)
             camera_left.targetTexture = renderTexture_left;
         else
-            if (camera == camera_right)
+            if (GetComponent<Camera>() == camera_right)
                 camera_right.targetTexture = renderTexture_right;
 #elif HDRP
         foreach (Camera camera in cameraList)
@@ -7760,7 +7792,7 @@ public class Stereo3D : MonoBehaviour
 
         commandBuffer = new CommandBuffer();
 #if URP
-        if (camera == camera_left)
+        if (GetComponent<Camera>() == camera_left)
         {
             commandBuffer = new CommandBuffer();
             camera_left.targetTexture = null;
@@ -7770,7 +7802,7 @@ public class Stereo3D : MonoBehaviour
             context.Submit();
         }
         else
-            if (camera == camera_right)
+            if (GetComponent<Camera>() == camera_right)
             {
                 commandBuffer = new CommandBuffer();
                 camera_right.targetTexture = null;
@@ -10780,12 +10812,15 @@ public class Stereo3D : MonoBehaviour
             //if (GraphicsSettings.defaultRenderPipeline.GetType().ToString().Contains("HDRenderPipelineAsset"))
             //    AddDefine("HDRP");
 
-            if (GraphicsSettings.defaultRenderPipeline)
+            //if (GraphicsSettings.defaultRenderPipeline)
+            if (GraphicsSettings.currentRenderPipeline)
             {
-                if (GraphicsSettings.defaultRenderPipeline.GetType().ToString().Contains("UniversalRenderPipelineAsset"))
+                //if (GraphicsSettings.defaultRenderPipeline.GetType().ToString().Contains("UniversalRenderPipelineAsset"))
+                if (GraphicsSettings.currentRenderPipeline.GetType().ToString().Contains("UniversalRenderPipelineAsset"))
                     AddDefine("URP");
                 else
-                    if (GraphicsSettings.defaultRenderPipeline.GetType().ToString().Contains("HDRenderPipelineAsset"))
+                    //if (GraphicsSettings.defaultRenderPipeline.GetType().ToString().Contains("HDRenderPipelineAsset"))
+                    if (GraphicsSettings.currentRenderPipeline.GetType().ToString().Contains("HDRenderPipelineAsset"))
                         AddDefine("HDRP");
             }
 
