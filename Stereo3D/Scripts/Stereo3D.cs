@@ -3151,7 +3151,7 @@ public class Stereo3D : MonoBehaviour
                 if (tooltipShow && toolTipTimer >= toolTipShowDelay)
                     tooltip.SetActive(true);
 
-                //if (debug) Debug.Log("toolTipTimer");
+                //if (debug) Debug.Log("toolTipTimer" + toolTipTimer);
             }
 
             //pointerEventData = new PointerEventData(eventSystem);
@@ -3479,6 +3479,9 @@ public class Stereo3D : MonoBehaviour
             Aspect_Set();
             //ViewSet();
             //Render_Set();
+#if URP || HDRP
+            RenderPipelineManager.beginCameraRendering += PreRenderClearScreen;
+#endif
         }
 
         if (lastDisableCullingMask != disableCullingMask)
@@ -5089,6 +5092,7 @@ public class Stereo3D : MonoBehaviour
                 //GUIVisible = false;
                 cursorRectTransform.gameObject.SetActive(false);
                 canvas.GetComponent<CanvasGroup>().blocksRaycasts = false;
+                tooltip.SetActive(false);
 
                 //if (inputSystem)
                 //{
@@ -7219,7 +7223,7 @@ public class Stereo3D : MonoBehaviour
         //method == Method.Two_Displays && (additionalS3DCamerasStruct.Length != 0 || GUIAsOverlay && GUIVisible) || 
         method == Method.Two_Displays && (additionalS3DTopmostCameraIndex != -1 || GUIAsOverlay && GUIVisible) || 
 #endif
-        method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
+        S3DEnabled && (method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY))
         {
             if (additionalS3DTopmostCameraIndex != -1 || GUIAsOverlay && GUIVisible)
                 //RenderPipelineManager.endCameraRendering += RenderTexture_BlitToRenderTexture; //blit Render Texture to main Render Texture(required for HDRP overlay cameras) after render is finished
@@ -7637,14 +7641,20 @@ public class Stereo3D : MonoBehaviour
         //        commandBuffer.Release();
         //        context.Submit();
 
-#if URP
-        if (GetComponent<Camera>() == camera_left)
-            camera_left.targetTexture = renderTexture_left;
-        else
-            if (GetComponent<Camera>() == camera_right)
-                camera_right.targetTexture = renderTexture_right;
-#elif HDRP
         foreach (Camera camera in cameraList)
+#if URP
+//        if (GetComponent<Camera>() == camera_left)
+//            camera_left.targetTexture = renderTexture_left;
+//        else
+//            if (GetComponent<Camera>() == camera_right)
+//                camera_right.targetTexture = renderTexture_right;
+
+        if (camera == camera_left)
+            camera.targetTexture = renderTexture_left;
+        else
+            if (camera == camera_right)
+                camera.targetTexture = renderTexture_right;
+#elif HDRP
         if (camera == cam)
             camera.targetTexture = renderTexture;
         else
@@ -7793,29 +7803,43 @@ public class Stereo3D : MonoBehaviour
             Debug.Log(camera + " RenderTexture_BlitToScreen " + Time.time);
 
         commandBuffer = new CommandBuffer();
+
+        foreach (Camera camera in cameraList)
 #if URP
-        if (GetComponent<Camera>() == camera_left)
+//        if (GetComponent<Camera>() == camera_left)
+//        {
+//            commandBuffer = new CommandBuffer();
+//            camera_left.targetTexture = null;
+//            commandBuffer.Blit(renderTexture_left, null as RenderTexture);
+//            context.ExecuteCommandBuffer(commandBuffer);
+//            commandBuffer.Release();
+//            context.Submit();
+//        }
+//        else
+//            if (GetComponent<Camera>() == camera_right)
+//            {
+//                commandBuffer = new CommandBuffer();
+//                camera_right.targetTexture = null;
+//                //commandBuffer.Blit(renderTexture_right, null as RenderTexture, RenderTextureFlipMaterial);
+//                commandBuffer.Blit(renderTexture_right, null as RenderTexture, S3DMaterial, pass);
+//                context.ExecuteCommandBuffer(commandBuffer);
+//                commandBuffer.Release();
+//                context.Submit();
+//            }
+
+        if (camera == camera_left)
         {
-            commandBuffer = new CommandBuffer();
-            camera_left.targetTexture = null;
+            camera.targetTexture = null;
             commandBuffer.Blit(renderTexture_left, null as RenderTexture);
-            context.ExecuteCommandBuffer(commandBuffer);
-            commandBuffer.Release();
-            context.Submit();
         }
         else
-            if (GetComponent<Camera>() == camera_right)
+            if (camera == camera_right)
             {
-                commandBuffer = new CommandBuffer();
-                camera_right.targetTexture = null;
+                camera.targetTexture = null;
                 //commandBuffer.Blit(renderTexture_right, null as RenderTexture, RenderTextureFlipMaterial);
                 commandBuffer.Blit(renderTexture_right, null as RenderTexture, S3DMaterial, pass);
-                context.ExecuteCommandBuffer(commandBuffer);
-                commandBuffer.Release();
-                context.Submit();
             }
 #elif HDRP
-        foreach (Camera camera in cameraList)
         if (camera == topmostCamera)
         {
             camera.targetTexture = null;
