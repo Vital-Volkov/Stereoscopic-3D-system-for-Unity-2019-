@@ -85,7 +85,8 @@ using UnityEngine.InputSystem.Utilities;
 #endif
 
 //#if STARTER_ASSETS_PACKAGES_CHECKED
-#if ENABLE_INPUT_SYSTEM
+//#if ENABLE_INPUT_SYSTEM
+#if STARTER_ASSETS_PACKAGES_CHECKED || UNITY_2022_1_OR_NEWER && ENABLE_INPUT_SYSTEM
 using StarterAssets;
 #endif
 
@@ -176,7 +177,7 @@ public class Stereo3D : MonoBehaviour
     string modifier3ActionPath;
     //ReadOnlyArray<InputBinding> GUIActionBindings;
     IDisposable inputSystem_KeyListener;
-    StarterAssetsInputs starterAssetsInputs;
+    //StarterAssetsInputs starterAssetsInputs;
 #else
     public KeyCode GUIKey = KeyCode.Tab; //GUI window show/hide Key
     public KeyCode S3DKey = KeyCode.KeypadMultiply; //S3D enable/disable shortcut Key and hold "LeftControl" Key to swap left-right cameras
@@ -385,8 +386,9 @@ public class Stereo3D : MonoBehaviour
 #endif
 
 //#if STARTER_ASSETS_PACKAGES_CHECKED
-//    StarterAssetsInputs starterAssetsInputs;
-//#endif
+#if STARTER_ASSETS_PACKAGES_CHECKED || UNITY_2022_1_OR_NEWER && ENABLE_INPUT_SYSTEM
+    StarterAssetsInputs starterAssetsInputs;
+#endif
 
     float GUI_Set_delay;
     //float setLastCameraDataStructTime;
@@ -1294,7 +1296,8 @@ public class Stereo3D : MonoBehaviour
 
             //if (inputSystem)
 //#if STARTER_ASSETS_PACKAGES_CHECKED
-#if ENABLE_INPUT_SYSTEM
+//#if ENABLE_INPUT_SYSTEM
+#if STARTER_ASSETS_PACKAGES_CHECKED || UNITY_2022_1_OR_NEWER && ENABLE_INPUT_SYSTEM
             {
                 //if (debug) Debug.Log(FindObjectOfType<StarterAssetsInputs>());
                 starterAssetsInputs = FindObjectOfType<StarterAssetsInputs>();
@@ -3191,7 +3194,8 @@ public class Stereo3D : MonoBehaviour
             {
                 //if (inputSystem)
 //#if STARTER_ASSETS_PACKAGES_CHECKED
-#if ENABLE_INPUT_SYSTEM
+//#if ENABLE_INPUT_SYSTEM
+#if STARTER_ASSETS_PACKAGES_CHECKED || UNITY_2022_1_OR_NEWER && ENABLE_INPUT_SYSTEM
                 {
                     cursorLockedDefault = starterAssetsInputs.cursorLocked;
                     cursorInputForLookDefault = starterAssetsInputs.cursorInputForLook;
@@ -5038,7 +5042,8 @@ public class Stereo3D : MonoBehaviour
 
                     //if (inputSystem)
 //#if STARTER_ASSETS_PACKAGES_CHECKED
-#if ENABLE_INPUT_SYSTEM
+//#if ENABLE_INPUT_SYSTEM
+#if STARTER_ASSETS_PACKAGES_CHECKED || UNITY_2022_1_OR_NEWER && ENABLE_INPUT_SYSTEM
                     {
                         starterAssetsInputs.cursorLocked = false;
                         starterAssetsInputs.cursorInputForLook = false;
@@ -5181,7 +5186,8 @@ public class Stereo3D : MonoBehaviour
     {
         //if (inputSystem)
 //#if STARTER_ASSETS_PACKAGES_CHECKED
-#if ENABLE_INPUT_SYSTEM
+//#if ENABLE_INPUT_SYSTEM
+#if STARTER_ASSETS_PACKAGES_CHECKED || UNITY_2022_1_OR_NEWER && ENABLE_INPUT_SYSTEM
         {
             starterAssetsInputs.cursorLocked = cursorLockedDefault;
             starterAssetsInputs.cursorInputForLook = cursorInputForLookDefault;
@@ -5383,7 +5389,9 @@ public class Stereo3D : MonoBehaviour
 //#endif
 
         //lastCamNearClip = cam.nearClipPlane;
+#if CINEMACHINE
         VCamClip_Sync();
+#endif
         ViewSet();
     }
 
@@ -8715,14 +8723,16 @@ public class Stereo3D : MonoBehaviour
                 cam.nearClipPlane = cameraNearClip; //restore camera original nearClipPlane if additionalS3DCameras.Count != 0
                 if (debug) Debug.Log("OnDisable sceneNearClip " + sceneNearClip + " sceneFarClip " + sceneFarClip);
                 cam.farClipPlane = sceneFarClip;
+#if CINEMACHINE
                 VCamClip_Sync();
+#endif
 
             //if (Cinemachine.CinemachineBrain.SoloCamera == null || Cinemachine.CinemachineBrain.SoloCamera.ToString() == "null") //virtual camera lost
             //if (vCam != null)
             //if (Cinemachine.CinemachineBrain.SoloCamera != null || Cinemachine.CinemachineBrain.SoloCamera.ToString() != "null")
             //if (GetComponent<Cinemachine.CinemachineBrain>().ActiveVirtualCamera != null)
-                //Cinemachine.CinemachineBrain.SoloCamera = vCam;
-                //Cinemachine.CinemachineBrain.SoloCamera = GetComponent<Cinemachine.CinemachineBrain>().ActiveVirtualCamera;
+            //Cinemachine.CinemachineBrain.SoloCamera = vCam;
+            //Cinemachine.CinemachineBrain.SoloCamera = GetComponent<Cinemachine.CinemachineBrain>().ActiveVirtualCamera;
 
             //}
 
@@ -8841,22 +8851,26 @@ public class Stereo3D : MonoBehaviour
     //        }
     //    }
 
+#if CINEMACHINE
     void VCamClip_Sync()
     {
-#if CINEMACHINE
-        if (debug) Debug.Log("VCamClip_Sync");
+//#if CINEMACHINE
+        //if (debug) Debug.Log("VCamClip_Sync");
 
-        if (cineMachineEnabled)
-            if (vCam != null)
-            {
-                //((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = cam.nearClipPlane;
-                ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.FarClipPlane = cam.farClipPlane;
-                ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = cam.nearClipPlane;
-            }
-            //else
-            //    Invoke("VCamClip_Sync", Time.deltaTime);
-#endif
+        //if (cineMachineEnabled)
+        //    if (vCam != null)
+        if (cineMachineEnabled && vCam != null)
+        {
+            if (debug) Debug.Log("VCamClip_Sync cineMachineEnabled");
+            //((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = cam.nearClipPlane;
+            ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.FarClipPlane = cam.farClipPlane;
+            ((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = cam.nearClipPlane;
+        }
+        //else
+        //    Invoke("VCamClip_Sync", Time.deltaTime);
+//#endif
     }
+#endif
 
     //void ClosestCamera_NearClipSet()
     //{
