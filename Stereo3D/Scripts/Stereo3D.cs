@@ -4890,6 +4890,8 @@ public class Stereo3D : MonoBehaviour
         Aspect_Set();
     }
 
+    //Rect pixelRect;
+
     void Aspect_Set()
     {
         //aspect = cam.aspect;
@@ -4927,6 +4929,11 @@ public class Stereo3D : MonoBehaviour
         //if (debug) Debug.Log("Aspect_Set Resize cam.rect " + cam.rect);
         if (debug) Debug.Log("Aspect_Set aspect " + aspect);
         //if (debug) Debug.Log("Aspect_Set cam.pixelWidth " + cam.pixelWidth + " cam.pixelHeight " + cam.pixelHeight);
+
+        //if (method == Method.Two_Displays_MirrorX)
+        //    pixelRect = new Rect((1 - cam.rect.x) * windowSize.x - cam.pixelWidth, cam.rect.y * windowSize.y, cam.pixelWidth, cam.pixelHeight);
+        //else
+        //    pixelRect = new Rect(cam.rect.x * windowSize.x, (1 - cam.rect.y) * windowSize.y - cam.pixelHeight, cam.pixelWidth, cam.pixelHeight);
 
         //ViewSet();
         FOV_Set();
@@ -7770,9 +7777,9 @@ public class Stereo3D : MonoBehaviour
     //void RenderQuad(ScriptableRenderContext context, Camera camera)
     void RenderQuad(ScriptableRenderContext context, Camera[] cameraList)
     {
-        //if (debug)
-        //foreach (Camera camera in cameraList)
-        //    Debug.Log(camera + " RenderQuad " + Time.time);
+        if (debug)
+        foreach (Camera camera in cameraList)
+            Debug.Log(camera + " RenderQuad " + Time.time);
 
         commandBuffer = new CommandBuffer();
 
@@ -7782,11 +7789,11 @@ public class Stereo3D : MonoBehaviour
             //commandBuffer = new CommandBuffer();
             //commandBuffer.name = "S3DRenderQuad";
 
-            //RenderTexture.active = null; //fixes rect in rect duplication
+            RenderTexture.active = null; //fixes rect inside rect
             //render clip space screen quad using S3DMaterial preset vertices buffer with:
-            //commandBuffer.DrawProcedural(Matrix4x4.identity, S3DMaterial, pass, MeshTopology.Quads, 4); //this need "nearClipPlane = -1" for same quad position as using Blit with custom camera Rect coordinates
-            //commandBuffer.Blit(null, cam.activeTexture, S3DMaterial, pass); //or this
-            commandBuffer.Blit(null, null as RenderTexture, S3DMaterial, pass); //or this
+            commandBuffer.DrawProcedural(Matrix4x4.identity, S3DMaterial, pass, MeshTopology.Quads, 4); //this need "nearClipPlane = -1" for same quad position as using Blit with custom camera Rect coordinates
+            //commandBuffer.Blit(null, cam.activeTexture, S3DMaterial, pass); //or this //not working with OpenGL core
+            //commandBuffer.Blit(null, null as RenderTexture, S3DMaterial, pass); //or this //not working with OpenGL core
 
             //below works without commandBuffer
             //Graphics.Blit(null, null, S3DMaterial, pass);
@@ -7839,13 +7846,37 @@ public class Stereo3D : MonoBehaviour
         {
             camera.targetTexture = null;
             commandBuffer.Blit(renderTexture_left, null as RenderTexture);
+            //commandBuffer.Blit(renderTexture_left, null as RenderTexture, S3DMaterial, pass);
+            //CustomBlit(renderTexture_left, null, S3DMaterial, pass);
+            //CustomBlit(false, false);
+            //CustomBlit(method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY);
+
+            //if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLCore)
+            //    CustomBlit(method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY);
+            //else
+            //    commandBuffer.Blit(renderTexture_left, null as RenderTexture, S3DMaterial, pass);
         }
         else
             if (camera == camera_right)
             {
                 camera.targetTexture = null;
                 //commandBuffer.Blit(renderTexture_right, null as RenderTexture, RenderTextureFlipMaterial);
-                commandBuffer.Blit(renderTexture_right, null as RenderTexture, S3DMaterial, pass);
+                //commandBuffer.Blit(renderTexture_right, null as RenderTexture, S3DMaterial, pass);
+
+                //Debug.Log("SystemInfo.graphicsDeviceType " + SystemInfo.graphicsDeviceType);
+                //CustomBlit(method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY);
+
+                if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLCore) //OpenGLCore not working(black screen and RenderTexture show once in rare case) with commandBuffer.Blit via material
+                {
+                    //CustomBlit(renderTexture_right, null, S3DMaterial, pass);
+
+                    //Rect r = camera.rect;
+                    //camera.rect = Rect.MinMaxRect(0, 0, 1, 1);
+                    CustomBlit(method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY);
+                    //camera.rect = r;
+                }
+                else
+                    commandBuffer.Blit(renderTexture_right, null as RenderTexture, S3DMaterial, pass);
             }
 #elif HDRP
         if (camera == topmostCamera)
@@ -7922,6 +7953,40 @@ public class Stereo3D : MonoBehaviour
         context.ExecuteCommandBuffer(commandBuffer);
         commandBuffer.Release();
         context.Submit();
+    }
+
+//void CustomBlit(RenderTexture source, RenderTexture destination, Material material, int pass) 
+void CustomBlit(bool flipX, bool flipY) 
+    {
+        // Set new rendertexture as active and feed the source texture into the material
+        //RenderTexture.active = destination;
+        RenderTexture.active = null;
+        //material.SetTexture("_MainTex", source);
+        //material.SetPass(pass);    // start the first rendering pass
+
+        // Low-Level Graphics Library calls
+        GL.PushMatrix();    // Calculate MVP Matrix and push it to the GL stack
+        GL.LoadOrtho();    // Set up Ortho-Perspective Transform
+        GL.Clear(true, true, Color.clear);
+        //GL.Viewport(new Rect(cam.rect.x * windowSize.x, cam.rect.y * windowSize.y, cam.rect.width * windowSize.x, cam.rect.height * windowSize.y));
+        //GL.Viewport(pixelRect);
+        GL.Viewport(new Rect(flipX ? (1 - cam.rect.x) * windowSize.x - cam.pixelWidth : cam.rect.x * windowSize.x, flipY ? (1 - cam.rect.y) * windowSize.y - cam.pixelHeight : cam.rect.y * windowSize.y, cam.rect.width * windowSize.x, cam.rect.height * windowSize.y));
+        GL.Begin(GL.QUADS);
+
+        GL.TexCoord2(flipX ? 1 : 0, flipY ? 1 : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
+        GL.Vertex3(0.0f, 0.0f, 0.0f); // Finalize and submit this vertex for rendering (bottom left)
+
+        GL.TexCoord2(flipX ? 1 : 0, flipY ? 0 : 1); // prepare input struct (Texcoord0 (UV's)) for this vertex
+        GL.Vertex3(0.0f, 1.0f, 0.0f); // Finalize and submit this vertex for rendering (top left)
+
+        GL.TexCoord2(flipX ? 0 : 1, flipY ? 0 : 1); // prepare input struct (Texcoord0 (UV's)) for this vertex
+        GL.Vertex3(1.0f, 1.0f, 0.0f); // Finalize and submit this vertex for rendering  (top right)
+
+        GL.TexCoord2(flipX ? 0 : 1, flipY ? 1 : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
+        GL.Vertex3(1.0f, 0.0f, 0.0f); // Finalize and submit this vertex for rendering  (bottom right)
+
+        GL.End();
+        GL.PopMatrix(); // Pop the matrices off the stack
     }
 
     //void RenderTexture_BlitToRenderTexture(ScriptableRenderContext context, Camera camera)
