@@ -2389,32 +2389,32 @@ public class Stereo3D : MonoBehaviour
             //oddFrame = !oddFrame;
             S3DMaterial.SetInt("_OddFrame", oddFrame ? 1 : 0);
 
-//#if !HDRP
-            if (optimize)
-            {
-                //if (Time.time < 10)
-                if (oddFrame)
-                {
-                    camera_left.Render();
-                    camera_right.Render();
+////#if !HDRP
+//            if (optimize)
+//            {
+//                //if (Time.time < 10)
+//                if (oddFrame)
+//                {
+//                    camera_left.Render();
+//                    camera_right.Render();
 
-#if !URP
-                    foreach (var c in additionalS3DCamerasStruct)
-                        if (c.camera)
-                        {
-                            c.camera_left.Render();
-                            c.camera_right.Render();
-                        }
-#endif
+//#if !URP
+//                    foreach (var c in additionalS3DCamerasStruct)
+//                        if (c.camera)
+//                        {
+//                            c.camera_left.Render();
+//                            c.camera_right.Render();
+//                        }
+//#endif
 
-                    if (GUIAsOverlay && GUIVisible)
-                    {
-                        //if (debug) Debug.Log("canvasCamera_left && canvasCamera_left.isActiveAndEnabled");
-                        canvasCamera_left.Render();
-                        canvasCamera_right.Render();
-                    }
-                }
-            }
+//                    if (GUIAsOverlay && GUIVisible)
+//                    {
+//                        //if (debug) Debug.Log("canvasCamera_left && canvasCamera_left.isActiveAndEnabled");
+//                        canvasCamera_left.Render();
+//                        canvasCamera_right.Render();
+//                    }
+//                }
+//            }
             //else
             //{
             //    if (oddFrame)
@@ -4708,12 +4708,12 @@ public class Stereo3D : MonoBehaviour
                 canvasCamera.enabled = false;
                 //canvasCamera_left.enabled = canvasCamera_right.enabled = true;
 
-//#if !HDRP
-                if (method == Method.Sequential && optimize)
-                    canvasCamera_left.enabled = canvasCamera_right.enabled = false;
-                else
-                    canvasCamera_left.enabled = canvasCamera_right.enabled = true;
-//#endif
+////#if !HDRP
+//                if (method == Method.Sequential && optimize)
+//                    canvasCamera_left.enabled = canvasCamera_right.enabled = false;
+//                else
+//                    canvasCamera_left.enabled = canvasCamera_right.enabled = true;
+////#endif
 
                 //canvasCamera.orthographicSize = canvasHalfSizeY;
                 canvasCamera_left.orthographicSize = canvasCamera_right.orthographicSize = canvasHalfSizeY;
@@ -6539,18 +6539,18 @@ public class Stereo3D : MonoBehaviour
                 }
 
                 case Method.Sequential:
-//#if !HDRP
-                    if (optimize)
-                    {
-                        camera_left.enabled = camera_right.enabled = false;
+////#if !HDRP
+//                    if (optimize)
+//                    {
+//                        camera_left.enabled = camera_right.enabled = false;
 
-#if !URP
-                        foreach (var c in additionalS3DCamerasStruct)
-                            if (c.camera)
-                                c.camera_left.enabled = c.camera_right.enabled = false;
-#endif
-                    }
+//#if !URP
+//                        foreach (var c in additionalS3DCamerasStruct)
+//                            if (c.camera)
+//                                c.camera_left.enabled = c.camera_right.enabled = false;
 //#endif
+//                    }
+////#endif
                     //nullRT = new RenderTexture(8, 8, 0, RenderTextureFormat.R8); //minimal RenderTexture for fastest rendering
                     ////nullRT = new RenderTexture(rtWidth, rtHeight, 0, RenderTextureFormat.R8); //minimal RenderTexture for fastest rendering
                     //nullRT.filterMode = FilterMode.Point;
@@ -7866,7 +7866,8 @@ public class Stereo3D : MonoBehaviour
                 //Debug.Log("SystemInfo.graphicsDeviceType " + SystemInfo.graphicsDeviceType);
                 //CustomBlit(method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY);
 
-                if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLCore) //OpenGLCore not working(black screen and RenderTexture show once in rare case) with commandBuffer.Blit via material
+                //if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLCore) //OpenGL not working(black screen and RenderTexture show once in rare case) with commandBuffer.Blit via material
+                if (SystemInfo.graphicsDeviceType.ToString().Contains("OpenGL"))
                 {
                     //CustomBlit(renderTexture_right, null, S3DMaterial, pass);
 
@@ -7970,7 +7971,12 @@ void CustomBlit(bool flipX, bool flipY)
         GL.Clear(true, true, Color.clear);
         //GL.Viewport(new Rect(cam.rect.x * windowSize.x, cam.rect.y * windowSize.y, cam.rect.width * windowSize.x, cam.rect.height * windowSize.y));
         //GL.Viewport(pixelRect);
-        GL.Viewport(new Rect(flipX ? (1 - cam.rect.x) * windowSize.x - cam.pixelWidth : cam.rect.x * windowSize.x, flipY ? (1 - cam.rect.y) * windowSize.y - cam.pixelHeight : cam.rect.y * windowSize.y, cam.rect.width * windowSize.x, cam.rect.height * windowSize.y));
+
+        GL.Viewport(new Rect(flipX ? (1 - cam.rect.x) * windowSize.x - cam.pixelWidth : cam.rect.x * windowSize.x, 
+            flipY ? (1 - cam.rect.y) * windowSize.y - cam.pixelHeight : cam.rect.y * windowSize.y, 
+            cam.rect.width * windowSize.x, 
+            cam.rect.height * windowSize.y));
+
         GL.Begin(GL.QUADS);
 
         GL.TexCoord2(flipX ? 1 : 0, flipY ? 1 : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
