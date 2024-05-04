@@ -2389,32 +2389,35 @@ public class Stereo3D : MonoBehaviour
             //oddFrame = !oddFrame;
             S3DMaterial.SetInt("_OddFrame", oddFrame ? 1 : 0);
 
-////#if !HDRP
-//            if (optimize)
-//            {
-//                //if (Time.time < 10)
-//                if (oddFrame)
-//                {
-//                    camera_left.Render();
-//                    camera_right.Render();
+//#if !HDRP
+#if !URP // GUI panel & additional cameras disappear in URP
+            if (optimize)
+            {
+                //if (Time.time < 10)
+                if (oddFrame)
+                {
+                    camera_left.Render();
+                    camera_right.Render();
 
 //#if !URP
-//                    foreach (var c in additionalS3DCamerasStruct)
-//                        if (c.camera)
-//                        {
-//                            c.camera_left.Render();
-//                            c.camera_right.Render();
-//                        }
+                    foreach (var c in additionalS3DCamerasStruct)
+                        if (c.camera)
+                        {
+                            c.camera_left.Render();
+                            c.camera_right.Render();
+                        }
 //#endif
 
-//                    if (GUIAsOverlay && GUIVisible)
-//                    {
-//                        //if (debug) Debug.Log("canvasCamera_left && canvasCamera_left.isActiveAndEnabled");
-//                        canvasCamera_left.Render();
-//                        canvasCamera_right.Render();
-//                    }
-//                }
-//            }
+                    if (GUIAsOverlay && GUIVisible)
+                    {
+                        //if (debug) Debug.Log("canvasCamera_left && canvasCamera_left.isActiveAndEnabled");
+                        canvasCamera_left.Render();
+                        canvasCamera_right.Render();
+                    }
+//#endif
+                }
+            }
+#endif
             //else
             //{
             //    if (oddFrame)
@@ -2428,7 +2431,7 @@ public class Stereo3D : MonoBehaviour
             //        camera_right.targetTexture = nullRT;
             //    }
             //}
-//#endif
+            //#endif
         }
 
         //if (cam.nearClipPlane == -1 && vCam != null && UnityEditor.Selection.activeObject == vCam.VirtualCameraGameObject)
@@ -4708,12 +4711,14 @@ public class Stereo3D : MonoBehaviour
                 canvasCamera.enabled = false;
                 //canvasCamera_left.enabled = canvasCamera_right.enabled = true;
 
-////#if !HDRP
-//                if (method == Method.Sequential && optimize)
-//                    canvasCamera_left.enabled = canvasCamera_right.enabled = false;
-//                else
-//                    canvasCamera_left.enabled = canvasCamera_right.enabled = true;
-////#endif
+//#if !HDRP
+#if !URP
+                if (method == Method.Sequential && optimize)
+                    canvasCamera_left.enabled = canvasCamera_right.enabled = false;
+                else
+#endif
+                    canvasCamera_left.enabled = canvasCamera_right.enabled = true;
+//#endif
 
                 //canvasCamera.orthographicSize = canvasHalfSizeY;
                 canvasCamera_left.orthographicSize = canvasCamera_right.orthographicSize = canvasHalfSizeY;
@@ -6539,18 +6544,19 @@ public class Stereo3D : MonoBehaviour
                 }
 
                 case Method.Sequential:
-////#if !HDRP
-//                    if (optimize)
-//                    {
-//                        camera_left.enabled = camera_right.enabled = false;
+//#if !HDRP
+#if !URP
+                    if (optimize)
+                    {
+                        camera_left.enabled = camera_right.enabled = false;
 
 //#if !URP
-//                        foreach (var c in additionalS3DCamerasStruct)
-//                            if (c.camera)
-//                                c.camera_left.enabled = c.camera_right.enabled = false;
+                        foreach (var c in additionalS3DCamerasStruct)
+                            if (c.camera)
+                                c.camera_left.enabled = c.camera_right.enabled = false;
 //#endif
-//                    }
-////#endif
+                    }
+#endif
                     //nullRT = new RenderTexture(8, 8, 0, RenderTextureFormat.R8); //minimal RenderTexture for fastest rendering
                     ////nullRT = new RenderTexture(rtWidth, rtHeight, 0, RenderTextureFormat.R8); //minimal RenderTexture for fastest rendering
                     //nullRT.filterMode = FilterMode.Point;
@@ -7171,11 +7177,13 @@ public class Stereo3D : MonoBehaviour
         //    //}
         //}
 
-        if (topmostCamera_left)
-        {
-            Destroy(topmostCamera_left.GetComponent<OnRenderImageDelegate>());
-            Destroy(topmostCamera_right.GetComponent<OnRenderImageDelegate>());
-        }
+        //if (topmostCamera_left)
+        //{
+        //    Destroy(topmostCamera_left.GetComponent<OnRenderImageDelegate>());
+        //    Destroy(topmostCamera_right.GetComponent<OnRenderImageDelegate>());
+        //}
+
+        OnRenderImageEvent_Remove();
 #endif
 
         //if (canvasCamera_left && canvasCamera_left.isActiveAndEnabled)
@@ -7209,7 +7217,7 @@ public class Stereo3D : MonoBehaviour
             }
 
 #if !(URP || HDRP)
-        if (method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
+        if (S3DEnabled && (method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY))
         {
             topmostCamera_left.gameObject.AddComponent<OnRenderImageDelegate>().RenderImageEvent += OnRenderImageEvent;
             topmostCamera_right.gameObject.AddComponent<OnRenderImageDelegate>().RenderImageEvent += OnRenderImageEvent;
@@ -7218,6 +7226,15 @@ public class Stereo3D : MonoBehaviour
 
         //if (debug) Debug.Log("TopMostCamera_Set left: " + topmostCamera_left + " right: " + topmostCamera_right);
         if (debug) Debug.Log("TopMostCamera_Set: " + topmostCamera + " left: " + topmostCamera_left + " right: " + topmostCamera_right);
+    }
+
+    void OnRenderImageEvent_Remove()
+    {
+        if (topmostCamera_left)
+        {
+            Destroy(topmostCamera_left.GetComponent<OnRenderImageDelegate>());
+            Destroy(topmostCamera_right.GetComponent<OnRenderImageDelegate>());
+        }
     }
 
     void RenderTextureContextSet()
@@ -8986,6 +9003,7 @@ void CustomBlit(bool flipX, bool flipY)
         //canvasCamera_right.gameObject.GetComponent<OnRenderImageDelegate>().RenderImageEvent -= OnRenderImageEvent;
         //Destroy(camera_left.gameObject.GetComponent<OnRenderImageDelegate>());
         //Destroy(camera_right.gameObject.GetComponent<OnRenderImageDelegate>());
+        OnRenderImageEvent_Remove();
 #endif
         //cam.targetTexture = null;
         //camera_left.targetTexture = null;
@@ -9377,7 +9395,7 @@ void CustomBlit(bool flipX, bool flipY)
 
     void OnRenderImageEvent(RenderTexture src, RenderTexture dest, Camera c)
     {
-        //if (debug) Debug.Log(c + " OnRenderImageEvent " + Time.time);
+        if (debug) Debug.Log(c + " OnRenderImageEvent " + Time.time);
 
         //if (method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
         //    if (!(canvasCamera_left && canvasCamera_left.isActiveAndEnabled))
@@ -9403,11 +9421,18 @@ void CustomBlit(bool flipX, bool flipY)
         //    BlitToScreen(c, RenderTextureFlipMaterial);
 
         c.targetTexture = null;
+        //RenderTexture.active = null;
+        Rect r = c.rect;
+        c.rect = Rect.MinMaxRect(0, 0, 1, 1);
 
         if (c.name.Contains("_left"))
-            Graphics.Blit(RenderTexture.active, null as RenderTexture);
+            //Graphics.Blit(RenderTexture.active, null as RenderTexture);
+            Graphics.Blit(renderTexture_left, null as RenderTexture);
         else
-            Graphics.Blit(RenderTexture.active, null, S3DMaterial, pass);
+            //Graphics.Blit(RenderTexture.active, null, S3DMaterial, pass);
+            Graphics.Blit(renderTexture_right, null, S3DMaterial, pass);
+
+        c.rect = r;
     }
 
     //void BlitToScreen(Camera c, Material m)
