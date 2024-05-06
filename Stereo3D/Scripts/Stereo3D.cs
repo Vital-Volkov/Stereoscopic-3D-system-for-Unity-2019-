@@ -29,6 +29,7 @@ using System.Runtime.Serialization.Formatters.Binary;
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
+//using static Unity.VisualScripting.Member;
 
 #if ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
@@ -395,6 +396,7 @@ public class Stereo3D : MonoBehaviour
     bool cameraDataStructIsReady;
     bool physicalCamera;
     Vector2 camVanishPoint;
+    RenderTextureFormat defaultRTFormat;
 
     public void Awake()
     {
@@ -1661,6 +1663,7 @@ public class Stereo3D : MonoBehaviour
             outputMethod_dropdown.value = (int)method;
             matchUserIPD_toggle.isOn = matchUserIPD;
             slotName_inputField.text = slotName;
+            defaultRTFormat = lastRTFormat = RTFormat;
 
             //GUI_Set();
             //Invoke("GUI_Set", Time.deltaTime * 32);
@@ -1711,7 +1714,7 @@ public class Stereo3D : MonoBehaviour
             lastGUIAsOverlay = GUIAsOverlay;
             lastGUISizeKeep = GUISizeKeep;
             lastCameraPrefab = cameraPrefab;
-            lastRTFormat = RTFormat;
+            //lastRTFormat = RTFormat;
             //lastSetMatrixDirectly = setMatrixDirectly;
             //lastInterlaceType = interlaceType;
             //lastAnaglyphLeftColor = anaglyphLeftColor;
@@ -3257,6 +3260,8 @@ public class Stereo3D : MonoBehaviour
 #if URP || HDRP
             if (lastS3DEnabled)
                 RenderPipelineManager.beginCameraRendering += PreRenderClearScreen;
+#else
+            Camera.onPreRender += PreRenderClearScreen;
 #endif
             lastS3DEnabled = S3DEnabled;
             enableS3D_toggle.isOn = S3DEnabled;
@@ -3307,6 +3312,8 @@ public class Stereo3D : MonoBehaviour
 #if URP || HDRP
             if (method == Method.Two_Displays)
                 RenderPipelineManager.beginCameraRendering += PreRenderClearScreen;
+#else
+            Camera.onPreRender += PreRenderClearScreen;
 #endif
 
             lastMethod = method;
@@ -3488,6 +3495,8 @@ public class Stereo3D : MonoBehaviour
             //Render_Set();
 #if URP || HDRP
             RenderPipelineManager.beginCameraRendering += PreRenderClearScreen;
+#else
+            Camera.onPreRender += PreRenderClearScreen;
 #endif
         }
 
@@ -6993,10 +7002,10 @@ public class Stereo3D : MonoBehaviour
                 //}
             }
 
-#if !(URP || HDRP)
-            //clearFrameCount = 0;
-            Camera.onPreRender += PreRenderClearScreen;
-#endif
+//#if !(URP || HDRP)
+//            //clearFrameCount = 0;
+//            Camera.onPreRender += PreRenderClearScreen;
+//#endif
 
             //#if UNITY_2019_1_OR_NEWER
             //                if (!defaultRender)
@@ -7293,6 +7302,10 @@ public class Stereo3D : MonoBehaviour
 
     RenderTexture RT_Make()
     {
+#if !URP && !HDRP && !UNITY_2022_1_OR_NEWER
+        if (QualitySettings.antiAliasing != 0)
+            lastRTFormat = RTFormat = RenderTextureFormat.ARGBFloat;
+#endif
         RenderTexture rt = new RenderTexture(rtWidth, rtHeight, 24, RTFormat);
 
         //RenderTextureDescriptor desc = new RenderTextureDescriptor(); //unflipped for use with bindMS = true custom antialiasing resolving samples in shader
@@ -8711,7 +8724,7 @@ void CustomBlit(bool flipX, bool flipY)
     }
 #endif
 
-                void Vertices() //set clip space vertices and texture coordinates for render fullscreen quad via shader buffer
+    void Vertices() //set clip space vertices and texture coordinates for render fullscreen quad via shader buffer
     {
         //if (defaultRender)
 //#if !(URP || HDRP)
@@ -9120,6 +9133,8 @@ void CustomBlit(bool flipX, bool flipY)
 
             //Destroy(canvasCamera_left.GetComponent<CameraBlit>());
             //Destroy(canvasCamera_right.GetComponent<CameraBlit>());
+
+        lastRTFormat = RTFormat = defaultRTFormat;
     }
 
     void CameraDataStruct_Change()
@@ -9218,8 +9233,8 @@ void CustomBlit(bool flipX, bool flipY)
         //else
         //    Camera.onPreRender -= PreRenderClearScreen;
 
-        //if (clearFrameCount == 4) //2 is enought in Player but min 3 is required in Editor
-        if (clearFrameCount == 1) //1 is enought in URP
+        if (clearFrameCount == 4) //2 is enought in Player but min 3 is required in Editor
+        //if (clearFrameCount == 1) //1 is enought in URP
         {
             //clearScreen = false;
             clearFrameCount = 0;
@@ -9394,6 +9409,7 @@ void CustomBlit(bool flipX, bool flipY)
     //}
 
     void OnRenderImageEvent(RenderTexture src, RenderTexture dest, Camera c)
+    //void OnRenderImageEvent(Camera c)
     {
         if (debug) Debug.Log(c + " OnRenderImageEvent " + Time.time);
 
@@ -9421,18 +9437,99 @@ void CustomBlit(bool flipX, bool flipY)
         //    BlitToScreen(c, RenderTextureFlipMaterial);
 
         c.targetTexture = null;
-        //RenderTexture.active = null;
+#if UNITY_2022_1_OR_NEWER
         Rect r = c.rect;
         c.rect = Rect.MinMaxRect(0, 0, 1, 1);
+#endif
 
         if (c.name.Contains("_left"))
-            //Graphics.Blit(RenderTexture.active, null as RenderTexture);
-            Graphics.Blit(renderTexture_left, null as RenderTexture);
+        {
+            if (SystemInfo.graphicsDeviceType.ToString().Contains("OpenGL"))
+            {
+                //Rect r = camera.rect;
+                //camera.rect = Rect.MinMaxRect(0, 0, 1, 1);
+                //S3DMaterial.SetTexture("_MainTex", renderTexture_left);
+                //S3DMaterial.SetPass(pass);
+                //CustomBlit(method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, rt, S3DMaterial);
+                //camera.rect = r;
+#if UNITY_2022_1_OR_NEWER
+                RenderTexture.active = null;
+                S3DMaterial.SetTexture("_MainTex", renderTexture_left);
+                S3DMaterial.SetPass(pass);
+                Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
+#else
+                RenderTexture rt = new RenderTexture(RenderTexture.active);
+                Graphics.CopyTexture(RenderTexture.active, rt);
+                RenderTexture.active = null;
+                S3DMaterial.SetTexture("_MainTex", rt);
+                S3DMaterial.SetPass(pass);
+                Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
+                rt.Release();
+#endif
+            }
+            else
+                //Graphics.Blit(RenderTexture.active, null as RenderTexture);
+                //Graphics.Blit(RenderTexture.active, null, S3DMaterial, pass);
+                //Graphics.Blit(src, dest);
+                //Graphics.Blit(dest, null as RenderTexture);
+                //Graphics.Blit(renderTexture_left, null as RenderTexture);
+                //Graphics.Blit(renderTexture_left, null, S3DMaterial, pass);
+                //Graphics.Blit(rt, null, S3DMaterial, pass);
+                Graphics.Blit(RenderTexture.active, null, S3DMaterial, pass);
+        }
         else
             //Graphics.Blit(RenderTexture.active, null, S3DMaterial, pass);
-            Graphics.Blit(renderTexture_right, null, S3DMaterial, pass);
+            Graphics.Blit(RenderTexture.active, null as RenderTexture);
+            //Graphics.Blit(renderTexture_right, null, S3DMaterial, pass);
+            //Graphics.Blit(renderTexture_right, null as RenderTexture);
+            //CustomBlit(false, false, renderTexture_right, S3DMaterial);
 
+#if UNITY_2022_1_OR_NEWER
         c.rect = r;
+#endif
+    }
+
+    //void CustomBlit(RenderTexture source, RenderTexture destination, Material material, int pass) 
+    //void CustomBlit(bool flipX, bool flipY) 
+//void CustomBlit(bool flipX, bool flipY, RenderTexture source, Material material, int pass) 
+void CustomBlit(bool flipX, bool flipY, RenderTexture source, Material material)
+    {
+        // Low-Level Graphics Library calls
+        GL.PushMatrix();    // Calculate MVP Matrix and push it to the GL stack
+        GL.LoadIdentity();
+        GL.LoadOrtho();    // Set up Ortho-Perspective Transform
+        //GL.LoadIdentity();
+        // Set new rendertexture as active and feed the source texture into the material
+        //RenderTexture.active = destination;
+        RenderTexture.active = null;
+        //material.SetTexture("_MainTex", source);
+        //material.SetPass(pass);    // start the first rendering pass
+
+        //GL.Clear(true, true, Color.blue);
+        //GL.Viewport(new Rect(cam.rect.x * windowSize.x, cam.rect.y * windowSize.y, cam.rect.width * windowSize.x, cam.rect.height * windowSize.y));
+        //GL.Viewport(pixelRect);
+
+        //GL.Viewport(new Rect(flipX ? (1 - cam.rect.x) * windowSize.x - cam.pixelWidth : cam.rect.x * windowSize.x,
+        //    flipY ? (1 - cam.rect.y) * windowSize.y - cam.pixelHeight : cam.rect.y * windowSize.y,
+        //    cam.rect.width * windowSize.x,
+        //    cam.rect.height * windowSize.y));
+
+        GL.Begin(GL.QUADS);
+
+        GL.TexCoord2(flipX ? 1 : 0, flipY ? 1 : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
+        GL.Vertex3(0.0f, 0.0f, 0.0f); // Finalize and submit this vertex for rendering (bottom left)
+
+        GL.TexCoord2(flipX ? 1 : 0, flipY ? 0 : 1); // prepare input struct (Texcoord0 (UV's)) for this vertex
+        GL.Vertex3(0.0f, 1.0f, 0.0f); // Finalize and submit this vertex for rendering (top left)
+
+        GL.TexCoord2(flipX ? 0 : 1, flipY ? 0 : 1); // prepare input struct (Texcoord0 (UV's)) for this vertex
+        GL.Vertex3(1.0f, 1.0f, 0.0f); // Finalize and submit this vertex for rendering  (top right)
+
+        GL.TexCoord2(flipX ? 0 : 1, flipY ? 1 : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
+        GL.Vertex3(1.0f, 0.0f, 0.0f); // Finalize and submit this vertex for rendering  (bottom right)
+
+        GL.End();
+        GL.PopMatrix(); // Pop the matrices off the stack
     }
 
     //void BlitToScreen(Camera c, Material m)
