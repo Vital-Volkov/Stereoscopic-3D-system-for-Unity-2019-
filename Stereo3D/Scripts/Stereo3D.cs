@@ -31,7 +31,7 @@ using System.Collections.Generic;
 using System.Reflection;
 //using static Unity.VisualScripting.Member;
 
-#if ENABLE_INPUT_SYSTEM
+#if INPUT_SYSTEM
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Utilities;
 
@@ -86,12 +86,12 @@ using UnityEngine.InputSystem.Utilities;
 #endif
 
 //#if STARTER_ASSETS_PACKAGES_CHECKED
-//#if ENABLE_INPUT_SYSTEM
-#if STARTER_ASSETS_PACKAGES_CHECKED || UNITY_2022_1_OR_NEWER && ENABLE_INPUT_SYSTEM
+//#if INPUT_SYSTEM
+#if STARTER_ASSETS_PACKAGES_CHECKED || UNITY_2022_1_OR_NEWER && INPUT_SYSTEM
 using StarterAssets;
 #endif
 
-#if UNITY_POST_PROCESSING_STACK_V2
+#if POST_PROCESSING_STACK_V2
 using UnityEngine.Rendering.PostProcessing;
 #endif
 
@@ -157,7 +157,7 @@ public class Stereo3D : MonoBehaviour
     public bool detectCameraSettingChange = true;
     public bool debug;
 
-#if ENABLE_INPUT_SYSTEM
+#if INPUT_SYSTEM
     public InputAction GUIAction;
     public InputAction S3DAction;
     public InputAction FOVAction;
@@ -180,7 +180,8 @@ public class Stereo3D : MonoBehaviour
     IDisposable inputSystem_KeyListener;
     //StarterAssetsInputs starterAssetsInputs;
 #else
-    public KeyCode GUIKey = KeyCode.Tab; //GUI window show/hide Key
+    //public KeyCode GUIKey = KeyCode.Tab; //GUI window show/hide Key
+    public KeyCode GUIKey = KeyCode.Keypad0; //GUI window show/hide Key
     public KeyCode S3DKey = KeyCode.KeypadMultiply; //S3D enable/disable shortcut Key and hold "LeftControl" Key to swap left-right cameras
     public KeyCode increaseKey = KeyCode.KeypadPlus; //increase Field Of View shortcut Key + hold "Shift" Key to faster change + hold "LeftControl" Key to increase virtual IPD if "matchUserIPD" unchecked
     public KeyCode decreaseKey = KeyCode.KeypadMinus; //decrease Field Of View shortcut Key + hold "Shift" Key to faster change + hold "LeftControl" Key to decrease virtual IPD if "matchUserIPD" unchecked
@@ -358,7 +359,7 @@ public class Stereo3D : MonoBehaviour
     AdditionalS3DCamera[] additionalS3DCamerasStruct;
     //bool loaded;
 
-#if UNITY_POST_PROCESSING_STACK_V2
+#if POST_PROCESSING_STACK_V2
     PostProcessLayer PPLayer;
     bool PPLayerEnabled;
 #endif
@@ -387,7 +388,7 @@ public class Stereo3D : MonoBehaviour
 #endif
 
 //#if STARTER_ASSETS_PACKAGES_CHECKED
-#if STARTER_ASSETS_PACKAGES_CHECKED || UNITY_2022_1_OR_NEWER && ENABLE_INPUT_SYSTEM
+#if STARTER_ASSETS_PACKAGES_CHECKED || UNITY_2022_1_OR_NEWER && INPUT_SYSTEM
     StarterAssetsInputs starterAssetsInputs;
 #endif
 
@@ -416,11 +417,12 @@ public class Stereo3D : MonoBehaviour
 
         if (!name.Contains("(Clone)"))
         {
-#if ENABLE_INPUT_SYSTEM
+#if INPUT_SYSTEM
             //if (debug) Debug.Log(GUIAction.bindings.Count);
 
             if (GUIAction.bindings.Count == 0)
-                GUIAction.AddBinding("<Keyboard>/tab");
+                //GUIAction.AddBinding("<Keyboard>/tab");
+                GUIAction.AddBinding("<Keyboard>/numpad0");
 
             if (S3DAction.bindings.Count == 0)
                 S3DAction.AddBinding("<Keyboard>/numpadMultiply");
@@ -440,6 +442,7 @@ public class Stereo3D : MonoBehaviour
                 modifier3Action.AddBinding("<Keyboard>/leftAlt");
 
             //if (debug) Debug.Log(modifier3Action.bindings[0].effectivePath);
+            //Debug.Log(GUIAction.bindings[0].effectivePath);
 
             GUIAction.performed += context => { OnGUIAction(context); };
             //S3DAction.performed += context => { OnS3DAction(context); };
@@ -471,19 +474,6 @@ public class Stereo3D : MonoBehaviour
         if (!name.Contains("(Clone)"))
         {
             if (debug) Debug.Log("OnEnable cameraDataStructIsReady " + cameraDataStructIsReady);
-
-#if UNITY_POST_PROCESSING_STACK_V2
-        if (GetComponent<PostProcessLayer>())
-        {
-            PPLayer = GetComponent<PostProcessLayer>();
-            PPLayerEnabled = PPLayer.enabled;
-
-            if (PPLayerEnabled)
-                //setMatrixDirectly = false;
-                cam.usePhysicalProperties = true;
-        }
-#endif
-
             //if (debug) Debug.Log("windowSize " + windowSize);
             //List<Type> types = GetAllTypesInAssembly(new string[] { "Assembly-CSharp" });
             //if (debug) Debug.Log(types.Count);
@@ -526,6 +516,19 @@ public class Stereo3D : MonoBehaviour
             //RenderTextureFlipMaterial2 = new Material(Shader.Find("Render Texture Flip"));
 
             cam = GetComponent<Camera>();
+
+#if POST_PROCESSING_STACK_V2
+        if (GetComponent<PostProcessLayer>())
+        {
+            PPLayer = GetComponent<PostProcessLayer>();
+            PPLayerEnabled = PPLayer.enabled;
+
+            if (PPLayerEnabled)
+                //setMatrixDirectly = false;
+                cam.usePhysicalProperties = true;
+        }
+#endif
+
             cam.orthographic = false; //S3D is not possible in orthographic
             cam.stereoTargetEye = StereoTargetEyeMask.None;
             sceneCullingMask = cam.cullingMask;
@@ -622,7 +625,7 @@ public class Stereo3D : MonoBehaviour
             //if (debug) Debug.Log("OnEnable sceneNearClip " + sceneNearClip);
             //if (debug) Debug.Log("OnEnable sceneNearClip " + sceneNearClip + " sceneFarClip " + sceneFarClip);
 
-//#if UNITY_POST_PROCESSING_STACK_V2
+//#if POST_PROCESSING_STACK_V2
 //        if (GetComponent<PostProcessLayer>())
 //        {
 //            PPLayer = GetComponent<PostProcessLayer>();
@@ -634,7 +637,7 @@ public class Stereo3D : MonoBehaviour
 //        }
 //#endif
 
-            //#if ENABLE_INPUT_SYSTEM
+            //#if INPUT_SYSTEM
             //        GUIAction.Enable();
             //        S3DAction.Enable();
             //        FOVAction.Enable();
@@ -1298,8 +1301,8 @@ public class Stereo3D : MonoBehaviour
 
             //if (inputSystem)
 //#if STARTER_ASSETS_PACKAGES_CHECKED
-//#if ENABLE_INPUT_SYSTEM
-#if STARTER_ASSETS_PACKAGES_CHECKED || UNITY_2022_1_OR_NEWER && ENABLE_INPUT_SYSTEM
+//#if INPUT_SYSTEM
+#if STARTER_ASSETS_PACKAGES_CHECKED || UNITY_2022_1_OR_NEWER && INPUT_SYSTEM
             {
                 //if (debug) Debug.Log(FindObjectOfType<StarterAssetsInputs>());
                 starterAssetsInputs = FindObjectOfType<StarterAssetsInputs>();
@@ -1327,7 +1330,7 @@ public class Stereo3D : MonoBehaviour
             //            //canvas.gameObject.AddComponent<EventSystem>();
             //            //canvas.gameObject.AddComponent<StandaloneInputModule>();
 
-            //#if ENABLE_INPUT_SYSTEM
+            //#if INPUT_SYSTEM
             //                new GameObject("UI_EventSystem", typeof(EventSystem), typeof(UnityEngine.InputSystem.UI.InputSystemUIInputModule));
             //#else
             //                new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
@@ -1336,7 +1339,7 @@ public class Stereo3D : MonoBehaviour
             //        //else
             //        //    //if (debug) Debug.Log("EventSystem.current " + EventSystem.current.name);
 
-#if ENABLE_INPUT_SYSTEM
+#if INPUT_SYSTEM
         GUIAction.Enable();
         S3DAction.Enable();
         FOVAction.Enable();
@@ -2551,7 +2554,7 @@ public class Stereo3D : MonoBehaviour
         //    //cam.nearClipPlane = .001f;
         //}
 
-#if UNITY_EDITOR && ENABLE_INPUT_SYSTEM
+#if UNITY_EDITOR && INPUT_SYSTEM
         //if (debug) Debug.Log(GUIAction.bindings[0].path);
         //if (debug) Debug.Log(GUIAction.bindings.Count);
 
@@ -2816,7 +2819,7 @@ public class Stereo3D : MonoBehaviour
         //if (cineMachineBrain.ActiveVirtualCamera == null)
         //    //if (debug) Debug.Log(cineMachineBrain.ActiveVirtualCamera);
 
-#if ENABLE_INPUT_SYSTEM
+#if INPUT_SYSTEM
         //if (inputSystem)
         //{
         //if (debug) Debug.Log("inputSystem");
@@ -3116,7 +3119,7 @@ public class Stereo3D : MonoBehaviour
 
             Vector2 pointerPosition;
 
-#if ENABLE_INPUT_SYSTEM
+#if INPUT_SYSTEM
             //cursorLocalPos.x = (Pointer.current.position.value.x / windowSize.x - .5f) * canvasWidthWithOffset;
             //cursorLocalPos.y = (Pointer.current.position.value.y / windowSize.y - 1) * canvasSize.y;
             //pointerPosition.x = Pointer.current.position.value.x;
@@ -3200,8 +3203,8 @@ public class Stereo3D : MonoBehaviour
             {
                 //if (inputSystem)
 //#if STARTER_ASSETS_PACKAGES_CHECKED
-//#if ENABLE_INPUT_SYSTEM
-#if STARTER_ASSETS_PACKAGES_CHECKED || UNITY_2022_1_OR_NEWER && ENABLE_INPUT_SYSTEM
+//#if INPUT_SYSTEM
+#if STARTER_ASSETS_PACKAGES_CHECKED || UNITY_2022_1_OR_NEWER && INPUT_SYSTEM
                 {
                     cursorLockedDefault = starterAssetsInputs.cursorLocked;
                     cursorInputForLookDefault = starterAssetsInputs.cursorInputForLook;
@@ -4305,7 +4308,7 @@ public class Stereo3D : MonoBehaviour
     //    typeof(HDRenderPipelineAsset).GetField("m_RenderPipelineSettings", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(GraphicsSettings.currentRenderPipeline, settings);
     //}
 
-#if ENABLE_INPUT_SYSTEM
+#if INPUT_SYSTEM
     //void PlayerInputEnable()
     //{
     //    playerInput.enabled = true;
@@ -5063,8 +5066,8 @@ public class Stereo3D : MonoBehaviour
 
                     //if (inputSystem)
 //#if STARTER_ASSETS_PACKAGES_CHECKED
-//#if ENABLE_INPUT_SYSTEM
-#if STARTER_ASSETS_PACKAGES_CHECKED || UNITY_2022_1_OR_NEWER && ENABLE_INPUT_SYSTEM
+//#if INPUT_SYSTEM
+#if STARTER_ASSETS_PACKAGES_CHECKED || UNITY_2022_1_OR_NEWER && INPUT_SYSTEM
                     {
                         starterAssetsInputs.cursorLocked = false;
                         starterAssetsInputs.cursorInputForLook = false;
@@ -5207,8 +5210,8 @@ public class Stereo3D : MonoBehaviour
     {
         //if (inputSystem)
 //#if STARTER_ASSETS_PACKAGES_CHECKED
-//#if ENABLE_INPUT_SYSTEM
-#if STARTER_ASSETS_PACKAGES_CHECKED || UNITY_2022_1_OR_NEWER && ENABLE_INPUT_SYSTEM
+//#if INPUT_SYSTEM
+#if STARTER_ASSETS_PACKAGES_CHECKED || UNITY_2022_1_OR_NEWER && INPUT_SYSTEM
         {
             starterAssetsInputs.cursorLocked = cursorLockedDefault;
             starterAssetsInputs.cursorInputForLook = cursorInputForLookDefault;
@@ -6370,7 +6373,7 @@ public class Stereo3D : MonoBehaviour
 
         if (S3DEnabled)
         {
-#if UNITY_POST_PROCESSING_STACK_V2
+#if POST_PROCESSING_STACK_V2
             if (PPLayer)
                 PPLayer.enabled = false; //disabling Post Process Layer if exist due it heavily eats fps even when the camera doesn't render the scene
 #endif
@@ -6763,7 +6766,7 @@ public class Stereo3D : MonoBehaviour
                 //displaySelectWaitInput = false;
                 StaticTooltip_Destroy();
 
-#if ENABLE_INPUT_SYSTEM
+#if INPUT_SYSTEM
                 if (inputSystem_KeyListener != null)
                     inputSystem_KeyListener.Dispose();
 #endif
@@ -7398,7 +7401,7 @@ public class Stereo3D : MonoBehaviour
                 //Destroy(staticTooltip);
                 //displaySelectWaitInput = false;
                 StaticTooltip_Destroy();
-#if ENABLE_INPUT_SYSTEM
+#if INPUT_SYSTEM
                 inputSystem_KeyListener.Dispose();
 #endif
                 TargetDisplays_Set();
@@ -7432,7 +7435,7 @@ public class Stereo3D : MonoBehaviour
         //if (debug) Debug.Log("fakeDisplays[0].active " + fakeDisplays[0].active);
         StaticTooltip_Make("Press the number key to select the display for Left camera:" + displays);
         displaySelectWaitInput = true;
-#if ENABLE_INPUT_SYSTEM
+#if INPUT_SYSTEM
         inputSystem_KeyListener = InputSystem.onAnyButtonPress.Call(AnyKeyPress);
 #endif
     }
@@ -8865,7 +8868,7 @@ void CustomBlit(bool flipX, bool flipY)
             HDRPSettings_Restore();
             cameraDataStructIsReady = false;
 
-#if ENABLE_INPUT_SYSTEM
+#if INPUT_SYSTEM
             GUIAction.Disable();
             S3DAction.Disable();
             FOVAction.Disable();
@@ -8892,7 +8895,7 @@ void CustomBlit(bool flipX, bool flipY)
             Destroy(canvas.gameObject);
             Resources.UnloadUnusedAssets(); //free memory
 
-//#if ENABLE_INPUT_SYSTEM
+//#if INPUT_SYSTEM
 //            GUIAction.Disable();
 //            S3DAction.Disable();
 //            FOVAction.Disable();
@@ -9125,7 +9128,7 @@ void CustomBlit(bool flipX, bool flipY)
 	        renderTexture_right.Release();
         }
 
-//#if UNITY_POST_PROCESSING_STACK_V2
+//#if POST_PROCESSING_STACK_V2
 //        if (PPLayer)
 //            PPLayer.enabled = PPLayerEnabled;
 //#endif
@@ -10973,135 +10976,239 @@ void CustomBlit(bool flipX, bool flipY, RenderTexture source, Material material)
         }
     }
 
-#if UNITY_EDITOR
-//#if UNITY_EDITOR && UNITY_2021_2_OR_NEWER
-    [UnityEditor.InitializeOnLoad]
-    public class Startup
-    {
-        static Startup()
-        {
-            //if (debug) Debug.Log("Up and running");
+//#if UNITY_EDITOR
+//    //#if UNITY_EDITOR && UNITY_2021_2_OR_NEWER
+//    [UnityEditor.InitializeOnLoad]
+//    public class Startup
+//    {
+//        static Startup()
+//        {
+//            //if (debug) Debug.Log("Up and running");
 
+//            //#if UNITY_2021_2_OR_NEWER
+//            //foreach (var package in UnityEditor.PackageManager.PackageInfo.GetAllRegisteredPackages())
+//            //    if (package.name == "com.unity.cinemachine")
+//            //UnityEditor.PackageManager.Requests.ListRequest packageListRequest = UnityEditor.PackageManager.Client.List();
+
+//            //while (!packageListRequest.IsCompleted){ } //wait for packageListRequest.IsCompleted
+
+//            //foreach (var package in packageListRequest.Result)
+//            //    Debug.Log(package.assetPath);
+
+//            //UnityEditor.Compilation.CompilationPipeline.assemblyCompilationStarted -= CompilationPipeline_assemblyCompilationStarted;
+//            //UnityEditor.Compilation.CompilationPipeline.assemblyCompilationStarted += CompilationPipeline_assemblyCompilationStarted;
+//            //UnityEditor.Compilation.CompilationPipeline.compilationStarted -= CompilationPipeline_compilationStarted;
+//            UnityEditor.Compilation.CompilationPipeline.compilationStarted += CompilationPipeline_compilationStarted;
+
+//            if (UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.cinemachine") != null)
+//            {
+//                ////if (debug) Debug.Log(UnityEditor.EditorUserBuildSettings.selectedStandaloneTarget);
+//                //var buildTarget = UnityEditor.Build.NamedBuildTarget.FromBuildTargetGroup(UnityEditor.EditorUserBuildSettings.selectedBuildTargetGroup);
+//                //UnityEditor.PlayerSettings.GetScriptingDefineSymbols(buildTarget, out string[] defines);
+//                ////if (debug) Debug.Log(defines.Length);
+
+//                //bool cinemachineDefine = false;
+
+//                //foreach (string define in defines)
+//                //    if (define.Contains("CINEMACHINE"))
+//                //        cinemachineDefine = true;
+
+//                //if (!cinemachineDefine)
+//                //{
+//                //    string[] newDefines = new string[defines.Length + 1];
+//                //    defines.CopyTo(newDefines, 0);
+//                //    newDefines.SetValue("CINEMACHINE", defines.Length);
+//                //    UnityEditor.PlayerSettings.SetScriptingDefineSymbols(buildTarget, newDefines);
+
+//                //    //foreach (string define in newDefines)
+//                //        //if (debug) Debug.Log(define);
+//                //}
+
+//                AddDefine("CINEMACHINE");
+//            }
+//            //#endif
+
+//            if (UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.inputsystem") != null)
+//                AddDefine("INPUT_SYSTEM");
+//            //else
+//            //    RemoveDefine("INPUT_SYSTEM");
+
+//            if (UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.postprocessing") != null)
+//                AddDefine("POST_PROCESSING_STACK_V2");
+//            //else
+//            //    RemoveDefine("POST_PROCESSING_STACK_V2");
+
+//            foreach (var assembly in UnityEditor.Compilation.CompilationPipeline.GetAssemblies())
+//            {
+//                if (assembly.name.StartsWith("Assembly-CSharp"))
+//                {
+
+//                    foreach (var fileName in assembly.sourceFiles)
+//                    {
+//                        if (fileName.Contains("LookWithMouse"))
+//                            AddDefine("LookWithMouse");
+
+//                        if (fileName.Contains("SimpleCameraController"))
+//                            AddDefine("SimpleCameraController");
+//                    }
+//                }
+//            }
+
+//            //if (GraphicsSettings.defaultRenderPipeline.name.Contains("Universal"))
+//            //    AddDefine("URP");
+
+//            //if (GraphicsSettings.defaultRenderPipeline.GetType().ToString().Contains("UniversalRenderPipelineAsset"))
+//            //    AddDefine("URP");
+
+//            //if (GraphicsSettings.defaultRenderPipeline.GetType().ToString().Contains("HDRenderPipelineAsset"))
+//            //    AddDefine("HDRP");
+
+//            //if (GraphicsSettings.defaultRenderPipeline)
+//            if (GraphicsSettings.currentRenderPipeline)
+//            {
+//                //if (GraphicsSettings.defaultRenderPipeline.GetType().ToString().Contains("UniversalRenderPipelineAsset"))
+//                if (GraphicsSettings.currentRenderPipeline.GetType().ToString().Contains("UniversalRenderPipelineAsset"))
+//                    AddDefine("URP");
+//                else
+//                    //if (GraphicsSettings.defaultRenderPipeline.GetType().ToString().Contains("HDRenderPipelineAsset"))
+//                    if (GraphicsSettings.currentRenderPipeline.GetType().ToString().Contains("HDRenderPipelineAsset"))
+//                    AddDefine("HDRP");
+//            }
+
+//            //if (debug) Debug.Log(GraphicsSettings.defaultRenderPipeline.GetType().ToString());
+//            //if (debug) Debug.Log(GraphicsSettings.defaultRenderPipeline);
+//        }
+//    }
+
+//    static void CompilationPipeline_assemblyCompilationStarted(string s)
+//    {
+//        //throw new System.NotImplementedException();
+//        Debug.Log("CompilationPipeline_assemblyCompilationStarted: " + s);
+
+//        //if (UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.inputsystem") == null)
+//        //    RemoveDefine("INPUT_SYSTEM");
+
+//        //if (UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.postprocessing") == null)
+//        //    RemoveDefine("POST_PROCESSING_STACK_V2");
+
+//        if (UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.inputsystem") != null)
+//            AddDefine("INPUT_SYSTEM");
+//        else
+//            RemoveDefine("INPUT_SYSTEM");
+
+//        if (UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.postprocessing") != null)
+//            AddDefine("POST_PROCESSING_STACK_V2");
+//        else
+//            RemoveDefine("POST_PROCESSING_STACK_V2");
+//    }
+
+//    private static void CompilationPipeline_compilationStarted(object o)
+//    {
+//        //throw new System.NotImplementedException();
+//        Debug.Log("CompilationPipeline_compilationStarted: " + o);
+
+//        //if (UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.inputsystem") == null)
+//        //    RemoveDefine("INPUT_SYSTEM");
+
+//        //if (UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.postprocessing") == null)
+//        //    RemoveDefine("POST_PROCESSING_STACK_V2");
+
+//        if (UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.inputsystem") != null)
+//            AddDefine("INPUT_SYSTEM");
+//        else
+//            RemoveDefine("INPUT_SYSTEM");
+
+//        if (UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.postprocessing") != null)
+//            AddDefine("POST_PROCESSING_STACK_V2");
+//        else
+//            RemoveDefine("POST_PROCESSING_STACK_V2");
+//    }
+
+//    static void AddDefine(string defineName)
+//    {
 //#if UNITY_2021_2_OR_NEWER
-            //foreach (var package in UnityEditor.PackageManager.PackageInfo.GetAllRegisteredPackages())
-            //    if (package.name == "com.unity.cinemachine")
-            //UnityEditor.PackageManager.Requests.ListRequest packageListRequest = UnityEditor.PackageManager.Client.List();
+//        //if (debug) Debug.Log("AddDefine");
+//        var buildTarget = UnityEditor.Build.NamedBuildTarget.FromBuildTargetGroup(UnityEditor.EditorUserBuildSettings.selectedBuildTargetGroup);
+//        UnityEditor.PlayerSettings.GetScriptingDefineSymbols(buildTarget, out string[] defines);
 
-            //while (!packageListRequest.IsCompleted){ } //wait for packageListRequest.IsCompleted
+//        bool alreadyDefined = false;
 
-            //foreach (var package in packageListRequest.Result)
-            //    Debug.Log(package.assetPath);
+//        foreach (string define in defines)
+//            //if (define.Contains(defineName))
+//            if (define == defineName)
+//            {
+//                //if (debug) Debug.Log(defineName + " already Defined");
+//                alreadyDefined = true;
+//            }
 
-                if (UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.cinemachine") != null)
-                {
-                    ////if (debug) Debug.Log(UnityEditor.EditorUserBuildSettings.selectedStandaloneTarget);
-                    //var buildTarget = UnityEditor.Build.NamedBuildTarget.FromBuildTargetGroup(UnityEditor.EditorUserBuildSettings.selectedBuildTargetGroup);
-                    //UnityEditor.PlayerSettings.GetScriptingDefineSymbols(buildTarget, out string[] defines);
-                    ////if (debug) Debug.Log(defines.Length);
+//        if (!alreadyDefined)
+//        {
+//            string[] newDefines = new string[defines.Length + 1];
+//            defines.CopyTo(newDefines, 0);
+//            newDefines.SetValue(defineName, defines.Length);
 
-                    //bool cinemachineDefine = false;
+//            //foreach(var def in newDefines)
+//            //    if (debug) Debug.Log(def);
 
-                    //foreach (string define in defines)
-                    //    if (define.Contains("CINEMACHINE"))
-                    //        cinemachineDefine = true;
+//            UnityEditor.PlayerSettings.SetScriptingDefineSymbols(buildTarget, newDefines);
+//        }
+//#else
+//        var buildTargetGroup = UnityEditor.EditorUserBuildSettings.selectedBuildTargetGroup;
+//        string defines = UnityEditor.PlayerSettings.GetScriptingDefineSymbolsForGroup(buildTargetGroup);
 
-                    //if (!cinemachineDefine)
-                    //{
-                    //    string[] newDefines = new string[defines.Length + 1];
-                    //    defines.CopyTo(newDefines, 0);
-                    //    newDefines.SetValue("CINEMACHINE", defines.Length);
-                    //    UnityEditor.PlayerSettings.SetScriptingDefineSymbols(buildTarget, newDefines);
+//        if (!defines.Contains(defineName))
+//        {
+//            if (defines != "")
+//                defines += ";";
 
-                    //    //foreach (string define in newDefines)
-                    //        //if (debug) Debug.Log(define);
-                    //}
-
-                    AddDefine("CINEMACHINE");
-                }
+//            defines += defineName;
+//            UnityEditor.PlayerSettings.SetScriptingDefineSymbolsForGroup(buildTargetGroup, defines);
+//        }
 //#endif
+//    }
 
-            foreach (var assembly in UnityEditor.Compilation.CompilationPipeline.GetAssemblies())
-            {
-                if (assembly.name.StartsWith("Assembly-CSharp"))
-                {
+//    static void RemoveDefine(string defineName) //not working in same script with defines due after package removed errors in this script not allow code execution so remove defines script must be separate from defines
+//    {
+//#if UNITY_2021_2_OR_NEWER
+//        //if (debug) Debug.Log("AddDefine");
+//        var buildTarget = UnityEditor.Build.NamedBuildTarget.FromBuildTargetGroup(UnityEditor.EditorUserBuildSettings.selectedBuildTargetGroup);
+//        UnityEditor.PlayerSettings.GetScriptingDefineSymbols(buildTarget, out string[] defines);
+//        //Debug.Log(defines.ToString());
+//        //bool alreadyDefined = false;
 
-                    foreach (var fileName in assembly.sourceFiles)
-                    {
-                        if (fileName.Contains("LookWithMouse"))
-                            AddDefine("LookWithMouse");
+//        for (int i = 0; i < defines.Length; i++)
+//            //if (define.Contains(defineName))
+//            if (defines[i] == defineName)
+//            {
+//                //if (debug) Debug.Log(defineName + " already Defined");
+//                //alreadyDefined = true;
+//                defines.SetValue("", i);
+//            }
 
-                        if (fileName.Contains("SimpleCameraController"))
-                            AddDefine("SimpleCameraController");
-                    }
-                }
-            }
+//        //if (!alreadyDefined)
+//        //{
+//        //    string[] newDefines = new string[defines.Length + 1];
+//        //    defines.CopyTo(newDefines, 0);
+//        //    newDefines.SetValue(defineName, defines.Length);
 
-            //if (GraphicsSettings.defaultRenderPipeline.name.Contains("Universal"))
-            //    AddDefine("URP");
+//        //    //foreach(var def in newDefines)
+//        //    //    if (debug) Debug.Log(def);
 
-            //if (GraphicsSettings.defaultRenderPipeline.GetType().ToString().Contains("UniversalRenderPipelineAsset"))
-            //    AddDefine("URP");
+//        //    UnityEditor.PlayerSettings.SetScriptingDefineSymbols(buildTarget, newDefines);
+//        //}
+//#else
+//        var buildTargetGroup = UnityEditor.EditorUserBuildSettings.selectedBuildTargetGroup;
+//        string defines = UnityEditor.PlayerSettings.GetScriptingDefineSymbolsForGroup(buildTargetGroup);
 
-            //if (GraphicsSettings.defaultRenderPipeline.GetType().ToString().Contains("HDRenderPipelineAsset"))
-            //    AddDefine("HDRP");
+//        if (!defines.Contains(defineName))
+//        {
+//            if (defines != "")
+//                defines += ";";
 
-            //if (GraphicsSettings.defaultRenderPipeline)
-            if (GraphicsSettings.currentRenderPipeline)
-            {
-                //if (GraphicsSettings.defaultRenderPipeline.GetType().ToString().Contains("UniversalRenderPipelineAsset"))
-                if (GraphicsSettings.currentRenderPipeline.GetType().ToString().Contains("UniversalRenderPipelineAsset"))
-                    AddDefine("URP");
-                else
-                    //if (GraphicsSettings.defaultRenderPipeline.GetType().ToString().Contains("HDRenderPipelineAsset"))
-                    if (GraphicsSettings.currentRenderPipeline.GetType().ToString().Contains("HDRenderPipelineAsset"))
-                        AddDefine("HDRP");
-            }
-
-            //if (debug) Debug.Log(GraphicsSettings.defaultRenderPipeline.GetType().ToString());
-            //if (debug) Debug.Log(GraphicsSettings.defaultRenderPipeline);
-        }
-    }
-
-    static void AddDefine(string defineName)
-    {
-#if UNITY_2021_2_OR_NEWER
-        //if (debug) Debug.Log("AddDefine");
-        var buildTarget = UnityEditor.Build.NamedBuildTarget.FromBuildTargetGroup(UnityEditor.EditorUserBuildSettings.selectedBuildTargetGroup);
-        UnityEditor.PlayerSettings.GetScriptingDefineSymbols(buildTarget, out string[] defines);
-
-        bool alreadyDefined = false;
-
-        foreach (string define in defines)
-            if (define.Contains(defineName))
-            {
-                //if (debug) Debug.Log(defineName + " already Defined");
-                alreadyDefined = true;
-            }
-
-        if (!alreadyDefined)
-        {
-            string[] newDefines = new string[defines.Length + 1];
-            defines.CopyTo(newDefines, 0);
-            newDefines.SetValue(defineName, defines.Length);
-
-            //foreach(var def in newDefines)
-            //    if (debug) Debug.Log(def);
-
-            UnityEditor.PlayerSettings.SetScriptingDefineSymbols(buildTarget, newDefines);
-        }
-#else
-        var buildTargetGroup = UnityEditor.EditorUserBuildSettings.selectedBuildTargetGroup;
-        string defines = UnityEditor.PlayerSettings.GetScriptingDefineSymbolsForGroup(buildTargetGroup);
-
-        if (!defines.Contains(defineName))
-        {
-            if (defines != "")
-                defines += ";";
-
-            defines += defineName;
-            UnityEditor.PlayerSettings.SetScriptingDefineSymbolsForGroup(buildTargetGroup, defines);
-        }
-#endif
-    }
-#endif
-} 
+//            defines += defineName;
+//            UnityEditor.PlayerSettings.SetScriptingDefineSymbolsForGroup(buildTargetGroup, defines);
+//        }
+//#endif
+//    }
+//#endif
+}
