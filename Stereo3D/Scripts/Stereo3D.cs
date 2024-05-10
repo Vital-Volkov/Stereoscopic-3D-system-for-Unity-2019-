@@ -144,6 +144,7 @@ public class Stereo3D : MonoBehaviour
     public bool GUIOpened = true; //GUI window visible or not on the start
     public float GUIAutoshowTime = 3; //automatically show GUI duration in seconds when S3D setting changes by hotkeys
     public float toolTipShowDelay = 3; //delay in seconds after mouse stop while hovering before toolTip shows
+    public bool hide2DCursor;
     //public Color anaglyphLeftColor = Color.red; //tweak colors at runtime to best match different goggles
     //public Color anaglyphRightColor = Color.cyan;
     public bool cloneCamera = true;
@@ -361,7 +362,8 @@ public class Stereo3D : MonoBehaviour
 
 #if POST_PROCESSING_STACK_V2
     PostProcessLayer PPLayer;
-    bool PPLayerEnabled;
+    bool PPLayerDefaultStatus;
+    bool PPLayerLastStatus;
 #endif
 
 #if CINEMACHINE
@@ -521,11 +523,12 @@ public class Stereo3D : MonoBehaviour
         if (GetComponent<PostProcessLayer>())
         {
             PPLayer = GetComponent<PostProcessLayer>();
-            PPLayerEnabled = PPLayer.enabled;
+            PPLayer.finalBlitToCameraTarget = false;
+            PPLayerLastStatus = PPLayerDefaultStatus = PPLayer.enabled;
 
-            if (PPLayerEnabled)
-                //setMatrixDirectly = false;
-                cam.usePhysicalProperties = true;
+            //if (PPLayerDefaultStatus)
+            //    //setMatrixDirectly = false;
+            //    cam.usePhysicalProperties = true;
         }
 #endif
 
@@ -629,9 +632,9 @@ public class Stereo3D : MonoBehaviour
 //        if (GetComponent<PostProcessLayer>())
 //        {
 //            PPLayer = GetComponent<PostProcessLayer>();
-//            PPLayerEnabled = PPLayer.enabled;
+//            PPLayerDefaultStatus = PPLayer.enabled;
 
-//            if (PPLayerEnabled)
+//            if (PPLayerDefaultStatus)
 //                //setMatrixDirectly = false;
 //                cam.usePhysicalProperties = true;
 //        }
@@ -717,6 +720,8 @@ public class Stereo3D : MonoBehaviour
                             && !(component is UniversalAdditionalCameraData)
 #elif HDRP
                             && !(component is HDAdditionalCameraData)
+#elif POST_PROCESSING_STACK_V2
+                            && !(component is PostProcessLayer)
 #endif
                             )
                         {
@@ -1087,19 +1092,32 @@ public class Stereo3D : MonoBehaviour
                             depth = c.depth;
 
 #if HDRP
-                    HDAdditionalCameraData additionalCamData = c.gameObject.GetComponent<HDAdditionalCameraData>();
+                        HDAdditionalCameraData additionalCamData = c.gameObject.GetComponent<HDAdditionalCameraData>();
 
-                    if (additionalCamData.clearColorMode != HDAdditionalCameraData.ClearColorMode.Color)
-                    {
-                        if (debug) Debug.Log("additionalCamData.clearColorMode != HDAdditionalCameraData.ClearColorMode.Color");
-                        additionalCamData.clearColorMode = HDAdditionalCameraData.ClearColorMode.Color;
-                        additionalCamData.backgroundColorHDR = Color.clear;
-                    }
+                        if (additionalCamData.clearColorMode != HDAdditionalCameraData.ClearColorMode.Color)
+                        {
+                            if (debug) Debug.Log("additionalCamData.clearColorMode != HDAdditionalCameraData.ClearColorMode.Color");
+                            additionalCamData.clearColorMode = HDAdditionalCameraData.ClearColorMode.Color;
+                            additionalCamData.backgroundColorHDR = Color.clear;
+                        }
 //#elif URP
 //                    c.clearFlags = CameraClearFlags.Nothing;
 //#else
 #elif !URP
-                    c.clearFlags = CameraClearFlags.Depth;
+                        c.clearFlags = CameraClearFlags.Depth;
+#endif
+
+#if POST_PROCESSING_STACK_V2
+                        if (c.GetComponent<PostProcessLayer>())
+                        {
+                            additionalS3DCamerasStruct[i].PPLayer = c.GetComponent<PostProcessLayer>();
+                            additionalS3DCamerasStruct[i].PPLayer.finalBlitToCameraTarget = false;
+                            additionalS3DCamerasStruct[i].PPLayerDefaultStatus = additionalS3DCamerasStruct[i].PPLayer.enabled;
+
+                            //if (PPLayerDefaultStatus)
+                            //    //setMatrixDirectly = false;
+                            //    cam.usePhysicalProperties = true;
+                        }
 #endif
 
                         Camera cloneLeft = Instantiate(c, c.transform.position, c.transform.rotation);
@@ -3885,6 +3903,32 @@ public class Stereo3D : MonoBehaviour
         //}
 #endif
 
+#if POST_PROCESSING_STACK_V2
+        if (PPLayer && PPLayer.enabled != PPLayerLastStatus)
+        {
+            Debug.Log("PPLayer.enabled != PPLayerLastStatus");
+            PPLayerDefaultStatus = PPLayer.enabled;
+            onOffToggle = true;
+        }
+
+        //foreach (var c in additionalS3DCamerasStruct)
+        //    if (c.PPLayer && c.camera && c.PPLayer.enabled != c.PPLayerLastStatus)
+        //    {
+        //        Debug.Log("c.PPLayer.enabled != c.PPLayerLastStatus");
+        //        additionalS3DCamerasStruct[additionalS3DCameras.IndexOf(c.camera)].PPLayerDefaultStatus = c.PPLayer.enabled;
+        //        onOffToggle = true;
+        //    }
+
+        for (int i = 0; i < additionalS3DCamerasStruct.Length; i++)
+            if (additionalS3DCamerasStruct[i].camera && additionalS3DCamerasStruct[i].PPLayer && additionalS3DCamerasStruct[i].PPLayer.enabled != additionalS3DCamerasStruct[i].PPLayerLastStatus)
+            {
+                Debug.Log("c.PPLayer.enabled != c.PPLayerLastStatus");
+                additionalS3DCamerasStruct[i].PPLayerDefaultStatus = additionalS3DCamerasStruct[i].PPLayer.enabled;
+                onOffToggle = true;
+            }
+
+#endif
+
         //if (Time.time > setLastCameraDataStructTime)
         //if (cameraDataStructIsReady)
         //if (cameraDataStructIsReady
@@ -5047,7 +5091,10 @@ public class Stereo3D : MonoBehaviour
         //{
         //    if (debug) Debug.Log("GUI_Set canvas");
             //lastGUIOpened = GUIOpened;
-            Cursor.visible = false;
+
+            if (hide2DCursor)
+                Cursor.visible = false;
+
             //CursorLockMode cursorLockMode = Cursor.lockState;
 
             if (GUIVisible)
@@ -6375,7 +6422,7 @@ public class Stereo3D : MonoBehaviour
         {
 #if POST_PROCESSING_STACK_V2
             if (PPLayer)
-                PPLayer.enabled = false; //disabling Post Process Layer if exist due it heavily eats fps even when the camera doesn't render the scene
+                PPLayerLastStatus = PPLayer.enabled = false; //disabling Post Process Layer if exist due it heavily eats fps even when the camera doesn't render the scene
 #endif
 
             //if (GetComponent<Cinemachine.CinemachineBrain>())
@@ -6408,11 +6455,28 @@ public class Stereo3D : MonoBehaviour
             camera_left.enabled = camera_right.enabled = true;
 
             //if (additionalS3DCamerasStruct != null)
-            foreach (var c in additionalS3DCamerasStruct)
-                if (c.camera)
+//            foreach (var c in additionalS3DCamerasStruct)
+//                if (c.camera)
+//                {
+//                    c.camera.enabled = false;
+//                    c.camera_left.enabled = c.camera_right.enabled = true;
+
+//#if POST_PROCESSING_STACK_V2
+//                    if (c.PPLayer)
+//                        additionalS3DCamerasStruct[additionalS3DCameras.IndexOf(c.camera)].PPLayerLastStatus = c.PPLayer.enabled = false; //disabling Post Process Layer if exist due it heavily eats fps even when the camera doesn't render the scene
+//#endif
+//                }
+
+            for (int i = 0; i < additionalS3DCamerasStruct.Length; i++)
+                if (additionalS3DCamerasStruct[i].camera)
                 {
-                    c.camera.enabled = false;
-                    c.camera_left.enabled = c.camera_right.enabled = true;
+                    additionalS3DCamerasStruct[i].camera.enabled = false;
+                    additionalS3DCamerasStruct[i].camera_left.enabled = additionalS3DCamerasStruct[i].camera_right.enabled = true;
+
+#if POST_PROCESSING_STACK_V2
+                    if (additionalS3DCamerasStruct[i].PPLayer)
+                        additionalS3DCamerasStruct[i].PPLayerLastStatus = additionalS3DCamerasStruct[i].PPLayer.enabled = false; //disabling Post Process Layer if exist due it heavily eats fps even when the camera doesn't render the scene
+#endif
                 }
 
       //      int rtWidth = cam.pixelWidth;
@@ -8986,7 +9050,7 @@ void CustomBlit(bool flipX, bool flipY)
 
     void Render_Release()
     {
-        //if (debug) Debug.Log("Render_Release " + name);
+        if (debug) Debug.Log("Render_Release " + name);
         //#if UNITY_2019_1_OR_NEWER
         //if (!defaultRender)
         //{
@@ -9040,21 +9104,44 @@ void CustomBlit(bool flipX, bool flipY)
 //                    //c.camera.ResetProjectionMatrix();
 //                }
 
-        //if (additionalS3DCamerasStruct != null)
-        foreach (var c in additionalS3DCamerasStruct)
-            if (c.camera)
+#if POST_PROCESSING_STACK_V2
+        if (PPLayer)
+            PPLayerLastStatus = PPLayer.enabled = PPLayerDefaultStatus;
+#endif
+        //CameraDataStruct_Change();
+
+//        //if (additionalS3DCamerasStruct != null)
+//        foreach (var c in additionalS3DCamerasStruct)
+//            if (c.camera)
+//            {
+//                c.camera.rect = cam.rect;
+//                //c.camera_left.targetTexture = c.camera_right.targetTexture = null;
+//                c.camera_left.targetTexture = c.camera_right.targetTexture = c.camera.targetTexture = null;
+
+//#if POST_PROCESSING_STACK_V2
+//                if (c.PPLayer)
+//                    additionalS3DCamerasStruct[additionalS3DCameras.IndexOf(c.camera)].PPLayerLastStatus = c.PPLayer.enabled = c.PPLayerDefaultStatus;
+//#endif
+//                //Destroy(c.camera_left.gameObject.GetComponent<OnRenderImageDelegate>());
+//                //Destroy(c.camera_right.gameObject.GetComponent<OnRenderImageDelegate>());
+//            }
+
+        for (int i = 0; i < additionalS3DCamerasStruct.Length; i++)
+            if (additionalS3DCamerasStruct[i].camera)
             {
-                c.camera.rect = cam.rect;
-                //c.camera_left.targetTexture = c.camera_right.targetTexture = null;
-                c.camera_left.targetTexture = c.camera_right.targetTexture = c.camera.targetTexture = null;
-                //Destroy(c.camera_left.gameObject.GetComponent<OnRenderImageDelegate>());
-                //Destroy(c.camera_right.gameObject.GetComponent<OnRenderImageDelegate>());
+                additionalS3DCamerasStruct[i].camera.rect = cam.rect;
+                additionalS3DCamerasStruct[i].camera_left.targetTexture = additionalS3DCamerasStruct[i].camera_right.targetTexture = additionalS3DCamerasStruct[i].camera.targetTexture = null;
+
+#if POST_PROCESSING_STACK_V2
+                if (additionalS3DCamerasStruct[i].PPLayer)
+                    additionalS3DCamerasStruct[i].PPLayerLastStatus = additionalS3DCamerasStruct[i].PPLayer.enabled = additionalS3DCamerasStruct[i].PPLayerDefaultStatus;
+#endif
             }
 
-//#if URP
-//        foreach (Camera c in cameraStack)
-//            c.targetTexture = null;
-//#endif
+        //#if URP
+        //        foreach (Camera c in cameraStack)
+        //            c.targetTexture = null;
+        //#endif
 
         if (canvasCamera)
         {
@@ -9128,14 +9215,8 @@ void CustomBlit(bool flipX, bool flipY)
 	        renderTexture_right.Release();
         }
 
-//#if POST_PROCESSING_STACK_V2
-//        if (PPLayer)
-//            PPLayer.enabled = PPLayerEnabled;
-//#endif
-//        CameraDataStruct_Change();
-
-            //Destroy(canvasCamera_left.GetComponent<CameraBlit>());
-            //Destroy(canvasCamera_right.GetComponent<CameraBlit>());
+        //Destroy(canvasCamera_left.GetComponent<CameraBlit>());
+        //Destroy(canvasCamera_right.GetComponent<CameraBlit>());
 
         lastRTFormat = RTFormat = defaultRTFormat;
     }
@@ -10869,6 +10950,11 @@ void CustomBlit(bool flipX, bool flipY, RenderTexture source, Material material)
         public Camera camera;
         public Camera camera_left;
         public Camera camera_right;
+#if POST_PROCESSING_STACK_V2
+        public PostProcessLayer PPLayer;
+        public bool PPLayerDefaultStatus;
+        public bool PPLayerLastStatus;
+#endif
 #if HDRP
         public RenderTexture renderTexture;
         public RenderTexture renderTexture_left;
