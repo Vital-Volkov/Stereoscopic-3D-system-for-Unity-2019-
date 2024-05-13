@@ -15,10 +15,39 @@ public class Defines : Editor
         static EditorScriptStart()
         {
             Debug.Log("EditorScriptStart " + Time.time);
-            //CompilationPipeline.assemblyCompilationStarted -= CompilationPipeline_assemblyCompilationStarted;
-            //CompilationPipeline.assemblyCompilationStarted += CompilationPipeline_assemblyCompilationStarted;
-            //CompilationPipeline.compilationStarted -= CompilationPipeline_compilationStarted;
-            CompilationPipeline.compilationStarted += CompilationPipeline_compilationStarted;
+            //CompilationPipeline.assemblyCompilationStarted -= RemoveDefines;
+            //CompilationPipeline.assemblyCompilationStarted += RemoveDefines;
+            //CompilationPipeline.compilationStarted -= RemoveDefines;
+            CompilationPipeline.compilationStarted += RemoveDefines;
+
+            //if (GraphicsSettings.defaultRenderPipeline.name.Contains("Universal"))
+            //    AddDefine("URP");
+
+            //if (GraphicsSettings.defaultRenderPipeline.GetType().ToString().Contains("UniversalRenderPipelineAsset"))
+            //    AddDefine("URP");
+
+            //if (GraphicsSettings.defaultRenderPipeline.GetType().ToString().Contains("HDRenderPipelineAsset"))
+            //    AddDefine("HDRP");
+
+            //if (GraphicsSettings.defaultRenderPipeline)
+            if (GraphicsSettings.currentRenderPipeline)
+            {
+                //if (GraphicsSettings.defaultRenderPipeline.GetType().ToString().Contains("UniversalRenderPipelineAsset"))
+                if (GraphicsSettings.currentRenderPipeline.GetType().ToString().Contains("UniversalRenderPipelineAsset"))
+                    AddDefine("URP");
+                else
+                    //if (GraphicsSettings.defaultRenderPipeline.GetType().ToString().Contains("HDRenderPipelineAsset"))
+                    if (GraphicsSettings.currentRenderPipeline.GetType().ToString().Contains("HDRenderPipelineAsset"))
+                    AddDefine("HDRP");
+            }
+
+            //if (debug) Debug.Log(GraphicsSettings.defaultRenderPipeline.GetType().ToString());
+            //if (debug) Debug.Log(GraphicsSettings.defaultRenderPipeline);
+
+            if (UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.postprocessing") != null)
+                AddDefine("POST_PROCESSING_STACK_V2");
+            //else
+            //    RemoveDefine("POST_PROCESSING_STACK_V2");
 
             if (UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.cinemachine") != null)
             {
@@ -46,83 +75,48 @@ public class Defines : Editor
 
                 AddDefine("CINEMACHINE");
             }
-            //#endif
 
             if (UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.inputsystem") != null)
                 AddDefine("INPUT_SYSTEM");
             //else
             //    RemoveDefine("INPUT_SYSTEM");
 
-            if (UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.postprocessing") != null)
-                AddDefine("POST_PROCESSING_STACK_V2");
-            //else
-            //    RemoveDefine("POST_PROCESSING_STACK_V2");
+            bool lookWithMouseFound = false;
+            //bool simpleCameraControllerFound = false;
 
-            foreach (var assembly in UnityEditor.Compilation.CompilationPipeline.GetAssemblies())
+            foreach (var assembly in CompilationPipeline.GetAssemblies())
             {
                 if (assembly.name.StartsWith("Assembly-CSharp"))
                 {
-
                     foreach (var fileName in assembly.sourceFiles)
                     {
                         if (fileName.Contains("LookWithMouse"))
-                            AddDefine("LookWithMouse");
+                            lookWithMouseFound = true;
 
-                        if (fileName.Contains("SimpleCameraController"))
-                            AddDefine("SimpleCameraController");
+                        //if (fileName.Contains("SimpleCameraController"))
+                        //    simpleCameraControllerFound = true;
                     }
                 }
             }
 
-            //if (GraphicsSettings.defaultRenderPipeline.name.Contains("Universal"))
-            //    AddDefine("URP");
+            if (lookWithMouseFound)
+                AddDefine("LookWithMouse");
 
-            //if (GraphicsSettings.defaultRenderPipeline.GetType().ToString().Contains("UniversalRenderPipelineAsset"))
-            //    AddDefine("URP");
-
-            //if (GraphicsSettings.defaultRenderPipeline.GetType().ToString().Contains("HDRenderPipelineAsset"))
-            //    AddDefine("HDRP");
-
-            //if (GraphicsSettings.defaultRenderPipeline)
-            if (GraphicsSettings.currentRenderPipeline)
-            {
-                //if (GraphicsSettings.defaultRenderPipeline.GetType().ToString().Contains("UniversalRenderPipelineAsset"))
-                if (GraphicsSettings.currentRenderPipeline.GetType().ToString().Contains("UniversalRenderPipelineAsset"))
-                    AddDefine("URP");
-                else
-                    //if (GraphicsSettings.defaultRenderPipeline.GetType().ToString().Contains("HDRenderPipelineAsset"))
-                    if (GraphicsSettings.currentRenderPipeline.GetType().ToString().Contains("HDRenderPipelineAsset"))
-                    AddDefine("HDRP");
-            }
-
-            //if (debug) Debug.Log(GraphicsSettings.defaultRenderPipeline.GetType().ToString());
-            //if (debug) Debug.Log(GraphicsSettings.defaultRenderPipeline);
+            //if (simpleCameraControllerFound)
+            //    AddDefine("SimpleCameraController");
         }
     }
 
-    //static void CompilationPipeline_assemblyCompilationStarted(string s)
-    static void CompilationPipeline_compilationStarted(object o)
+    //static void RemoveDefines(string s)
+    static void RemoveDefines(object o)
     {
         //throw new System.NotImplementedException();
-        //Debug.Log("CompilationPipeline_assemblyCompilationStarted: " + s);
-        Debug.Log("CompilationPipeline_compilationStarted: " + o);
+        //Debug.Log("RemoveDefines: " + s);
+        Debug.Log("RemoveDefines: " + o);
 
         if (!done)
         {
-            //if (UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.inputsystem") != null)
-            //    AddDefine("INPUT_SYSTEM");
-            //else
-            //    RemoveDefine("INPUT_SYSTEM");
-
-            //if (UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.postprocessing") != null)
-            //    AddDefine("POST_PROCESSING_STACK_V2");
-            //else
-            //    RemoveDefine("POST_PROCESSING_STACK_V2");
-
-            //if (UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.cinemachine") != null)
-            //    AddDefine("CINEMACHINE");
-            //else
-            //    RemoveDefine("CINEMACHINE");
+            done = true;
 
             //if (GraphicsSettings.currentRenderPipeline)
             //{
@@ -146,6 +140,24 @@ public class Defines : Editor
             //    RemoveDefine("HDRP");
             //}
 
+            //if (UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.postprocessing") != null)
+            //    AddDefine("POST_PROCESSING_STACK_V2");
+            //else
+            //    RemoveDefine("POST_PROCESSING_STACK_V2");
+
+            //if (UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.cinemachine") != null)
+            //    AddDefine("CINEMACHINE");
+            //else
+            //    RemoveDefine("CINEMACHINE");
+
+            //if (UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.inputsystem") != null)
+            //    AddDefine("INPUT_SYSTEM");
+            //else
+            //    RemoveDefine("INPUT_SYSTEM");
+
+            //bool lookWithMouseFound = false;
+            //bool simpleCameraControllerFound = false;
+
             //foreach (var assembly in CompilationPipeline.GetAssemblies())
             //{
             //    if (assembly.name.StartsWith("Assembly-CSharp"))
@@ -163,28 +175,18 @@ public class Defines : Editor
             //                //AddDefine("SimpleCameraController");
             //                simpleCameraControllerFound = true;
             //        }
-
-            //        if (lookWithMouseFound)
-            //            AddDefine("LookWithMouse");
-            //        else
-            //            RemoveDefine("LookWithMouse");
-
-            //        if (simpleCameraControllerFound)
-            //            AddDefine("SimpleCameraController");
-            //        else
-            //            RemoveDefine("SimpleCameraController");
             //    }
             //}
 
-            done = true;
-            if (UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.inputsystem") == null)
-                RemoveDefine("INPUT_SYSTEM");
+            //if (lookWithMouseFound)
+            //    AddDefine("LookWithMouse");
+            //else
+            //    RemoveDefine("LookWithMouse");
 
-            if (UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.postprocessing") == null)
-                RemoveDefine("POST_PROCESSING_STACK_V2");
-
-            if (UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.cinemachine") == null)
-                RemoveDefine("CINEMACHINE");
+            //if (simpleCameraControllerFound)
+            //    AddDefine("SimpleCameraController");
+            //else
+            //    RemoveDefine("SimpleCameraController");
 
             if (GraphicsSettings.currentRenderPipeline)
             {
@@ -201,30 +203,42 @@ public class Defines : Editor
                 RemoveDefine("HDRP");
             }
 
+            if (UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.postprocessing") == null)
+                RemoveDefine("POST_PROCESSING_STACK_V2");
+
+            if (UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.cinemachine") == null)
+                RemoveDefine("CINEMACHINE");
+
+            if (UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.inputsystem") == null)
+                RemoveDefine("INPUT_SYSTEM");
+
+            bool lookWithMouseFound = false;
+            //bool simpleCameraControllerFound = false;
+
             foreach (var assembly in CompilationPipeline.GetAssemblies())
             {
                 if (assembly.name.StartsWith("Assembly-CSharp"))
                 {
-                    bool lookWithMouseFound = false;
-                    bool simpleCameraControllerFound = false;
-
                     foreach (var fileName in assembly.sourceFiles)
                     {
                         if (fileName.Contains("LookWithMouse"))
                             lookWithMouseFound = true;
 
-                        if (fileName.Contains("SimpleCameraController"))
-                            simpleCameraControllerFound = true;
+                        //if (fileName.Contains("SimpleCameraController"))
+                        //    simpleCameraControllerFound = true;
                     }
-
-                    if (!lookWithMouseFound)
-                        RemoveDefine("LookWithMouse");
-
-                    if (!simpleCameraControllerFound)
-                        RemoveDefine("SimpleCameraController");
                 }
             }
+
+            if (!lookWithMouseFound)
+                RemoveDefine("LookWithMouse");
+
+            //if (!simpleCameraControllerFound)
+            //    RemoveDefine("SimpleCameraController");
         }
+
+        //CompilationPipeline.assemblyCompilationStarted -= RemoveDefines;
+        //CompilationPipeline.compilationStarted -= RemoveDefines;
     }
 
     static void AddDefine(string defineName)

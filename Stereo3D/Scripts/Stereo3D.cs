@@ -31,7 +31,7 @@ using System.Collections.Generic;
 using System.Reflection;
 //using static Unity.VisualScripting.Member;
 
-#if INPUT_SYSTEM
+#if INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
 using UnityEngine.InputSystem.Utilities;
 
@@ -86,8 +86,8 @@ using UnityEngine.InputSystem.Utilities;
 #endif
 
 //#if STARTER_ASSETS_PACKAGES_CHECKED
-//#if INPUT_SYSTEM
-#if STARTER_ASSETS_PACKAGES_CHECKED || UNITY_2022_1_OR_NEWER && INPUT_SYSTEM
+//#if INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
+#if STARTER_ASSETS_PACKAGES_CHECKED || UNITY_2022_1_OR_NEWER && INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
 using StarterAssets;
 #endif
 
@@ -158,7 +158,7 @@ public class Stereo3D : MonoBehaviour
     public bool detectCameraSettingChange = true;
     public bool debug;
 
-#if INPUT_SYSTEM
+#if INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
     public InputAction GUIAction;
     public InputAction S3DAction;
     public InputAction FOVAction;
@@ -385,12 +385,12 @@ public class Stereo3D : MonoBehaviour
     LookWithMouse lookWithMouseScript;
 #endif
 
-#if SimpleCameraController
-    UnityTemplateProjects.SimpleCameraController simpleCameraControllerScript;
-#endif
+//#if SimpleCameraController //by default it using right mouse button to look around and not conflict with S3D panel
+//    UnityTemplateProjects.SimpleCameraController simpleCameraControllerScript;
+//#endif
 
 //#if STARTER_ASSETS_PACKAGES_CHECKED
-#if STARTER_ASSETS_PACKAGES_CHECKED || UNITY_2022_1_OR_NEWER && INPUT_SYSTEM
+#if STARTER_ASSETS_PACKAGES_CHECKED || UNITY_2022_1_OR_NEWER && INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
     StarterAssetsInputs starterAssetsInputs;
 #endif
 
@@ -400,6 +400,7 @@ public class Stereo3D : MonoBehaviour
     bool physicalCamera;
     Vector2 camVanishPoint;
     RenderTextureFormat defaultRTFormat;
+    bool lastHide2DCursor;
 
     public void Awake()
     {
@@ -419,7 +420,7 @@ public class Stereo3D : MonoBehaviour
 
         if (!name.Contains("(Clone)"))
         {
-#if INPUT_SYSTEM
+#if INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
             //if (debug) Debug.Log(GUIAction.bindings.Count);
 
             if (GUIAction.bindings.Count == 0)
@@ -640,7 +641,7 @@ public class Stereo3D : MonoBehaviour
 //        }
 //#endif
 
-            //#if INPUT_SYSTEM
+            //#if INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
             //        GUIAction.Enable();
             //        S3DAction.Enable();
             //        FOVAction.Enable();
@@ -1112,7 +1113,8 @@ public class Stereo3D : MonoBehaviour
                         {
                             additionalS3DCamerasStruct[i].PPLayer = c.GetComponent<PostProcessLayer>();
                             additionalS3DCamerasStruct[i].PPLayer.finalBlitToCameraTarget = false;
-                            additionalS3DCamerasStruct[i].PPLayerDefaultStatus = additionalS3DCamerasStruct[i].PPLayer.enabled;
+                            //additionalS3DCamerasStruct[i].PPLayerDefaultStatus = additionalS3DCamerasStruct[i].PPLayer.enabled;
+                            additionalS3DCamerasStruct[i].PPLayerLastStatus = additionalS3DCamerasStruct[i].PPLayer.enabled;
 
                             //if (PPLayerDefaultStatus)
                             //    //setMatrixDirectly = false;
@@ -1319,8 +1321,8 @@ public class Stereo3D : MonoBehaviour
 
             //if (inputSystem)
 //#if STARTER_ASSETS_PACKAGES_CHECKED
-//#if INPUT_SYSTEM
-#if STARTER_ASSETS_PACKAGES_CHECKED || UNITY_2022_1_OR_NEWER && INPUT_SYSTEM
+//#if INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
+#if STARTER_ASSETS_PACKAGES_CHECKED || UNITY_2022_1_OR_NEWER && INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
             {
                 //if (debug) Debug.Log(FindObjectOfType<StarterAssetsInputs>());
                 starterAssetsInputs = FindObjectOfType<StarterAssetsInputs>();
@@ -1348,7 +1350,7 @@ public class Stereo3D : MonoBehaviour
             //            //canvas.gameObject.AddComponent<EventSystem>();
             //            //canvas.gameObject.AddComponent<StandaloneInputModule>();
 
-            //#if INPUT_SYSTEM
+            //#if INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
             //                new GameObject("UI_EventSystem", typeof(EventSystem), typeof(UnityEngine.InputSystem.UI.InputSystemUIInputModule));
             //#else
             //                new GameObject("EventSystem", typeof(EventSystem), typeof(StandaloneInputModule));
@@ -1357,7 +1359,7 @@ public class Stereo3D : MonoBehaviour
             //        //else
             //        //    //if (debug) Debug.Log("EventSystem.current " + EventSystem.current.name);
 
-#if INPUT_SYSTEM
+#if INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
         GUIAction.Enable();
         S3DAction.Enable();
         FOVAction.Enable();
@@ -1772,6 +1774,7 @@ public class Stereo3D : MonoBehaviour
             //additionalS3DCameras.CopyTo(lastAdditionalS3DCameras);
             //lastCameraStack = cameraStack.ToArray();
             lastAdditionalS3DCameras = additionalS3DCameras.ToArray();
+            Cursor.visible = !(lastHide2DCursor = hide2DCursor);
 
 #if LookWithMouse
         bool lookWithMouseScriptEnabled = false;
@@ -1795,34 +1798,34 @@ public class Stereo3D : MonoBehaviour
         }
 #endif
 
-#if SimpleCameraController
-            bool simpleCameraControllerScriptEnabled = false;
+//#if SimpleCameraController
+//            bool simpleCameraControllerScriptEnabled = false;
 
-            //foreach (var script in FindObjectsByType<UnityTemplateProjects.SimpleCameraController>(FindObjectsSortMode.None))
-            foreach (var script in FindObjectsOfType<UnityTemplateProjects.SimpleCameraController>())
-            {
-                if (debug) Debug.Log("FindObjectsOfType<UnityTemplateProjects.SimpleCameraController>()");
+//            //foreach (var script in FindObjectsByType<UnityTemplateProjects.SimpleCameraController>(FindObjectsSortMode.None))
+//            foreach (var script in FindObjectsOfType<UnityTemplateProjects.SimpleCameraController>())
+//            {
+//                if (debug) Debug.Log("FindObjectsOfType<UnityTemplateProjects.SimpleCameraController>()");
 
-                if (script.enabled)
-                {
-                    //if (lookWithMouseScriptEnabled)
-                    //    if (debug) Debug.Log("More than one mouse control script enabled in the scene");
+//                if (script.enabled)
+//                {
+//                    //if (lookWithMouseScriptEnabled)
+//                    //    if (debug) Debug.Log("More than one mouse control script enabled in the scene");
 
-                    if (!simpleCameraControllerScriptEnabled)
-                    {
-                        simpleCameraControllerScriptEnabled = true;
-                        simpleCameraControllerScript = script;
-                        //if (debug) Debug.Log(simpleCameraControllerScript);
-                        //break;
-                    }
-                    else
-                    {
-                        if (debug) Debug.Log("More than one simpleCameraControllerScript enabled in the scene");
-                        simpleCameraControllerScript = null;
-                    }
-                }
-            }
-#endif
+//                    if (!simpleCameraControllerScriptEnabled)
+//                    {
+//                        simpleCameraControllerScriptEnabled = true;
+//                        simpleCameraControllerScript = script;
+//                        //if (debug) Debug.Log(simpleCameraControllerScript);
+//                        //break;
+//                    }
+//                    else
+//                    {
+//                        if (debug) Debug.Log("More than one simpleCameraControllerScript enabled in the scene");
+//                        simpleCameraControllerScript = null;
+//                    }
+//                }
+//            }
+//#endif
         }
     }
 
@@ -2572,7 +2575,7 @@ public class Stereo3D : MonoBehaviour
         //    //cam.nearClipPlane = .001f;
         //}
 
-#if UNITY_EDITOR && INPUT_SYSTEM
+#if UNITY_EDITOR && INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
         //if (debug) Debug.Log(GUIAction.bindings[0].path);
         //if (debug) Debug.Log(GUIAction.bindings.Count);
 
@@ -2837,7 +2840,7 @@ public class Stereo3D : MonoBehaviour
         //if (cineMachineBrain.ActiveVirtualCamera == null)
         //    //if (debug) Debug.Log(cineMachineBrain.ActiveVirtualCamera);
 
-#if INPUT_SYSTEM
+#if INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
         //if (inputSystem)
         //{
         //if (debug) Debug.Log("inputSystem");
@@ -3137,13 +3140,16 @@ public class Stereo3D : MonoBehaviour
 
             Vector2 pointerPosition;
 
-#if INPUT_SYSTEM
+#if INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
             //cursorLocalPos.x = (Pointer.current.position.value.x / windowSize.x - .5f) * canvasWidthWithOffset;
             //cursorLocalPos.y = (Pointer.current.position.value.y / windowSize.y - 1) * canvasSize.y;
             //pointerPosition.x = Pointer.current.position.value.x;
             //pointerPosition.y = Pointer.current.position.value.y;
-            pointerPosition.x = UnityEngine.InputSystem.Pointer.current.position.value.x;
-            pointerPosition.y = UnityEngine.InputSystem.Pointer.current.position.value.y;
+            //pointerPosition.x = UnityEngine.InputSystem.Pointer.current.position.value.x;
+            //pointerPosition.y = UnityEngine.InputSystem.Pointer.current.position.value.y;
+            //pointerPosition = UnityEngine.InputSystem.Pointer.current.position.value; //only for Input System 1.5 and above
+            pointerPosition = UnityEngine.InputSystem.Pointer.current.position.ReadValue(); //for Input System below and above 1.5
+            //pointerPosition = Mouse.current.position.ReadValue();
 #else
             //cursorLocalPos.x = (Input.mousePosition.x / windowSize.x - .5f) * canvasWidthWithOffset;
             //cursorLocalPos.y = (Input.mousePosition.y / windowSize.y - 1) * canvasSize.y;
@@ -3221,8 +3227,8 @@ public class Stereo3D : MonoBehaviour
             {
                 //if (inputSystem)
 //#if STARTER_ASSETS_PACKAGES_CHECKED
-//#if INPUT_SYSTEM
-#if STARTER_ASSETS_PACKAGES_CHECKED || UNITY_2022_1_OR_NEWER && INPUT_SYSTEM
+//#if INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
+#if STARTER_ASSETS_PACKAGES_CHECKED || UNITY_2022_1_OR_NEWER && INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
                 {
                     cursorLockedDefault = starterAssetsInputs.cursorLocked;
                     cursorInputForLookDefault = starterAssetsInputs.cursorInputForLook;
@@ -3641,7 +3647,8 @@ public class Stereo3D : MonoBehaviour
 
         if (lastRTFormat != RTFormat)
         {
-            lastRTFormat = RTFormat;
+            //lastRTFormat = RTFormat;
+            defaultRTFormat = RTFormat;
             //this.enabled = false;
             //this.enabled = true;
             //OnOffToggle();
@@ -3699,6 +3706,16 @@ public class Stereo3D : MonoBehaviour
         //    OnOffToggle();
         //    //Debug.Break();
         //}
+
+        if (lastHide2DCursor != hide2DCursor
+            || lastHide2DCursor == Cursor.visible //prevent external script restore cursor like simpleCameraControllerScript
+            )
+        {
+            if (debug) Debug.Log("lastHide2DCursor != hide2DCursor");
+            Cursor.visible = !(lastHide2DCursor = hide2DCursor);
+            //lastHide2DCursor = hide2DCursor;
+            //Cursor.visible = !hide2DCursor;
+        }
 
 #if HDRP
         //HDRPSettings = HDRPAsset.currentPlatformRenderPipelineSettings;
@@ -3923,7 +3940,7 @@ public class Stereo3D : MonoBehaviour
             if (additionalS3DCamerasStruct[i].camera && additionalS3DCamerasStruct[i].PPLayer && additionalS3DCamerasStruct[i].PPLayer.enabled != additionalS3DCamerasStruct[i].PPLayerLastStatus)
             {
                 Debug.Log("c.PPLayer.enabled != c.PPLayerLastStatus");
-                additionalS3DCamerasStruct[i].PPLayerDefaultStatus = additionalS3DCamerasStruct[i].PPLayer.enabled;
+                //additionalS3DCamerasStruct[i].PPLayerDefaultStatus = additionalS3DCamerasStruct[i].PPLayer.enabled;
                 onOffToggle = true;
             }
 
@@ -4352,7 +4369,7 @@ public class Stereo3D : MonoBehaviour
     //    typeof(HDRenderPipelineAsset).GetField("m_RenderPipelineSettings", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(GraphicsSettings.currentRenderPipeline, settings);
     //}
 
-#if INPUT_SYSTEM
+#if INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
     //void PlayerInputEnable()
     //{
     //    playerInput.enabled = true;
@@ -5092,8 +5109,8 @@ public class Stereo3D : MonoBehaviour
         //    if (debug) Debug.Log("GUI_Set canvas");
             //lastGUIOpened = GUIOpened;
 
-            if (hide2DCursor)
-                Cursor.visible = false;
+            //if (hide2DCursor)
+            //    Cursor.visible = false;
 
             //CursorLockMode cursorLockMode = Cursor.lockState;
 
@@ -5106,15 +5123,15 @@ public class Stereo3D : MonoBehaviour
                         lookWithMouseScript.enabled = false;
 #endif
 
-#if SimpleCameraController
-                    //if (simpleCameraControllerScript)
-                    //    simpleCameraControllerScript.enabled = false;
-#endif
+//#if SimpleCameraController
+//                    if (simpleCameraControllerScript)
+//                        simpleCameraControllerScript.enabled = false;
+//#endif
 
                     //if (inputSystem)
 //#if STARTER_ASSETS_PACKAGES_CHECKED
-//#if INPUT_SYSTEM
-#if STARTER_ASSETS_PACKAGES_CHECKED || UNITY_2022_1_OR_NEWER && INPUT_SYSTEM
+//#if INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
+#if STARTER_ASSETS_PACKAGES_CHECKED || UNITY_2022_1_OR_NEWER && INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
                     {
                         starterAssetsInputs.cursorLocked = false;
                         starterAssetsInputs.cursorInputForLook = false;
@@ -5187,10 +5204,10 @@ public class Stereo3D : MonoBehaviour
                     lookWithMouseScript.enabled = true;
 #endif
 
-#if SimpleCameraController
-                if (simpleCameraControllerScript)
-                    simpleCameraControllerScript.enabled = true;
-#endif
+//#if SimpleCameraController
+//                if (simpleCameraControllerScript)
+//                    simpleCameraControllerScript.enabled = true;
+//#endif
 
 ////#if URP
 #if HDRP
@@ -5257,8 +5274,8 @@ public class Stereo3D : MonoBehaviour
     {
         //if (inputSystem)
 //#if STARTER_ASSETS_PACKAGES_CHECKED
-//#if INPUT_SYSTEM
-#if STARTER_ASSETS_PACKAGES_CHECKED || UNITY_2022_1_OR_NEWER && INPUT_SYSTEM
+//#if INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
+#if STARTER_ASSETS_PACKAGES_CHECKED || UNITY_2022_1_OR_NEWER && INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
         {
             starterAssetsInputs.cursorLocked = cursorLockedDefault;
             starterAssetsInputs.cursorInputForLook = cursorInputForLookDefault;
@@ -6473,10 +6490,10 @@ public class Stereo3D : MonoBehaviour
                     additionalS3DCamerasStruct[i].camera.enabled = false;
                     additionalS3DCamerasStruct[i].camera_left.enabled = additionalS3DCamerasStruct[i].camera_right.enabled = true;
 
-#if POST_PROCESSING_STACK_V2
-                    if (additionalS3DCamerasStruct[i].PPLayer)
-                        additionalS3DCamerasStruct[i].PPLayerLastStatus = additionalS3DCamerasStruct[i].PPLayer.enabled = false; //disabling Post Process Layer if exist due it heavily eats fps even when the camera doesn't render the scene
-#endif
+//#if POST_PROCESSING_STACK_V2
+//                    if (additionalS3DCamerasStruct[i].PPLayer)
+//                        additionalS3DCamerasStruct[i].PPLayerLastStatus = additionalS3DCamerasStruct[i].PPLayer.enabled = false; //disabling Post Process Layer if exist due it heavily eats fps even when the camera doesn't render the scene //not required for additional S3D cameras as PPLayer dont affect FPS while the camera is disabled
+//#endif
                 }
 
       //      int rtWidth = cam.pixelWidth;
@@ -6830,7 +6847,7 @@ public class Stereo3D : MonoBehaviour
                 //displaySelectWaitInput = false;
                 StaticTooltip_Destroy();
 
-#if INPUT_SYSTEM
+#if INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
                 if (inputSystem_KeyListener != null)
                     inputSystem_KeyListener.Dispose();
 #endif
@@ -7465,7 +7482,7 @@ public class Stereo3D : MonoBehaviour
                 //Destroy(staticTooltip);
                 //displaySelectWaitInput = false;
                 StaticTooltip_Destroy();
-#if INPUT_SYSTEM
+#if INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
                 inputSystem_KeyListener.Dispose();
 #endif
                 TargetDisplays_Set();
@@ -7499,7 +7516,7 @@ public class Stereo3D : MonoBehaviour
         //if (debug) Debug.Log("fakeDisplays[0].active " + fakeDisplays[0].active);
         StaticTooltip_Make("Press the number key to select the display for Left camera:" + displays);
         displaySelectWaitInput = true;
-#if INPUT_SYSTEM
+#if INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
         inputSystem_KeyListener = InputSystem.onAnyButtonPress.Call(AnyKeyPress);
 #endif
     }
@@ -8932,7 +8949,7 @@ void CustomBlit(bool flipX, bool flipY)
             HDRPSettings_Restore();
             cameraDataStructIsReady = false;
 
-#if INPUT_SYSTEM
+#if INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
             GUIAction.Disable();
             S3DAction.Disable();
             FOVAction.Disable();
@@ -8959,7 +8976,7 @@ void CustomBlit(bool flipX, bool flipY)
             Destroy(canvas.gameObject);
             Resources.UnloadUnusedAssets(); //free memory
 
-//#if INPUT_SYSTEM
+//#if INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
 //            GUIAction.Disable();
 //            S3DAction.Disable();
 //            FOVAction.Disable();
@@ -9132,10 +9149,10 @@ void CustomBlit(bool flipX, bool flipY)
                 additionalS3DCamerasStruct[i].camera.rect = cam.rect;
                 additionalS3DCamerasStruct[i].camera_left.targetTexture = additionalS3DCamerasStruct[i].camera_right.targetTexture = additionalS3DCamerasStruct[i].camera.targetTexture = null;
 
-#if POST_PROCESSING_STACK_V2
-                if (additionalS3DCamerasStruct[i].PPLayer)
-                    additionalS3DCamerasStruct[i].PPLayerLastStatus = additionalS3DCamerasStruct[i].PPLayer.enabled = additionalS3DCamerasStruct[i].PPLayerDefaultStatus;
-#endif
+//#if POST_PROCESSING_STACK_V2
+//                if (additionalS3DCamerasStruct[i].PPLayer)
+//                    additionalS3DCamerasStruct[i].PPLayerLastStatus = additionalS3DCamerasStruct[i].PPLayer.enabled = additionalS3DCamerasStruct[i].PPLayerDefaultStatus;
+//#endif
             }
 
         //#if URP
@@ -10952,7 +10969,7 @@ void CustomBlit(bool flipX, bool flipY, RenderTexture source, Material material)
         public Camera camera_right;
 #if POST_PROCESSING_STACK_V2
         public PostProcessLayer PPLayer;
-        public bool PPLayerDefaultStatus;
+        //public bool PPLayerDefaultStatus;
         public bool PPLayerLastStatus;
 #endif
 #if HDRP
