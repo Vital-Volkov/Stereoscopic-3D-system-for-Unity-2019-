@@ -149,7 +149,8 @@ public class Stereo3D : MonoBehaviour
     //public Color anaglyphRightColor = Color.cyan;
     public bool cloneCamera = true;
     public GameObject cameraPrefab; //if empty, Stereo3D cameras are copies of the main cam. Set prefab if need custom settings &/or components
-    public RenderTextureFormat RTFormat = RenderTextureFormat.DefaultHDR; //DefaultHDR(16bitFloat) be able to contain Post Process Effects and give fps gain from 328 to 343. In my case RGB111110Float is fastest - 346fps.
+    public RenderTextureFormat RTFormat;
+    //public RenderTextureFormat RTFormat = RenderTextureFormat.DefaultHDR; //DefaultHDR(16bitFloat) be able to contain Post Process Effects and give fps gain from 328 to 343. In my case RGB111110Float is fastest - 346fps.
     //public bool setMatrixDirectly = true; //shift image Vanish points to User IPD directly via camera Matrix(gives fps boost) or via camera's "physically" settings "lensShift"(required for Post Processing Stack V2 pack as it resets matrix and yields incorrect aspect)
     public string slotName = "User1";
     public bool loadSettingsFromFile = true; //autoload settings at start from last saved file
@@ -404,22 +405,22 @@ public class Stereo3D : MonoBehaviour
 
     public void Awake()
     {
-        if (debug) Debug.Log("Awake");
-        /* Screen.width is not correct OnEnable so viewportWidth need to be set here or at variable declaration and update only on changing
-         GameObject.Find("SceneCamera").GetComponent<Camera>().pixelRect also not correct OnEnable
-         EditorWindow.GetWindow<SceneView>().camera.pixelRect works but changing active window in player to scene view
-         */
-
-        GUI_Set_delay = Time.deltaTime * 2;
-
-        //for (int i = 0; i < 4; i++)
-        //{
-        //    int val = (i ^ 3);
-        //    if (debug) Debug.Log(i + " ^ 3 = " + val);
-        //}
-
-        if (!name.Contains("(Clone)"))
+        if (!name.Contains("(Clone)")) //avoid code execution of this script copy from camera clones before removing unwanted components
         {
+            if (debug) Debug.Log("Awake");
+            /* Screen.width is not correct OnEnable so viewportWidth need to be set here or at variable declaration and update only on changing
+             GameObject.Find("SceneCamera").GetComponent<Camera>().pixelRect also not correct OnEnable
+             EditorWindow.GetWindow<SceneView>().camera.pixelRect works but changing active window in player to scene view
+             */
+
+            GUI_Set_delay = Time.deltaTime * 2;
+
+            //for (int i = 0; i < 4; i++)
+            //{
+            //    int val = (i ^ 3);
+            //    if (debug) Debug.Log(i + " ^ 3 = " + val);
+            //}
+
 #if INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
             //if (debug) Debug.Log(GUIAction.bindings.Count);
 
@@ -461,6 +462,11 @@ public class Stereo3D : MonoBehaviour
             modifier1ActionPath = modifier1Action.bindings[0].path;
             modifier2ActionPath = modifier2Action.bindings[0].path;
             modifier3ActionPath = modifier3Action.bindings[0].path;
+#endif
+
+#if !HDRP
+            if(RTFormat == RenderTextureFormat.ARGB32 && SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.RGB111110Float))
+                RTFormat = RenderTextureFormat.RGB111110Float; //preffered fastest format as default ARGB32 but supported HDR post process(like lamp glow in 3D Sample Extra Unity 2019)
 #endif
         }
     }
@@ -1686,7 +1692,7 @@ public class Stereo3D : MonoBehaviour
             outputMethod_dropdown.value = (int)method;
             matchUserIPD_toggle.isOn = matchUserIPD;
             slotName_inputField.text = slotName;
-            defaultRTFormat = lastRTFormat = RTFormat;
+            //defaultRTFormat = lastRTFormat = RTFormat;
 
             //GUI_Set();
             //Invoke("GUI_Set", Time.deltaTime * 32);
@@ -1737,7 +1743,7 @@ public class Stereo3D : MonoBehaviour
             lastGUIAsOverlay = GUIAsOverlay;
             lastGUISizeKeep = GUISizeKeep;
             lastCameraPrefab = cameraPrefab;
-            //lastRTFormat = RTFormat;
+            lastRTFormat = RTFormat;
             //lastSetMatrixDirectly = setMatrixDirectly;
             //lastInterlaceType = interlaceType;
             //lastAnaglyphLeftColor = anaglyphLeftColor;
@@ -3284,11 +3290,13 @@ public class Stereo3D : MonoBehaviour
         {
             //if (cam.projectionMatrix == Matrix4x4.zero)
             //    cam.projectionMatrix = camMatrix;
+
+            if (cam.rect != Rect.MinMaxRect(0, 0, 1, 1))
 #if URP || HDRP
-            if (lastS3DEnabled)
-                RenderPipelineManager.beginCameraRendering += PreRenderClearScreen;
+                if (lastS3DEnabled)
+                    RenderPipelineManager.beginCameraRendering += PreRenderClearScreen;
 #else
-            Camera.onPreRender += PreRenderClearScreen;
+                Camera.onPreRender += PreRenderClearScreen;
 #endif
             lastS3DEnabled = S3DEnabled;
             enableS3D_toggle.isOn = S3DEnabled;
@@ -3332,18 +3340,20 @@ public class Stereo3D : MonoBehaviour
 
         if (lastMethod != method)
         {
+            lastMethod = method;
+
 //#if HDRP
 //            if (lastMethod == Method.Two_Displays)
 //                GUIAsOverlay = GUIAsOverlayState;
 //#endif
-#if URP || HDRP
-            if (method == Method.Two_Displays)
-                RenderPipelineManager.beginCameraRendering += PreRenderClearScreen;
-#else
-            Camera.onPreRender += PreRenderClearScreen;
-#endif
 
-            lastMethod = method;
+            if (cam.rect != Rect.MinMaxRect(0, 0, 1, 1))
+#if URP || HDRP
+                if (method == Method.Two_Displays)
+                    RenderPipelineManager.beginCameraRendering += PreRenderClearScreen;
+#else
+                Camera.onPreRender += PreRenderClearScreen;
+#endif
 
             //if (method == Method.SideBySide_HMD)
             //{
@@ -7386,10 +7396,10 @@ public class Stereo3D : MonoBehaviour
 
     RenderTexture RT_Make()
     {
-#if !URP && !HDRP && !UNITY_2022_1_OR_NEWER
-        if (QualitySettings.antiAliasing != 0)
-            lastRTFormat = RTFormat = RenderTextureFormat.ARGBFloat;
-#endif
+//#if !URP && !HDRP && !UNITY_2022_1_OR_NEWER
+//        if (QualitySettings.antiAliasing != 0)
+//            lastRTFormat = RTFormat = RenderTextureFormat.ARGBFloat;
+//#endif
         RenderTexture rt = new RenderTexture(rtWidth, rtHeight, 24, RTFormat);
 
         //RenderTextureDescriptor desc = new RenderTextureDescriptor(); //unflipped for use with bindMS = true custom antialiasing resolving samples in shader
@@ -7959,16 +7969,29 @@ public class Stereo3D : MonoBehaviour
         if (camera == camera_left)
         {
             camera.targetTexture = null;
-            commandBuffer.Blit(renderTexture_left, null as RenderTexture);
-            //commandBuffer.Blit(renderTexture_left, null as RenderTexture, S3DMaterial, pass);
-            //CustomBlit(renderTexture_left, null, S3DMaterial, pass);
-            //CustomBlit(false, false);
-            //CustomBlit(method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY);
+            //commandBuffer.Blit(renderTexture_left, null as RenderTexture);
+            ////commandBuffer.Blit(renderTexture_left, null as RenderTexture, S3DMaterial, pass);
+            ////CustomBlit(renderTexture_left, null, S3DMaterial, pass);
+            ////CustomBlit(false, false);
+            ////CustomBlit(method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY);
 
-            //if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLCore)
-            //    CustomBlit(method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY);
-            //else
-            //    commandBuffer.Blit(renderTexture_left, null as RenderTexture, S3DMaterial, pass);
+            ////if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLCore)
+            ////    CustomBlit(method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY);
+            ////else
+            ////    commandBuffer.Blit(renderTexture_left, null as RenderTexture, S3DMaterial, pass);
+
+            //if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLCore) //OpenGL not working(black screen and RenderTexture show once in rare case) with commandBuffer.Blit via material
+            if (SystemInfo.graphicsDeviceType.ToString().Contains("OpenGL"))
+            {
+                //CustomBlit(renderTexture_right, null, S3DMaterial, pass);
+
+                //Rect r = camera.rect;
+                //camera.rect = Rect.MinMaxRect(0, 0, 1, 1);
+                CustomBlit(method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY);
+                //camera.rect = r;
+            }
+            else
+                commandBuffer.Blit(renderTexture_left, null as RenderTexture, S3DMaterial, pass);
         }
         else
             if (camera == camera_right)
@@ -7980,18 +8003,20 @@ public class Stereo3D : MonoBehaviour
                 //Debug.Log("SystemInfo.graphicsDeviceType " + SystemInfo.graphicsDeviceType);
                 //CustomBlit(method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY);
 
-                //if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLCore) //OpenGL not working(black screen and RenderTexture show once in rare case) with commandBuffer.Blit via material
-                if (SystemInfo.graphicsDeviceType.ToString().Contains("OpenGL"))
-                {
-                    //CustomBlit(renderTexture_right, null, S3DMaterial, pass);
+                ////if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLCore) //OpenGL not working(black screen and RenderTexture show once in rare case) with commandBuffer.Blit via material
+                //if (SystemInfo.graphicsDeviceType.ToString().Contains("OpenGL"))
+                //{
+                //    //CustomBlit(renderTexture_right, null, S3DMaterial, pass);
 
-                    //Rect r = camera.rect;
-                    //camera.rect = Rect.MinMaxRect(0, 0, 1, 1);
-                    CustomBlit(method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY);
-                    //camera.rect = r;
-                }
-                else
-                    commandBuffer.Blit(renderTexture_right, null as RenderTexture, S3DMaterial, pass);
+                //    //Rect r = camera.rect;
+                //    //camera.rect = Rect.MinMaxRect(0, 0, 1, 1);
+                //    CustomBlit(method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY);
+                //    //camera.rect = r;
+                //}
+                //else
+                //    commandBuffer.Blit(renderTexture_right, null as RenderTexture, S3DMaterial, pass);
+
+                commandBuffer.Blit(renderTexture_right, null as RenderTexture);
             }
 #elif HDRP
         if (camera == topmostCamera)
@@ -8005,7 +8030,12 @@ public class Stereo3D : MonoBehaviour
                 //cameraToResetLeft = camera;
                 //renderTextureToResetLeft = camera.targetTexture;
                 camera.targetTexture = null;
-                commandBuffer.Blit(renderTexture_left, null as RenderTexture);
+                //commandBuffer.Blit(renderTexture_left, null as RenderTexture);
+
+                if (method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
+                    commandBuffer.Blit(renderTexture_left, null as RenderTexture, S3DMaterial, pass);
+                else
+                    commandBuffer.Blit(renderTexture_left, null as RenderTexture);
             }
             else
                 if (camera == topmostCamera_right)
@@ -8015,10 +8045,12 @@ public class Stereo3D : MonoBehaviour
                     camera.targetTexture = null;
                     //commandBuffer.Blit(renderTexture_right, null as RenderTexture, RenderTextureFlipMaterial);
 
-                    if (method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
-                        commandBuffer.Blit(renderTexture_right, null as RenderTexture, S3DMaterial, pass);
-                    else
-                        commandBuffer.Blit(renderTexture_right, null as RenderTexture);
+                    //if (method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
+                    //    commandBuffer.Blit(renderTexture_right, null as RenderTexture, S3DMaterial, pass);
+                    //else
+                    //    commandBuffer.Blit(renderTexture_right, null as RenderTexture);
+
+                    commandBuffer.Blit(renderTexture_right, null as RenderTexture);
                 }
 
         //if (camera == camera_left && camera == topmostCamera_left)
@@ -9235,7 +9267,7 @@ void CustomBlit(bool flipX, bool flipY)
         //Destroy(canvasCamera_left.GetComponent<CameraBlit>());
         //Destroy(canvasCamera_right.GetComponent<CameraBlit>());
 
-        lastRTFormat = RTFormat = defaultRTFormat;
+        //lastRTFormat = RTFormat = defaultRTFormat;
     }
 
     void CameraDataStruct_Change()
