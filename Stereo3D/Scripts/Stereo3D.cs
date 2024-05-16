@@ -9365,8 +9365,12 @@ void CustomBlit(bool flipX, bool flipY)
         //}
         //else
         //    Camera.onPreRender -= PreRenderClearScreen;
-
+//#if UNITY_2019 || UNITY_2020 || UNITY_2021
+#if !UNITY_2022_1_OR_NEWER
+        if (clearFrameCount == 5) //4 is not enought in UNITY_2019 when switch from SideBySide to Mirror not clear all swapchain frames
+#else
         if (clearFrameCount == 4) //2 is enought in Player but min 3 is required in Editor
+#endif
         //if (clearFrameCount == 1) //1 is enought in URP
         {
             //clearScreen = false;
