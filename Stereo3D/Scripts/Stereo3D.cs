@@ -3229,23 +3229,24 @@ public class Stereo3D : MonoBehaviour
         //check variable changes after Keys pressed
         if (lastGUIOpened != GUIOpened)
         {
-            if (!lastGUIOpened)
-            {
-                //if (inputSystem)
-//#if STARTER_ASSETS_PACKAGES_CHECKED
-//#if INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
-#if STARTER_ASSETS_PACKAGES_CHECKED || UNITY_2022_1_OR_NEWER && INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
-                {
-                    cursorLockedDefault = starterAssetsInputs.cursorLocked;
-                    cursorInputForLookDefault = starterAssetsInputs.cursorInputForLook;
-                }
-#endif
-                //else
-                cursorLockModeDefault = Cursor.lockState;
-            }
+//            if (!lastGUIOpened)
+//            {
+////if (inputSystem)
+////#if STARTER_ASSETS_PACKAGES_CHECKED
+////#if INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
+//#if STARTER_ASSETS_PACKAGES_CHECKED || UNITY_2022_1_OR_NEWER && INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
+//                {
+//                    cursorLockedDefault = starterAssetsInputs.cursorLocked;
+//                    cursorInputForLookDefault = starterAssetsInputs.cursorInputForLook;
+//                }
+//#endif
+//                //else
+//                cursorLockModeDefault = Cursor.lockState;
+//            }
 
             //lastGUIOpened = GUIOpened;
-            lastGUIOpened = GUIVisible = GUIOpened;
+            //lastGUIOpened = GUIVisible = GUIOpened;
+            GUIVisible = GUIOpened;
             GUI_Set();
 //#if HDRP
 //            Render_Set();
@@ -5142,12 +5143,15 @@ public class Stereo3D : MonoBehaviour
 //#if STARTER_ASSETS_PACKAGES_CHECKED
 //#if INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
 #if STARTER_ASSETS_PACKAGES_CHECKED || UNITY_2022_1_OR_NEWER && INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
-                    {
+                    //{
+                        cursorLockedDefault = starterAssetsInputs.cursorLocked;
+                        cursorInputForLookDefault = starterAssetsInputs.cursorInputForLook;
                         starterAssetsInputs.cursorLocked = false;
                         starterAssetsInputs.cursorInputForLook = false;
-                    }
+                    //}
 #endif
                     //else
+                        cursorLockModeDefault = Cursor.lockState;
                         Cursor.lockState = CursorLockMode.None;
 
                     ////Cursor.visible = true;
@@ -5204,7 +5208,9 @@ public class Stereo3D : MonoBehaviour
                 //}
                 //else
                 //    Cursor.lockState = cursorLockModeDefault;
-                GUIClose();
+
+                if (lastGUIOpened)
+                    CursorRestore();
 
                 //Cursor.lockState = CursorLockMode.Locked;
                 ////Cursor.visible = false;
@@ -5235,6 +5241,7 @@ public class Stereo3D : MonoBehaviour
 #endif
             }
 
+            lastGUIOpened = GUIOpened;
             TopMostCamera_Set();
             Clip_Set();
             HDRPSettings_Set();
@@ -5280,9 +5287,11 @@ public class Stereo3D : MonoBehaviour
         }
     }
 
-    void GUIClose()
+    void CursorRestore()
     {
-        //if (inputSystem)
+        Debug.Log("CursorRestore");
+
+//if (inputSystem)
 //#if STARTER_ASSETS_PACKAGES_CHECKED
 //#if INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
 #if STARTER_ASSETS_PACKAGES_CHECKED || UNITY_2022_1_OR_NEWER && INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
@@ -5686,7 +5695,7 @@ public class Stereo3D : MonoBehaviour
     void Save_Button()
     {
         Save(slotName);
-        SaveUserName(slotName);
+        //SaveUserName(slotName);
     }
 
     void Load_Button()
@@ -8879,7 +8888,7 @@ void CustomBlit(bool flipX, bool flipY)
         if (!name.Contains("(Clone)"))
         {
             if (debug) Debug.Log("OnDisable");
-            GUIClose();
+            CursorRestore();
             Render_Release();
             cameraRestore();
             //Destroy(camera_left.gameObject);
@@ -9923,6 +9932,7 @@ void CustomBlit(bool flipX, bool flipY, RenderTexture source, Material material)
 
         DropdownSet();
         DropdownNameSet(name);
+        SaveUserName(slotName);
     }
 
     void Load(string name)
