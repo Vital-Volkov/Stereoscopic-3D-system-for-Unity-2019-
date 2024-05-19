@@ -210,7 +210,7 @@ Shader "Stereo3D Screen Quad"
 			struct vertData
 			{
 				float4 pos : SV_POSITION;
-				float2 uv : uv;
+				float2 uv : TEXCOORD0;
 			};
 
 			vertData vert(uint vertexID : SV_VertexID)
@@ -245,7 +245,7 @@ Shader "Stereo3D Screen Quad"
 			struct vertData
 			{
 				float4 pos : SV_POSITION;
-				float2 uv : uv;
+				float2 uv : TEXCOORD0;
 			};
 
 			vertData vert(uint vertexID : SV_VertexID)
@@ -280,7 +280,7 @@ Shader "Stereo3D Screen Quad"
 			struct vertData
 			{
 				float4 pos : SV_POSITION;
-				float2 uv : uv;
+				float2 uv : TEXCOORD0;
 			};
 
 			vertData vert(uint vertexID : SV_VertexID)
@@ -316,7 +316,7 @@ Shader "Stereo3D Screen Quad"
 			struct vertData
 			{
 				float4 pos : SV_POSITION;
-				float2 uv : uv;
+				float2 uv : TEXCOORD0;
 			};
 
 			vertData vert(uint vertexID : SV_VertexID)
