@@ -110,6 +110,7 @@ public class Stereo3D : MonoBehaviour
         Two_Displays_MirrorX, 
         Two_Displays_MirrorY, 
         Sequential, 
+        D3D11,
         Anaglyph_RedCyan, 
         Anaglyph_RedBlue, 
         Anaglyph_GreenMagenta, 
@@ -402,7 +403,7 @@ public class Stereo3D : MonoBehaviour
     bool cameraDataStructIsReady;
     bool physicalCamera;
     Vector2 camVanishPoint;
-    RenderTextureFormat defaultRTFormat;
+    //RenderTextureFormat defaultRTFormat;
     bool lastHide2DCursor;
 
     public void Awake()
@@ -2275,6 +2276,54 @@ public class Stereo3D : MonoBehaviour
     //float setLastCameraDataStructTime;
     Vector2 cursorLocalPos;
 
+	// Native plugin rendering events are only called if a plugin is used
+	// by some script. This means we have to DllImport at least
+	// one function in some active script.
+	// For this example, we'll call into plugin's SetTimeFromUnity
+	// function and pass the current time so the plugin can animate.
+
+#if !UNITY_EDITOR
+//#if (UNITY_IPHONE || UNITY_WEBGL) && !UNITY_EDITOR
+//	[DllImport ("__Internal")]
+//#else
+//	[DllImport ("RenderingPlugin")]
+//#endif
+//	private static extern void SetTimeFromUnity(float t);
+
+
+	// We'll also pass native pointer to a texture in Unity.
+	// The plugin will fill texture data from native code.
+#if (UNITY_IPHONE || UNITY_WEBGL) && !UNITY_EDITOR
+	[DllImport ("__Internal")]
+#else
+	[DllImport ("RenderingPlugin")]
+#endif
+	//private static extern void SetTextureFromUnity(System.IntPtr texture, int w, int h);
+	private static extern void SetTextureFromUnity(System.IntPtr textureLeft, System.IntPtr textureRight, int w, int h);
+
+	// We'll pass native pointer to the mesh vertex buffer.
+	// Also passing source unmodified mesh data.
+	// The plugin will fill vertex data from native code.
+#if (UNITY_IPHONE || UNITY_WEBGL) && !UNITY_EDITOR
+	[DllImport ("__Internal")]
+#else
+	[DllImport ("RenderingPlugin")]
+#endif
+	private static extern void SetMeshBuffersFromUnity (IntPtr vertexBuffer, int vertexCount, IntPtr sourceVertices, IntPtr sourceNormals, IntPtr sourceUVs);
+
+#if (UNITY_IPHONE || UNITY_WEBGL) && !UNITY_EDITOR
+	[DllImport ("__Internal")]
+#else
+	[DllImport("RenderingPlugin")]
+#endif
+	private static extern IntPtr GetRenderEventFunc();
+
+#if UNITY_WEBGL && !UNITY_EDITOR
+	[DllImport ("__Internal")]
+	private static extern void RegisterPlugin();
+#endif
+#endif
+
     //void Start()
     IEnumerator Start()
     {
@@ -2298,6 +2347,12 @@ public class Stereo3D : MonoBehaviour
         //if (method == Method.Two_Displays) //prevent disabled post process with Method.Two_Displays at start
         //    OnOffToggle();
 
+#if UNITY_WEBGL && !UNITY_EDITOR
+		RegisterPlugin();
+#endif
+        //Camera.onPostRender += CamEndRenderCallback;
+		//CreateTextureAndPassToPlugin();
+		//SendMeshBuffersToPlugin();
 		yield return StartCoroutine("CallPluginAtEndOfFrames");
     }
 
@@ -2333,6 +2388,18 @@ public class Stereo3D : MonoBehaviour
 
             ////Camera.SetupCurrent(cam);
             ////Camera.SetupCurrent(camera_right);
+
+            // Issue a plugin event with arbitrary integer identifier.
+            // The plugin can distinguish between different
+            // things it needs to do based on this ID.
+            // For our simple plugin, it does not matter which ID we pass here.
+#if !UNITY_EDITOR
+            if (method == Method.D3D11)
+            {
+			    //SetTimeFromUnity (Time.timeSinceLevelLoad);
+			    GL.IssuePluginEvent(GetRenderEventFunc(), 1);
+            }
+#endif
         }
     }
 
@@ -3665,7 +3732,7 @@ public class Stereo3D : MonoBehaviour
         if (lastRTFormat != RTFormat)
         {
             //lastRTFormat = RTFormat;
-            defaultRTFormat = RTFormat;
+            //defaultRTFormat = RTFormat;
             //this.enabled = false;
             //this.enabled = true;
             //OnOffToggle();
@@ -6730,7 +6797,8 @@ public class Stereo3D : MonoBehaviour
             //if (!(method == Method.Two_Displays))
             //if (method == Method.Two_Displays)
             //if (method == Method.Two_Displays)
-            if (method == Method.Two_Displays || method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
+            //if (method == Method.Two_Displays || method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
+            if (method.ToString().Contains("Two_Displays") || method == Method.D3D11)
             {
                 //if (method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
                 //    cam.usePhysicalProperties = false;
@@ -6749,51 +6817,52 @@ public class Stereo3D : MonoBehaviour
                 //    Display.displays[1].Activate();
                 //TargetDisplays_Set();
 
-                if (Display.displays.Length < 2)
-                {
-                    //GameObject staticTooltip = Instantiate(cursorRectTransform.Find("Tooltip").gameObject);
-                    ////staticTooltip.transform.parent = panel;
-                    //staticTooltip.transform.SetParent(panel, false);
-                    //staticTooltip.GetComponent<RectTransform>().anchoredPosition = new Vector2(20, -panel.GetComponent<RectTransform>().sizeDelta.y);
-                    //staticTooltip.SetActive(true);
-                    //Text staticTooltipText = staticTooltip.transform.Find("Text (Legacy)").GetComponent<Text>();
-                    ////staticTooltip.transform.Find("Text (Legacy)").GetComponent<Text>().text = "Second display is not connected";
-                    //staticTooltipText.text = "Second display is not connected";
-                    //staticTooltip.transform.Find("Image_Background").GetComponent<RectTransform>().sizeDelta = new Vector2(staticTooltipText.preferredWidth, staticTooltipText.preferredHeight);
-                    StaticTooltip_Make("Second display is not connected");
-                    //displayIndex_left = 0;
-                    //displayIndex_right = 1;
-                    TargetDisplays_Set();
-                }
-                else
-                    if (Display.displays.Length == 2)
+                if (method.ToString().Contains("Two_Displays"))
+                    if (Display.displays.Length < 2)
                     {
+                        //GameObject staticTooltip = Instantiate(cursorRectTransform.Find("Tooltip").gameObject);
+                        ////staticTooltip.transform.parent = panel;
+                        //staticTooltip.transform.SetParent(panel, false);
+                        //staticTooltip.GetComponent<RectTransform>().anchoredPosition = new Vector2(20, -panel.GetComponent<RectTransform>().sizeDelta.y);
+                        //staticTooltip.SetActive(true);
+                        //Text staticTooltipText = staticTooltip.transform.Find("Text (Legacy)").GetComponent<Text>();
+                        ////staticTooltip.transform.Find("Text (Legacy)").GetComponent<Text>().text = "Second display is not connected";
+                        //staticTooltipText.text = "Second display is not connected";
+                        //staticTooltip.transform.Find("Image_Background").GetComponent<RectTransform>().sizeDelta = new Vector2(staticTooltipText.preferredWidth, staticTooltipText.preferredHeight);
+                        StaticTooltip_Make("Second display is not connected");
+                        //displayIndex_left = 0;
+                        //displayIndex_right = 1;
                         TargetDisplays_Set();
-                        TargetDisplays_Activate();
                     }
                     else
-                        if (display_left == null || display_right == null || !display_left.active || !display_right.active)
+                        if (Display.displays.Length == 2)
                         {
-                            //TargetDisplays_Set(0, 1);
-                            //display_left = display_right = null;
-                            ////string displays = "";
-                            ////string[] fakeDisplays = new string[2];
-                            ////Display[] fakeDisplays = new Display[3];
-                            //fakeDisplays = new Display[3];
-                            //fakeDisplays[0] = fakeDisplays[1] = fakeDisplays[2] = Display.displays[0];
-
-                            ////for (int i = 0; i < Display.displays.Length; i++)
-                            //for (int i = 0; i < fakeDisplays.Length; i++)
-                            //    //if (!Display.displays[i].active)
-                            //    //if (!fakeDisplays[i].active)
-                            //    //displays.Insert(0, i.ToString());
-                            //    displays += " " + i.ToString();
-
-                            //if (debug) Debug.Log("fakeDisplays[0].active " + fakeDisplays[0].active);
-                            //StaticTooltip_Make("Press the number key to select the display for Left camera:" + displays);
-                            //displaySelectWaitInput = true;
-                            TargetDisplays_Select();
+                            TargetDisplays_Set();
+                            TargetDisplays_Activate();
                         }
+                        else
+                            if (display_left == null || display_right == null || !display_left.active || !display_right.active)
+                            {
+                                //TargetDisplays_Set(0, 1);
+                                //display_left = display_right = null;
+                                ////string displays = "";
+                                ////string[] fakeDisplays = new string[2];
+                                ////Display[] fakeDisplays = new Display[3];
+                                //fakeDisplays = new Display[3];
+                                //fakeDisplays[0] = fakeDisplays[1] = fakeDisplays[2] = Display.displays[0];
+
+                                ////for (int i = 0; i < Display.displays.Length; i++)
+                                //for (int i = 0; i < fakeDisplays.Length; i++)
+                                //    //if (!Display.displays[i].active)
+                                //    //if (!fakeDisplays[i].active)
+                                //    //displays.Insert(0, i.ToString());
+                                //    displays += " " + i.ToString();
+
+                                //if (debug) Debug.Log("fakeDisplays[0].active " + fakeDisplays[0].active);
+                                //StaticTooltip_Make("Press the number key to select the display for Left camera:" + displays);
+                                //displaySelectWaitInput = true;
+                                TargetDisplays_Select();
+                            }
 
                 //void StaticTooltip_Make(string text)
                 //{
@@ -6923,6 +6992,10 @@ public class Stereo3D : MonoBehaviour
                 renderTexture_right = RT_Make();
                 renderTexture_left.Create();
                 renderTexture_right.Create();
+#if !UNITY_EDITOR
+                if (method == Method.D3D11)
+                    SetTextureFromUnity(renderTexture_left.GetNativeTexturePtr(), renderTexture_right.GetNativeTexturePtr(), renderTexture_left.width, renderTexture_left.height);
+#endif
                 //canvasRenderTexture_left = RT_Make();
                 //canvasRenderTexture_right = RT_Make();
 
@@ -7417,7 +7490,13 @@ public class Stereo3D : MonoBehaviour
 //        if (QualitySettings.antiAliasing != 0)
 //            lastRTFormat = RTFormat = RenderTextureFormat.ARGBFloat;
 //#endif
-        RenderTexture rt = new RenderTexture(rtWidth, rtHeight, 24, RTFormat);
+        //RenderTexture rt = new RenderTexture(rtWidth, rtHeight, 24, RTFormat);
+        RenderTexture rt;
+
+        if (method == Method.D3D11)
+            rt = new RenderTexture(rtWidth, rtHeight, 24, RenderTextureFormat.BGRA32);
+        else
+            rt = new RenderTexture(rtWidth, rtHeight, 24, RTFormat);
 
         //RenderTextureDescriptor desc = new RenderTextureDescriptor(); //unflipped for use with bindMS = true custom antialiasing resolving samples in shader
         ////RenderTextureDescriptor desc = new RenderTextureDescriptor(rtWidth, rtHeight, RTFormat, 24);
