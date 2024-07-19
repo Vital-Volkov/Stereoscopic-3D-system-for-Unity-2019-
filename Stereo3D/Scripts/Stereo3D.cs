@@ -3414,34 +3414,41 @@ public class Stereo3D : MonoBehaviour
 
         if (lastMethod != method)
         {
-            lastMethod = method;
+            if (method == Method.D3D11 && SystemInfo.graphicsDeviceType != GraphicsDeviceType.Direct3D11)
+                method = lastMethod;
+            else
+            {
+                lastMethod = method;
 
 //#if HDRP
-//            if (lastMethod == Method.Two_Displays)
-//                GUIAsOverlay = GUIAsOverlayState;
+//              if (lastMethod == Method.Two_Displays)
+//                  GUIAsOverlay = GUIAsOverlayState;
 //#endif
 
-            if (cam.rect != Rect.MinMaxRect(0, 0, 1, 1))
+                if (cam.rect != Rect.MinMaxRect(0, 0, 1, 1))
 #if URP || HDRP
-                if (method == Method.Two_Displays)
-                    RenderPipelineManager.beginCameraRendering += PreRenderClearScreen;
+                    if (method == Method.Two_Displays)
+                        RenderPipelineManager.beginCameraRendering += PreRenderClearScreen;
 #else
-                Camera.onPreRender += PreRenderClearScreen;
+                    Camera.onPreRender += PreRenderClearScreen;
 #endif
 
-            //if (method == Method.SideBySide_HMD)
-            //{
-            //    cam.aspect *= .5f;
-            //}
-            //else
-            //{
-            //    cam.aspect = windowSize.x / windowSize.y;
-            //}
+                //if (method == Method.SideBySide_HMD)
+                //{
+                //    cam.aspect *= .5f;
+                //}
+                //else
+                //{
+                //    cam.aspect = windowSize.x / windowSize.y;
+                //}
 
-            //Resize();
-            Aspect_Set();
-            //ViewSet();
-            //Render_Set();
+                //Resize();
+                Aspect_Set();
+                //ViewSet();
+                //Render_Set();
+                //outputMethod_dropdown.value = (int)method;
+            }
+
             outputMethod_dropdown.value = (int)method;
         }
 
