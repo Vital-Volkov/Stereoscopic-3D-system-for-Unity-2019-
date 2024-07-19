@@ -15,6 +15,7 @@ public class Defines : Editor
         static EditorScriptStart()
         {
             Debug.Log("EditorScriptStart " + Time.time);
+            PlayerSettings.useFlipModelSwapchain = false;
             //CompilationPipeline.assemblyCompilationStarted -= RemoveDefines;
             //CompilationPipeline.assemblyCompilationStarted += RemoveDefines;
             //CompilationPipeline.compilationStarted -= RemoveDefines;
