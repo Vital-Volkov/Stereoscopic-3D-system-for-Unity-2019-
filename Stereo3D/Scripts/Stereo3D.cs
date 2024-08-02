@@ -405,6 +405,7 @@ public class Stereo3D : MonoBehaviour
     Vector2 camVanishPoint;
     //RenderTextureFormat defaultRTFormat;
     bool lastHide2DCursor;
+    //bool lastS3DEnabledFake, S3DEnabledFake;
 
     public void Awake()
     {
@@ -2299,7 +2300,7 @@ public class Stereo3D : MonoBehaviour
 	[DllImport ("RenderingPlugin")]
 #endif
 	//private static extern void SetTextureFromUnity(System.IntPtr texture, int w, int h);
-	private static extern void SetTextureFromUnity(System.IntPtr textureLeft, System.IntPtr textureRight, int w, int h);
+	private static extern void SetTextureFromUnity(System.IntPtr textureLeft, System.IntPtr textureRight, int w, int h, bool s);
 
 	// We'll pass native pointer to the mesh vertex buffer.
 	// Also passing source unmodified mesh data.
@@ -2397,6 +2398,7 @@ public class Stereo3D : MonoBehaviour
             if (method == Method.D3D11)
             {
 			    //SetTimeFromUnity (Time.timeSinceLevelLoad);
+                //SetTextureFromUnity(renderTexture_left.GetNativeTexturePtr(), renderTexture_right.GetNativeTexturePtr(), renderTexture_left.width, renderTexture_left.height, S3DEnabledFake);
 			    GL.IssuePluginEvent(GetRenderEventFunc(), 1);
             }
 #endif
@@ -3360,6 +3362,17 @@ public class Stereo3D : MonoBehaviour
                 }
             }
 
+//        if (lastS3DEnabledFake != S3DEnabledFake)
+//        {
+//            lastS3DEnabledFake = S3DEnabledFake;
+//            Debug.Log("lastS3DEnabledFake != S3DEnabledFake");
+
+//#if !UNITY_EDITOR
+//            if (method == Method.D3D11)
+//                SetTextureFromUnity(renderTexture_left.GetNativeTexturePtr(), renderTexture_right.GetNativeTexturePtr(), renderTexture_left.width, renderTexture_left.height, S3DEnabledFake);
+//#endif
+//        }
+
         if (lastS3DEnabled != S3DEnabled)
         {
             //if (cam.projectionMatrix == Matrix4x4.zero)
@@ -3414,41 +3427,34 @@ public class Stereo3D : MonoBehaviour
 
         if (lastMethod != method)
         {
-            if (method == Method.D3D11 && SystemInfo.graphicsDeviceType != GraphicsDeviceType.Direct3D11)
-                method = lastMethod;
-            else
-            {
-                lastMethod = method;
+            lastMethod = method;
 
 //#if HDRP
-//              if (lastMethod == Method.Two_Displays)
-//                  GUIAsOverlay = GUIAsOverlayState;
+//            if (lastMethod == Method.Two_Displays)
+//                GUIAsOverlay = GUIAsOverlayState;
 //#endif
 
-                if (cam.rect != Rect.MinMaxRect(0, 0, 1, 1))
+            if (cam.rect != Rect.MinMaxRect(0, 0, 1, 1))
 #if URP || HDRP
-                    if (method == Method.Two_Displays)
-                        RenderPipelineManager.beginCameraRendering += PreRenderClearScreen;
+                if (method == Method.Two_Displays)
+                    RenderPipelineManager.beginCameraRendering += PreRenderClearScreen;
 #else
-                    Camera.onPreRender += PreRenderClearScreen;
+                Camera.onPreRender += PreRenderClearScreen;
 #endif
 
-                //if (method == Method.SideBySide_HMD)
-                //{
-                //    cam.aspect *= .5f;
-                //}
-                //else
-                //{
-                //    cam.aspect = windowSize.x / windowSize.y;
-                //}
+            //if (method == Method.SideBySide_HMD)
+            //{
+            //    cam.aspect *= .5f;
+            //}
+            //else
+            //{
+            //    cam.aspect = windowSize.x / windowSize.y;
+            //}
 
-                //Resize();
-                Aspect_Set();
-                //ViewSet();
-                //Render_Set();
-                //outputMethod_dropdown.value = (int)method;
-            }
-
+            //Resize();
+            Aspect_Set();
+            //ViewSet();
+            //Render_Set();
             outputMethod_dropdown.value = (int)method;
         }
 
@@ -5145,6 +5151,7 @@ public class Stereo3D : MonoBehaviour
                                 optimize = !optimize;
                             else
                                 S3DEnabled = !S3DEnabled;
+                                //S3DEnabledFake = !S3DEnabledFake;
         //else
         //    Load(slotName);
 
@@ -7001,7 +7008,7 @@ public class Stereo3D : MonoBehaviour
                 renderTexture_right.Create();
 #if !UNITY_EDITOR
                 if (method == Method.D3D11)
-                    SetTextureFromUnity(renderTexture_left.GetNativeTexturePtr(), renderTexture_right.GetNativeTexturePtr(), renderTexture_left.width, renderTexture_left.height);
+                    SetTextureFromUnity(renderTexture_left.GetNativeTexturePtr(), renderTexture_right.GetNativeTexturePtr(), renderTexture_left.width, renderTexture_left.height, S3DEnabled);
 #endif
                 //canvasRenderTexture_left = RT_Make();
                 //canvasRenderTexture_right = RT_Make();
@@ -7009,7 +7016,7 @@ public class Stereo3D : MonoBehaviour
                 //camera_left.targetDisplay = camera_right.targetDisplay = 0;
                 //camera_left.rect = camera_right.rect = Rect.MinMaxRect(0, 0, 1, 1);
 
-            if (method != Method.Two_Displays
+                if (method != Method.Two_Displays
 #if HDRP
                 || additionalS3DTopmostCameraIndex != -1
 #endif
@@ -7230,6 +7237,21 @@ public class Stereo3D : MonoBehaviour
             cameraRestore();
             StaticTooltip_Destroy();
 
+            if (method == Method.D3D11)
+            {
+                renderTexture_left = RT_Make();
+                renderTexture_left.Create();
+                cam.targetTexture = renderTexture_left;
+
+                if (canvasCamera)
+                    canvasCamera.targetTexture = renderTexture_left;
+
+#if !UNITY_EDITOR
+                SetTextureFromUnity(renderTexture_left.GetNativeTexturePtr(), IntPtr.Zero, renderTexture_left.width, renderTexture_left.height, S3DEnabled);
+#endif
+            }
+            else
+            {
             //renderTexture = RT_Make();
             //cam.targetTexture = renderTexture;
 
@@ -7339,6 +7361,7 @@ public class Stereo3D : MonoBehaviour
 //                //RenderPipelineManager.endContextRendering += PostRenderContext; //add render context
 //                RenderPipelineManager.endCameraRendering += PostRenderContext; //add render context
 #endif
+            }
         }
 
         //RenderTexture RT_Make()
