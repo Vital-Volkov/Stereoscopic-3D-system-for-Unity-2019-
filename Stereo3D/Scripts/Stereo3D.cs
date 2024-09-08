@@ -110,7 +110,7 @@ public class Stereo3D : MonoBehaviour
         Two_Displays_MirrorX, 
         Two_Displays_MirrorY, 
         Sequential, 
-        D3D11,
+        Direct3D11,
         Anaglyph_RedCyan, 
         Anaglyph_RedBlue, 
         Anaglyph_GreenMagenta, 
@@ -271,7 +271,8 @@ public class Stereo3D : MonoBehaviour
     //Transform cursorTransform;
     Vector2 canvasDefaultSize;
     Vector2 canvasSize;
-    Vector2 windowSize = new Vector2(Screen.width, Screen.height);
+    Vector2 viewportSize = new Vector2(Screen.width, Screen.height);
+    //Vector2 viewportSize = new Vector2(Display.main.systemWidth, Display.main.systemHeight);
     //Vector2 viewportSize;
     Transform panel;
     Toggle enableS3D_toggle;
@@ -305,6 +306,7 @@ public class Stereo3D : MonoBehaviour
     RectTransform tooltipBackgroundRect;
     Text tooltipText;
     Text FPSText;
+    Text S3DSettingsText;
     EventTrigger trigger;
     EventTrigger.Entry entry;
     float GUI_autoshowTimer;
@@ -406,8 +408,11 @@ public class Stereo3D : MonoBehaviour
     //RenderTextureFormat defaultRTFormat;
     bool lastHide2DCursor;
     //bool lastS3DEnabledFake, S3DEnabledFake;
+    int counter;
+    IntPtr renderTexturePtr;
 
-    public void Awake()
+    //public void Awake()
+    void Awake()
     {
         if (!name.Contains("(Clone)")) //avoid code execution of this script copy from camera clones before removing unwanted components
         {
@@ -416,6 +421,16 @@ public class Stereo3D : MonoBehaviour
              GameObject.Find("SceneCamera").GetComponent<Camera>().pixelRect also not correct OnEnable
              EditorWindow.GetWindow<SceneView>().camera.pixelRect works but changing active window in player to scene view
              */
+
+            //if (Screen.fullScreen)
+            //    Screen.SetResolution(1920, 1080, Screen.fullScreen);
+            //RefreshRate rr = new RefreshRate();
+            //rr.numerator = 60;
+            //rr.denominator = 1;
+            //RefreshRate rr = new RefreshRate(){ numerator = 60, denominator = 1 };
+            //Screen.SetResolution(Display.main.systemWidth, Display.main.systemHeight, Screen.fullScreenMode, rr);
+            //Screen.SetResolution(Display.main.systemWidth, Display.main.systemHeight, Screen.fullScreenMode, new RefreshRate(){ numerator = 60, denominator = 1 });
+            //Screen.SetResolution(Display.main.systemWidth, Display.main.systemHeight, FullScreenMode.ExclusiveFullScreen);
 
             GUI_Set_delay = Time.deltaTime * 2;
 
@@ -478,6 +493,7 @@ public class Stereo3D : MonoBehaviour
     //GameObject selectedObject;
     int additionalS3DTopmostCameraIndex;
     Camera lastAdditionalS3DTopmostCamera;
+    bool nativeRenderingPlugin;
 
     void OnEnable()
     {
@@ -487,7 +503,7 @@ public class Stereo3D : MonoBehaviour
         if (!name.Contains("(Clone)"))
         {
             if (debug) Debug.Log("OnEnable cameraDataStructIsReady " + cameraDataStructIsReady);
-            //if (debug) Debug.Log("windowSize " + windowSize);
+            //if (debug) Debug.Log("viewportSize " + viewportSize);
             //List<Type> types = GetAllTypesInAssembly(new string[] { "Assembly-CSharp" });
             //if (debug) Debug.Log(types.Count);
 
@@ -1520,6 +1536,7 @@ public class Stereo3D : MonoBehaviour
             tooltipText = tooltip.transform.Find("Text (Legacy)").GetComponent<Text>();
             //TooltipShow("HellO \nTesT");
             FPSText = panel.Find("Text (Legacy)_FPS").GetComponent<Text>();
+            S3DSettingsText = panel.Find("Text_S3D_Settings").GetComponent<Text>();
 
             //Invoke("InputFieldCaretMaterial_SetFields", Time.deltaTime);
 
@@ -1558,6 +1575,12 @@ public class Stereo3D : MonoBehaviour
                     lastPanelPosition = panel.GetComponent<RectTransform>().anchoredPosition;
                 else
                     panel.GetComponent<RectTransform>().anchoredPosition = lastPanelPosition;
+
+            if (method == Method.Direct3D11)
+                if (SystemInfo.graphicsDeviceType.ToString() == method.ToString())
+                    nativeRenderingPlugin = true;
+                else
+                    method = Method.Interlace_Horizontal;
 
             //if (method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
             //    cam.usePhysicalProperties = false;
@@ -2299,18 +2322,19 @@ public class Stereo3D : MonoBehaviour
 #else
 	[DllImport ("RenderingPlugin")]
 #endif
-	//private static extern void SetTextureFromUnity(System.IntPtr texture, int w, int h);
-	private static extern void SetTextureFromUnity(System.IntPtr textureLeft, System.IntPtr textureRight, int w, int h, bool s);
+	//private static extern void SetDataFromUnity(System.IntPtr texture, int w, int h);
+	//private static extern void SetDataFromUnity(System.IntPtr textureLeft, System.IntPtr textureRight, int w, int h, bool S3DEnabled);
+	private static extern void SetDataFromUnity(System.IntPtr textureLeft, System.IntPtr textureRight, bool S3DEnabled, Method method);
 
-	// We'll pass native pointer to the mesh vertex buffer.
-	// Also passing source unmodified mesh data.
-	// The plugin will fill vertex data from native code.
-#if (UNITY_IPHONE || UNITY_WEBGL) && !UNITY_EDITOR
-	[DllImport ("__Internal")]
-#else
-	[DllImport ("RenderingPlugin")]
-#endif
-	private static extern void SetMeshBuffersFromUnity (IntPtr vertexBuffer, int vertexCount, IntPtr sourceVertices, IntPtr sourceNormals, IntPtr sourceUVs);
+//	// We'll pass native pointer to the mesh vertex buffer.
+//	// Also passing source unmodified mesh data.
+//	// The plugin will fill vertex data from native code.
+//#if (UNITY_IPHONE || UNITY_WEBGL) && !UNITY_EDITOR
+//	[DllImport ("__Internal")]
+//#else
+//	[DllImport ("RenderingPlugin")]
+//#endif
+//	private static extern void SetMeshBuffersFromUnity (IntPtr vertexBuffer, int vertexCount, IntPtr sourceVertices, IntPtr sourceNormals, IntPtr sourceUVs);
 
 #if (UNITY_IPHONE || UNITY_WEBGL) && !UNITY_EDITOR
 	[DllImport ("__Internal")]
@@ -2325,8 +2349,10 @@ public class Stereo3D : MonoBehaviour
 #endif
 #endif
 
-    //void Start()
-    IEnumerator Start()
+    private IEnumerator coroutine;
+
+    void Start()
+    //IEnumerator Start()
     {
         if (debug) Debug.Log("Start");
         lastLoadSettingsFromFile = loadSettingsFromFile = false; //prevent reload settings by OnOffToggle
@@ -2354,7 +2380,10 @@ public class Stereo3D : MonoBehaviour
         //Camera.onPostRender += CamEndRenderCallback;
 		//CreateTextureAndPassToPlugin();
 		//SendMeshBuffersToPlugin();
-		yield return StartCoroutine("CallPluginAtEndOfFrames");
+		//yield return StartCoroutine("CallPluginAtEndOfFrames");
+
+        coroutine = CallPluginAtEndOfFrames();
+        StartCoroutine(coroutine);
     }
 
 	private IEnumerator CallPluginAtEndOfFrames()
@@ -2395,10 +2424,12 @@ public class Stereo3D : MonoBehaviour
             // things it needs to do based on this ID.
             // For our simple plugin, it does not matter which ID we pass here.
 #if !UNITY_EDITOR
-            if (method == Method.D3D11)
+            //if (method == Method.Direct3D11)
+            if (nativeRenderingPlugin)
             {
+                //nativeRenderingPlugin = true;
 			    //SetTimeFromUnity (Time.timeSinceLevelLoad);
-                //SetTextureFromUnity(renderTexture_left.GetNativeTexturePtr(), renderTexture_right.GetNativeTexturePtr(), renderTexture_left.width, renderTexture_left.height, S3DEnabledFake);
+                //SetDataFromUnity(renderTexture_left.GetNativeTexturePtr(), renderTexture_right.GetNativeTexturePtr(), renderTexture_left.width, renderTexture_left.height, S3DEnabledFake);
 			    GL.IssuePluginEvent(GetRenderEventFunc(), 1);
             }
 #endif
@@ -2784,6 +2815,8 @@ public class Stereo3D : MonoBehaviour
         //FPSText.text = "test";
         //FPSText.text = FPS.ToString();
         FPSText.text = averageFPS.ToString() + " FPS";
+        S3DSettingsText.text = counter + " " + renderTexturePtr;
+        //FPSText.text = Screen.currentResolution.width.ToString() + " FPS";
         //canvasCamData = canvasCamera.GetComponent<HDAdditionalCameraData>();
         //if (debug) Debug.Log("OnEnable panelDepth as screen distance = " + 1 / (1 - panelDepth));
         //canvasCamera.enabled = true;
@@ -3203,27 +3236,33 @@ public class Stereo3D : MonoBehaviour
         //   //if (debug) Debug.Log("caret == null");
         //}
 
-        if (Screen.width != windowSize.x || Screen.height != windowSize.y)
+        if (Screen.fullScreen && method.ToString().Contains("Interlace") && (Screen.width != Display.main.systemWidth || Screen.height != Display.main.systemHeight))
+        {
+            Screen.SetResolution(Display.main.systemWidth, Display.main.systemHeight, Screen.fullScreen);
+            Resize();
+        }
+        else
+            if (Screen.width != viewportSize.x || Screen.height != viewportSize.y)
             Resize();
 
         if (GUIOpened)
         {
             //if (debug) Debug.Log(Input.mousePosition);
-            //cursorRectTransform.anchoredPosition = new Vector2(Input.mousePosition.x / windowSize.x * canvasSize.x - canvasSize.x * 0.5f, Input.mousePosition.y / windowSize.y * canvasSize.y - canvasSize.y);
-            //cursorLocalPos = new Vector2(Input.mousePosition.x / windowSize.x * canvasSize.x - canvasSize.x * 0.5f, Input.mousePosition.y / windowSize.y * canvasSize.y - canvasSize.y);
-            //cursorLocalPos = new Vector2((Input.mousePosition.x - cam.rect.x * windowSize.x) / cam.pixelWidth * canvasSize.x - canvasSize.x * 0.5f, (Input.mousePosition.y - cam.rect.y * windowSize.y) / cam.pixelHeight * canvasSize.y - canvasSize.y);
-            //cursorLocalPos.x = ((Input.mousePosition.x - cam.rect.x * windowSize.x) / cam.pixelWidth - .5f) * canvasSize.x * (1 + canvasEdgeOffset);
-            //cursorLocalPos.x = (Input.mousePosition.x / windowSize.x - .5f) * canvasSize.x * (1 + canvasEdgeOffset);
-            //cursorLocalPos.x = (Input.mousePosition.x / windowSize.x - .5f) * canvasWidthWithOffset;
-            //cursorLocalPos.x = ((Input.mousePosition.x - cam.rect.x * windowSize.x) / cam.pixelWidth - .5f) * canvasSize.x + virtualIPD * .0005f * ((int)eyePriority - 1) / canvas.GetComponent<RectTransform>().lossyScale.x;
-            //cursorLocalPos.y = ((Input.mousePosition.y - cam.rect.y * windowSize.y) / cam.pixelHeight - 1) * canvasSize.y;
-            //cursorLocalPos.y = (Input.mousePosition.y / windowSize.y - 1) * canvasSize.y;
+            //cursorRectTransform.anchoredPosition = new Vector2(Input.mousePosition.x / viewportSize.x * canvasSize.x - canvasSize.x * 0.5f, Input.mousePosition.y / viewportSize.y * canvasSize.y - canvasSize.y);
+            //cursorLocalPos = new Vector2(Input.mousePosition.x / viewportSize.x * canvasSize.x - canvasSize.x * 0.5f, Input.mousePosition.y / viewportSize.y * canvasSize.y - canvasSize.y);
+            //cursorLocalPos = new Vector2((Input.mousePosition.x - cam.rect.x * viewportSize.x) / cam.pixelWidth * canvasSize.x - canvasSize.x * 0.5f, (Input.mousePosition.y - cam.rect.y * viewportSize.y) / cam.pixelHeight * canvasSize.y - canvasSize.y);
+            //cursorLocalPos.x = ((Input.mousePosition.x - cam.rect.x * viewportSize.x) / cam.pixelWidth - .5f) * canvasSize.x * (1 + canvasEdgeOffset);
+            //cursorLocalPos.x = (Input.mousePosition.x / viewportSize.x - .5f) * canvasSize.x * (1 + canvasEdgeOffset);
+            //cursorLocalPos.x = (Input.mousePosition.x / viewportSize.x - .5f) * canvasWidthWithOffset;
+            //cursorLocalPos.x = ((Input.mousePosition.x - cam.rect.x * viewportSize.x) / cam.pixelWidth - .5f) * canvasSize.x + virtualIPD * .0005f * ((int)eyePriority - 1) / canvas.GetComponent<RectTransform>().lossyScale.x;
+            //cursorLocalPos.y = ((Input.mousePosition.y - cam.rect.y * viewportSize.y) / cam.pixelHeight - 1) * canvasSize.y;
+            //cursorLocalPos.y = (Input.mousePosition.y / viewportSize.y - 1) * canvasSize.y;
 
             Vector2 pointerPosition;
 
 #if INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
-            //cursorLocalPos.x = (Pointer.current.position.value.x / windowSize.x - .5f) * canvasWidthWithOffset;
-            //cursorLocalPos.y = (Pointer.current.position.value.y / windowSize.y - 1) * canvasSize.y;
+            //cursorLocalPos.x = (Pointer.current.position.value.x / viewportSize.x - .5f) * canvasWidthWithOffset;
+            //cursorLocalPos.y = (Pointer.current.position.value.y / viewportSize.y - 1) * canvasSize.y;
             //pointerPosition.x = Pointer.current.position.value.x;
             //pointerPosition.y = Pointer.current.position.value.y;
             //pointerPosition.x = UnityEngine.InputSystem.Pointer.current.position.value.x;
@@ -3232,31 +3271,31 @@ public class Stereo3D : MonoBehaviour
             pointerPosition = UnityEngine.InputSystem.Pointer.current.position.ReadValue(); //for Input System below and above 1.5
             //pointerPosition = Mouse.current.position.ReadValue();
 #else
-            //cursorLocalPos.x = (Input.mousePosition.x / windowSize.x - .5f) * canvasWidthWithOffset;
-            //cursorLocalPos.y = (Input.mousePosition.y / windowSize.y - 1) * canvasSize.y;
+            //cursorLocalPos.x = (Input.mousePosition.x / viewportSize.x - .5f) * canvasWidthWithOffset;
+            //cursorLocalPos.y = (Input.mousePosition.y / viewportSize.y - 1) * canvasSize.y;
             pointerPosition.x = Input.mousePosition.x;
             pointerPosition.y = Input.mousePosition.y;
 #endif
 
-            //cursorLocalPos.x = (pointerPosition.x / windowSize.x - .5f) * canvasWidthWithOffset;
-            //cursorLocalPos.y = (pointerPosition.y / windowSize.y - 1) * canvasSize.y;
-            //if (debug) Debug.Log((pointerPosition.y / windowSize.y - cam.rect.y) / cam.rect.height - 1);
+            //cursorLocalPos.x = (pointerPosition.x / viewportSize.x - .5f) * canvasWidthWithOffset;
+            //cursorLocalPos.y = (pointerPosition.y / viewportSize.y - 1) * canvasSize.y;
+            //if (debug) Debug.Log((pointerPosition.y / viewportSize.y - cam.rect.y) / cam.rect.height - 1);
             //Camera canvasWorldCam = canvas.worldCamera;
-            //cursorLocalPos.x = ((pointerPosition.x / windowSize.x - canvasWorldCam.rect.x) / canvasWorldCam.rect.width - .5f) * canvasWidthWithOffset;
-            //cursorLocalPos.y = ((pointerPosition.y / windowSize.y - canvasWorldCam.rect.y) / canvasWorldCam.rect.height - 1) * canvasSize.y;
-            //cursorLocalPos.x = ((pointerPosition.x / windowSize.x - canvas.worldCamera.rect.x) / canvas.worldCamera.rect.width - .5f) * canvasWidthWithOffset;
-            //cursorLocalPos.y = ((pointerPosition.y / windowSize.y - canvas.worldCamera.rect.y) / canvas.worldCamera.rect.height - 1) * canvasSize.y;
+            //cursorLocalPos.x = ((pointerPosition.x / viewportSize.x - canvasWorldCam.rect.x) / canvasWorldCam.rect.width - .5f) * canvasWidthWithOffset;
+            //cursorLocalPos.y = ((pointerPosition.y / viewportSize.y - canvasWorldCam.rect.y) / canvasWorldCam.rect.height - 1) * canvasSize.y;
+            //cursorLocalPos.x = ((pointerPosition.x / viewportSize.x - canvas.worldCamera.rect.x) / canvas.worldCamera.rect.width - .5f) * canvasWidthWithOffset;
+            //cursorLocalPos.y = ((pointerPosition.y / viewportSize.y - canvas.worldCamera.rect.y) / canvas.worldCamera.rect.height - 1) * canvasSize.y;
 
             Vector2 viewportLeftBottomPos = new Vector2(Mathf.Clamp01(canvas.worldCamera.rect.x), Mathf.Clamp01(canvas.worldCamera.rect.y)); //viewport LeftBottom & RightTop corner coordinates inside render window
             Vector2 viewportRightTopPos = new Vector2(Mathf.Clamp01(canvas.worldCamera.rect.xMax), Mathf.Clamp01(canvas.worldCamera.rect.yMax));
             Rect viewportRect = new Rect(viewportLeftBottomPos.x, viewportLeftBottomPos.y, viewportRightTopPos.x - viewportLeftBottomPos.x, viewportRightTopPos.y - viewportLeftBottomPos.y);
             //if (debug) Debug.Log("viewportRect.x " + viewportRect.x + " viewportRect.width " + viewportRect.width);
             //if (debug) Debug.Log("canvas.worldCamera.rect.x " + canvas.worldCamera.rect.x + " canvas.worldCamera.rect.xMin " + canvas.worldCamera.rect.xMin);
-            cursorLocalPos.x = ((pointerPosition.x / windowSize.x - viewportRect.x) / viewportRect.width - .5f) * canvasWidthWithOffset;
-            cursorLocalPos.y = ((pointerPosition.y / windowSize.y - viewportRect.y) / viewportRect.height - 1) * canvasSize.y;
+            cursorLocalPos.x = ((pointerPosition.x / viewportSize.x - viewportRect.x) / viewportRect.width - .5f) * canvasWidthWithOffset;
+            cursorLocalPos.y = ((pointerPosition.y / viewportSize.y - viewportRect.y) / viewportRect.height - 1) * canvasSize.y;
 
             cursorRectTransform.anchoredPosition = cursorLocalPos;
-            //cursorTransform.localPosition = new Vector2(Input.mousePosition.x / windowSize.x * canvasSize.x - canvasSize.x * 0.5f, Input.mousePosition.y / windowSize.y * canvasSize.y - canvasSize.y * 0.5f);
+            //cursorTransform.localPosition = new Vector2(Input.mousePosition.x / viewportSize.x * canvasSize.x - canvasSize.x * 0.5f, Input.mousePosition.y / viewportSize.y * canvasSize.y - canvasSize.y * 0.5f);
             //canvas.worldCamera.ViewportPointToRay(Vector3.zero);
             //EventSystem eSys = EventSystem.current;
             //eSys.
@@ -3368,8 +3407,8 @@ public class Stereo3D : MonoBehaviour
 //            Debug.Log("lastS3DEnabledFake != S3DEnabledFake");
 
 //#if !UNITY_EDITOR
-//            if (method == Method.D3D11)
-//                SetTextureFromUnity(renderTexture_left.GetNativeTexturePtr(), renderTexture_right.GetNativeTexturePtr(), renderTexture_left.width, renderTexture_left.height, S3DEnabledFake);
+//            if (method == Method.Direct3D11)
+//                SetDataFromUnity(renderTexture_left.GetNativeTexturePtr(), renderTexture_right.GetNativeTexturePtr(), renderTexture_left.width, renderTexture_left.height, S3DEnabledFake);
 //#endif
 //        }
 
@@ -3427,14 +3466,31 @@ public class Stereo3D : MonoBehaviour
 
         if (lastMethod != method)
         {
-            lastMethod = method;
+            ////if (method == Method.Direct3D11 && SystemInfo.graphicsDeviceType != GraphicsDeviceType.Direct3D11)
+            //if (method == Method.Direct3D11 && SystemInfo.graphicsDeviceType.ToString() != method.ToString())
+            //    method = lastMethod;
+            //else
+
+            if (method == Method.Direct3D11)
+            {
+                if (SystemInfo.graphicsDeviceType.ToString() == method.ToString())
+                {
+                    nativeRenderingPlugin = true;
+                    Aspect_Set();
+                }
+                else
+                    method = lastMethod;
+            }
+            else
+            {
+                //lastMethod = method;
 
 //#if HDRP
 //            if (lastMethod == Method.Two_Displays)
 //                GUIAsOverlay = GUIAsOverlayState;
 //#endif
 
-            if (cam.rect != Rect.MinMaxRect(0, 0, 1, 1))
+                if (cam.rect != Rect.MinMaxRect(0, 0, 1, 1))
 #if URP || HDRP
                 if (method == Method.Two_Displays)
                     RenderPipelineManager.beginCameraRendering += PreRenderClearScreen;
@@ -3442,19 +3498,26 @@ public class Stereo3D : MonoBehaviour
                 Camera.onPreRender += PreRenderClearScreen;
 #endif
 
-            //if (method == Method.SideBySide_HMD)
-            //{
-            //    cam.aspect *= .5f;
-            //}
-            //else
-            //{
-            //    cam.aspect = windowSize.x / windowSize.y;
-            //}
+                //if (method == Method.SideBySide_HMD)
+                //{
+                //    cam.aspect *= .5f;
+                //}
+                //else
+                //{
+                //    cam.aspect = viewportSize.x / viewportSize.y;
+                //}
 
-            //Resize();
-            Aspect_Set();
-            //ViewSet();
-            //Render_Set();
+                //if (method == Method.Direct3D11)
+                //    nativeRenderingPlugin = true;
+
+                //Resize();
+                Aspect_Set();
+                //ViewSet();
+                //Render_Set();
+                //outputMethod_dropdown.value = (int)method;
+            }
+
+            lastMethod = method;
             outputMethod_dropdown.value = (int)method;
         }
 
@@ -4188,6 +4251,13 @@ public class Stereo3D : MonoBehaviour
                 //    if (S3DEnabled && matrixKillHack)
                 //        cam.projectionMatrix = Matrix4x4.zero;
                 //}
+
+            //if (
+            //    //lastCameraDataStruct.pixelHeight != cameraDataStruct.pixelHeight
+            //    //lastCameraDataStruct.pixelRect != cameraDataStruct.pixelRect
+            //    lastCameraDataStruct.scaledPixelHeight != cameraDataStruct.scaledPixelHeight
+            //    )
+            //    onOffToggle = false;
 
                 //universalAdditionalCameraData = cam.GetUniversalAdditionalCameraData();
                 lastCameraDataStruct = cameraDataStruct;
@@ -4960,12 +5030,12 @@ public class Stereo3D : MonoBehaviour
                 canvas.renderMode = RenderMode.ScreenSpaceCamera;
                 //canvas.worldCamera = cam;
                 canvas.worldCamera = canvasCamera;
-                //canvas.GetComponent<CanvasScaler>().scaleFactor = windowSize.y / canvasSize.y;
-                canvas.GetComponent<CanvasScaler>().scaleFactor = windowSize.y / canvasSize.y * canvasCamera.rect.height;
-                //canvas.GetComponent<CanvasScaler>().scaleFactor = windowSize.y / canvasSize.y * cam.rect.height;
+                //canvas.GetComponent<CanvasScaler>().scaleFactor = viewportSize.y / canvasSize.y;
+                canvas.GetComponent<CanvasScaler>().scaleFactor = viewportSize.y / canvasSize.y * canvasCamera.rect.height;
+                //canvas.GetComponent<CanvasScaler>().scaleFactor = viewportSize.y / canvasSize.y * cam.rect.height;
                 //canvas.GetComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
                 //canvas.GetComponent<CanvasScaler>().referenceResolution = canvasSize;
-                //if (debug) Debug.Log("canvasSize " + canvasSize + " windowSize " + windowSize);
+                //if (debug) Debug.Log("canvasSize " + canvasSize + " viewportSize " + viewportSize);
                 //canvas.planeDistance = cam.farClipPlane * .5f;
                 canvas.planeDistance = canvasCamera.farClipPlane;
             }
@@ -5053,15 +5123,21 @@ public class Stereo3D : MonoBehaviour
 
     void Resize()
     {
+        counter++;
         //if (debug) Debug.Log("Resize");
-        windowSize = new Vector2(Screen.width, Screen.height);
-        //viewportSize = new Vector2(windowSize.x * cam.rect.width, windowSize.y * cam.rect.height);
+
+        //if (Screen.fullScreen)
+        //    viewportSize = new Vector2(Display.main.systemWidth, Display.main.systemHeight);
+        //else
+            viewportSize = new Vector2(Screen.width, Screen.height);
+
+        //viewportSize = new Vector2(viewportSize.x * cam.rect.width, viewportSize.y * cam.rect.height);
         //viewportSize = new Vector2(cam.pixelWidth, cam.pixelHeight);
         //aspect = viewportSize.x / viewportSize.y;
-        //aspect = windowSize.x / windowSize.y;
         //aspect = viewportSize.x / viewportSize.y;
-        //canvas.GetComponent<RectTransform>().sizeDelta = new Vector2(windowSize.x, windowSize.y);
-        //canvas.GetComponent<RectTransform>().localPosition = new Vector3(0, 0, windowSize.x * 0.5f);
+        //aspect = viewportSize.x / viewportSize.y;
+        //canvas.GetComponent<RectTransform>().sizeDelta = new Vector2(viewportSize.x, viewportSize.y);
+        //canvas.GetComponent<RectTransform>().localPosition = new Vector3(0, 0, viewportSize.x * 0.5f);
         Aspect_Set();
     }
 
@@ -5106,9 +5182,9 @@ public class Stereo3D : MonoBehaviour
         //if (debug) Debug.Log("Aspect_Set cam.pixelWidth " + cam.pixelWidth + " cam.pixelHeight " + cam.pixelHeight);
 
         //if (method == Method.Two_Displays_MirrorX)
-        //    pixelRect = new Rect((1 - cam.rect.x) * windowSize.x - cam.pixelWidth, cam.rect.y * windowSize.y, cam.pixelWidth, cam.pixelHeight);
+        //    pixelRect = new Rect((1 - cam.rect.x) * viewportSize.x - cam.pixelWidth, cam.rect.y * viewportSize.y, cam.pixelWidth, cam.pixelHeight);
         //else
-        //    pixelRect = new Rect(cam.rect.x * windowSize.x, (1 - cam.rect.y) * windowSize.y - cam.pixelHeight, cam.pixelWidth, cam.pixelHeight);
+        //    pixelRect = new Rect(cam.rect.x * viewportSize.x, (1 - cam.rect.y) * viewportSize.y - cam.pixelHeight, cam.pixelWidth, cam.pixelHeight);
 
         //ViewSet();
         FOV_Set();
@@ -5137,7 +5213,8 @@ public class Stereo3D : MonoBehaviour
     {
         if (S3DKeyTimer < 1)
             //if (modifier1 != 0 && modifier2 != 0 && method == Method.Two_Displays)
-            if (modifier1 != 0 && modifier2 != 0 && (method == Method.Two_Displays || method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY))
+            //if (modifier1 != 0 && modifier2 != 0 && (method == Method.Two_Displays || method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY))
+            if (modifier1 != 0 && modifier2 != 0 && method.ToString().Contains("Two_Displays"))
                 //if (debug) Debug.Log("modifier1 != 0 & modifier2 != 0");
                 TargetDisplays_Select();
             else
@@ -6513,8 +6590,8 @@ public class Stereo3D : MonoBehaviour
         //rtHeight = cam.pixelHeight;
         //rtWidth = Screen.width;
         //rtHeight = Screen.height;
-        rtWidth = (int)windowSize.x;
-        rtHeight = (int)windowSize.y;
+        rtWidth = (int)viewportSize.x;
+        rtHeight = (int)viewportSize.y;
 
 //#if URP || HDRP
         camera_left.rect = camera_right.rect = cam.rect;
@@ -6812,7 +6889,8 @@ public class Stereo3D : MonoBehaviour
             //if (method == Method.Two_Displays)
             //if (method == Method.Two_Displays)
             //if (method == Method.Two_Displays || method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
-            if (method.ToString().Contains("Two_Displays") || method == Method.D3D11)
+            //if (method.ToString().Contains("Two_Displays") || method == Method.Direct3D11)
+            if (method.ToString().Contains("Two_Displays"))
             {
                 //if (method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
                 //    cam.usePhysicalProperties = false;
@@ -6948,6 +7026,25 @@ public class Stereo3D : MonoBehaviour
 //                    Camera.onPostRender += PostRender;
 //                }
 //#endif
+
+                if (nativeRenderingPlugin)
+                {
+                    renderTexture_left = RT_Make();
+                    renderTexture_right = RT_Make();
+                    renderTexture_left.Create();
+                    renderTexture_right.Create();
+
+                    camera_left.targetTexture = renderTexture_left;
+                    camera_right.targetTexture = renderTexture_right;
+
+                    if (canvasCamera)
+                    {
+                        canvasCamera_left.targetTexture = renderTexture_left;
+                        canvasCamera_right.targetTexture = renderTexture_right;
+                    }
+
+                    NativeRenderingPluginData_Set(renderTexture_left, renderTexture_right);
+                }
             }
             else
             {
@@ -6959,7 +7056,11 @@ public class Stereo3D : MonoBehaviour
                 if (inputSystem_KeyListener != null)
                     inputSystem_KeyListener.Dispose();
 #endif
-                cam.enabled = true;
+                if (nativeRenderingPlugin)
+                    cam.enabled = false;
+                else
+                    cam.enabled = true;
+
                 //camera_left.tag = "Untagged";
                 //camera_right.tag = "Untagged";
                 ////GUIAsOverlay = GUIAsOverlayState;
@@ -7006,10 +7107,19 @@ public class Stereo3D : MonoBehaviour
                 renderTexture_right = RT_Make();
                 renderTexture_left.Create();
                 renderTexture_right.Create();
-#if !UNITY_EDITOR
-                if (method == Method.D3D11)
-                    SetTextureFromUnity(renderTexture_left.GetNativeTexturePtr(), renderTexture_right.GetNativeTexturePtr(), renderTexture_left.width, renderTexture_left.height, S3DEnabled);
-#endif
+//#if !UNITY_EDITOR
+//                //if (method == Method.Direct3D11)
+//                if (nativeRenderingPlugin)
+//                {
+//                    //SetDataFromUnity(renderTexture_left.GetNativeTexturePtr(), renderTexture_right.GetNativeTexturePtr(), renderTexture_left.width, renderTexture_left.height, S3DEnabled);
+//                    renderTexturePtr = renderTexture_left.GetNativeTexturePtr();
+//                    //SetDataFromUnity(renderTexturePtr, renderTexture_right.GetNativeTexturePtr(), renderTexture_left.width, renderTexture_left.height, S3DEnabled);
+//                    SetDataFromUnity(renderTexturePtr, renderTexture_right.GetNativeTexturePtr(), S3DEnabled, method);
+//                }
+//#endif
+                if (nativeRenderingPlugin)
+                    NativeRenderingPluginData_Set(renderTexture_left, renderTexture_right);
+
                 //canvasRenderTexture_left = RT_Make();
                 //canvasRenderTexture_right = RT_Make();
 
@@ -7020,7 +7130,7 @@ public class Stereo3D : MonoBehaviour
 #if HDRP
                 || additionalS3DTopmostCameraIndex != -1
 #endif
-            )
+                )
                 {
                     //cam.targetTexture = renderTexture;
                     camera_left.targetTexture = renderTexture_left;
@@ -7153,7 +7263,8 @@ public class Stereo3D : MonoBehaviour
                     //    }
 #if !(URP || HDRP)
                     //Camera.onPreCull += PreCull;
-                    Camera.onPreRender += RenderTexture_Reset;
+                    if (!nativeRenderingPlugin)
+                        Camera.onPreRender += RenderTexture_Reset;
                     //Camera.onPostRender += PostRender;
 #endif
                 }
@@ -7237,18 +7348,29 @@ public class Stereo3D : MonoBehaviour
             cameraRestore();
             StaticTooltip_Destroy();
 
-            if (method == Method.D3D11)
+            //if (method == Method.Direct3D11)
+            if (nativeRenderingPlugin)
             {
-                renderTexture_left = RT_Make();
-                renderTexture_left.Create();
-                cam.targetTexture = renderTexture_left;
+                //renderTexture_left = RT_Make();
+                //renderTexture_left.Create();
+                //cam.targetTexture = renderTexture_left;
+
+                renderTexture = RT_Make();
+                renderTexture.Create();
+                cam.targetTexture = renderTexture;
 
                 if (canvasCamera)
-                    canvasCamera.targetTexture = renderTexture_left;
+                    //canvasCamera.targetTexture = renderTexture_left;
+                    canvasCamera.targetTexture = renderTexture;
 
-#if !UNITY_EDITOR
-                SetTextureFromUnity(renderTexture_left.GetNativeTexturePtr(), IntPtr.Zero, renderTexture_left.width, renderTexture_left.height, S3DEnabled);
-#endif
+//#if !UNITY_EDITOR
+//                //SetDataFromUnity(renderTexture_left.GetNativeTexturePtr(), IntPtr.Zero, renderTexture_left.width, renderTexture_left.height, S3DEnabled);
+//                //renderTexturePtr = renderTexture_left.GetNativeTexturePtr();
+//                renderTexturePtr = renderTexture.GetNativeTexturePtr();
+//                //SetDataFromUnity(renderTexturePtr, IntPtr.Zero, renderTexture_left.width, renderTexture_left.height, S3DEnabled);
+//                SetDataFromUnity(renderTexturePtr, IntPtr.Zero, S3DEnabled, method);
+//#endif
+                NativeRenderingPluginData_Set(renderTexture, null);
             }
             else
             {
@@ -7386,6 +7508,26 @@ public class Stereo3D : MonoBehaviour
         CameraDataStruct_Change();
     }
 
+    void NativeRenderingPluginData_Set(RenderTexture RT_left, RenderTexture RT_right)
+    {
+#if !UNITY_EDITOR
+                IntPtr renderTexturePtr_left = IntPtr.Zero;
+                IntPtr renderTexturePtr_right = IntPtr.Zero;
+
+                if (RT_left)
+                    //renderTexturePtr_left = RT_left.GetNativeTexturePtr();
+                    renderTexturePtr = RT_left.GetNativeTexturePtr();
+                    //renderTexturePtr = RT_left.colorBuffer.GetNativeRenderBufferPtr();
+
+                if (RT_right)
+                    renderTexturePtr_right = RT_right.GetNativeTexturePtr();
+                    //renderTexturePtr_right = RT_right.colorBuffer.GetNativeRenderBufferPtr();
+
+                //SetDataFromUnity(renderTexturePtr_left, renderTexturePtr_right, S3DEnabled, method);
+                SetDataFromUnity(renderTexturePtr, renderTexturePtr_right, S3DEnabled, method);
+#endif
+    }
+
     void TopMostCamera_Set()
     {
 #if !(URP || HDRP)
@@ -7438,7 +7580,7 @@ public class Stereo3D : MonoBehaviour
             }
 
 #if !(URP || HDRP)
-        if (S3DEnabled && (method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY))
+        if (!nativeRenderingPlugin && S3DEnabled && (method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY))
         {
             topmostCamera_left.gameObject.AddComponent<OnRenderImageDelegate>().RenderImageEvent += OnRenderImageEvent;
             topmostCamera_right.gameObject.AddComponent<OnRenderImageDelegate>().RenderImageEvent += OnRenderImageEvent;
@@ -7516,6 +7658,7 @@ public class Stereo3D : MonoBehaviour
 
     RenderTexture RT_Make()
     {
+        //counter++;
 //#if !URP && !HDRP && !UNITY_2022_1_OR_NEWER
 //        if (QualitySettings.antiAliasing != 0)
 //            lastRTFormat = RTFormat = RenderTextureFormat.ARGBFloat;
@@ -7523,9 +7666,10 @@ public class Stereo3D : MonoBehaviour
         //RenderTexture rt = new RenderTexture(rtWidth, rtHeight, 24, RTFormat);
         RenderTexture rt;
 
-        if (method == Method.D3D11)
-            rt = new RenderTexture(rtWidth, rtHeight, 24, RenderTextureFormat.BGRA32);
-        else
+        ////if (method == Method.Direct3D11)
+        //if (nativeRenderingPlugin)
+        //    rt = new RenderTexture(rtWidth, rtHeight, 24, RenderTextureFormat.BGRA32);
+        //else
             rt = new RenderTexture(rtWidth, rtHeight, 24, RTFormat);
 
         //RenderTextureDescriptor desc = new RenderTextureDescriptor(); //unflipped for use with bindMS = true custom antialiasing resolving samples in shader
@@ -7695,11 +7839,14 @@ public class Stereo3D : MonoBehaviour
         display_left = Display.displays[displayIndex_left];
         display_right = Display.displays[displayIndex_right];
 
-        if (!display_left.active)
-            display_left.Activate();
+        //if (!nativeRenderingPlugin)
+        {
+            if (!display_left.active)
+                display_left.Activate();
 
-        if (!display_right.active)
-            display_right.Activate();
+            if (!display_right.active)
+                display_right.Activate();
+        }
     }
 
     GameObject staticTooltip;
@@ -9166,7 +9313,7 @@ public class Stereo3D : MonoBehaviour
     //void OnPreCull()
     void RenderTexture_Reset(Camera c)
     {
-        //if (debug) Debug.Log(c + " RenderTexture_Reset " + Time.time);
+        if (debug) Debug.Log(c + " RenderTexture_Reset " + Time.time);
 
         //if (c == canvasCamera_right)
         //    canvasCamera_right.targetTexture = renderTexture_right;
@@ -9267,13 +9414,13 @@ void CustomBlit(RenderTexture source, RenderTexture destination, Material materi
         //GL.Clear(true, true, Color.clear);
         GL.LoadOrtho();    // Set up Ortho-Perspective Transform
         //GL.LoadIdentity();
-        //GL.Viewport(new Rect(cam.rect.x * windowSize.x, cam.rect.y * windowSize.y, cam.rect.width * windowSize.x, cam.rect.height * windowSize.y));
+        //GL.Viewport(new Rect(cam.rect.x * viewportSize.x, cam.rect.y * viewportSize.y, cam.rect.width * viewportSize.x, cam.rect.height * viewportSize.y));
         //GL.Viewport(pixelRect);
 
-        //GL.Viewport(new Rect(flipX ? (1 - cam.rect.x) * windowSize.x - cam.pixelWidth : cam.rect.x * windowSize.x, 
-        //    flipY ? (1 - cam.rect.y) * windowSize.y - cam.pixelHeight : cam.rect.y * windowSize.y, 
-        //    cam.rect.width * windowSize.x, 
-        //    cam.rect.height * windowSize.y));
+        //GL.Viewport(new Rect(flipX ? (1 - cam.rect.x) * viewportSize.x - cam.pixelWidth : cam.rect.x * viewportSize.x, 
+        //    flipY ? (1 - cam.rect.y) * viewportSize.y - cam.pixelHeight : cam.rect.y * viewportSize.y, 
+        //    cam.rect.width * viewportSize.x, 
+        //    cam.rect.height * viewportSize.y));
 
         GL.Begin(GL.QUADS);
 
@@ -10505,7 +10652,7 @@ void CustomBlit(RenderTexture source, RenderTexture destination, Material materi
         // Summary:
         //     How tall is the camera in pixels (not accounting for dynamic resolution scaling)
         //     (Read Only).
-        c.pixelHeight, // { get; }
+        //c.pixelHeight, // { get; }
         //
         // Summary:
         //     Where on the screen is the camera rendered in normalized coordinates.
@@ -10621,12 +10768,12 @@ void CustomBlit(RenderTexture source, RenderTexture destination, Material materi
         // Summary:
         //     How tall is the camera in pixels (accounting for dynamic resolution scaling)
         //     (Read Only).
-        c.scaledPixelHeight, // { get; }
+        //c.scaledPixelHeight, // { get; }
         //
         // Summary:
         //     How wide is the camera in pixels (accounting for dynamic resolution scaling)
         //     (Read Only).
-        c.scaledPixelWidth, // { get; }
+        //c.scaledPixelWidth, // { get; }
         //
         // Summary:
         //     The distance of the far clipping plane from the Camera, in world units.
@@ -10636,12 +10783,12 @@ void CustomBlit(RenderTexture source, RenderTexture destination, Material materi
         // Summary:
         //     How wide is the camera in pixels (not accounting for dynamic resolution scaling)
         //     (Read Only).
-        c.pixelWidth, // { get; }
+        //c.pixelWidth, // { get; }
         //
         // Summary:
         //     Where on the screen is the camera rendered in pixel coordinates.
         //[NativeProperty("ScreenViewportRect")]
-        c.pixelRect, // { get; set; }
+        //c.pixelRect, // { get; set; }
         //
 #if !CINEMACHINE
         // Summary:
@@ -10787,7 +10934,7 @@ void CustomBlit(RenderTexture source, RenderTexture destination, Material materi
         public RenderingPath renderingPath;
         public int cullingMask;
         public float focalLength;
-        public int pixelHeight;
+        //public int pixelHeight;
         public Rect rect;
         //public bool stereoMirrorMode;
         public int commandBufferCount;
@@ -10812,11 +10959,11 @@ void CustomBlit(RenderTexture source, RenderTexture destination, Material materi
         public int targetDisplay;
         //public RenderTexture activeTexture;
         //public RenderTexture targetTexture;
-        public int scaledPixelHeight;
-        public int scaledPixelWidth;
+        //public int scaledPixelHeight;
+        //public int scaledPixelWidth;
         public float farClipPlane;
-        public int pixelWidth;
-        public Rect pixelRect;
+        //public int pixelWidth;
+        //public Rect pixelRect;
 #if !CINEMACHINE
         public Camera.GateFitMode gateFit;
 #endif
@@ -10943,7 +11090,7 @@ void CustomBlit(RenderTexture source, RenderTexture destination, Material materi
             RenderingPath renderingPath,
             int cullingMask,
             float focalLength,
-            int pixelHeight,
+            //int pixelHeight,
             Rect rect,
             //bool stereoMirrorMode,
             int commandBufferCount,
@@ -10968,11 +11115,11 @@ void CustomBlit(RenderTexture source, RenderTexture destination, Material materi
             int targetDisplay,
             //RenderTexture activeTexture,
             //RenderTexture targetTexture,
-            int scaledPixelHeight,
-            int scaledPixelWidth,
+            //int scaledPixelHeight,
+            //int scaledPixelWidth,
             float farClipPlane,
-            int pixelWidth,
-            Rect pixelRect,
+            //int pixelWidth,
+            //Rect pixelRect,
 #if !CINEMACHINE
             Camera.GateFitMode gateFit,
 #endif
@@ -11099,7 +11246,7 @@ void CustomBlit(RenderTexture source, RenderTexture destination, Material materi
             this.renderingPath = renderingPath;
             this.cullingMask = cullingMask;
             this.focalLength = focalLength;
-            this.pixelHeight = pixelHeight;
+            //this.pixelHeight = pixelHeight;
             this.rect = rect;
             //this.stereoMirrorMode = stereoMirrorMode;
             this.commandBufferCount = commandBufferCount;
@@ -11124,11 +11271,11 @@ void CustomBlit(RenderTexture source, RenderTexture destination, Material materi
             this.targetDisplay = targetDisplay;
             //this.activeTexture = activeTexture;
             //this.targetTexture = targetTexture;
-            this.scaledPixelHeight = scaledPixelHeight;
-            this.scaledPixelWidth = scaledPixelWidth;
+            //this.scaledPixelHeight = scaledPixelHeight;
+            //this.scaledPixelWidth = scaledPixelWidth;
             this.farClipPlane = farClipPlane;
-            this.pixelWidth = pixelWidth;
-            this.pixelRect = pixelRect;
+            //this.pixelWidth = pixelWidth;
+            //this.pixelRect = pixelRect;
 #if !CINEMACHINE
             this.gateFit = gateFit;
 #endif
