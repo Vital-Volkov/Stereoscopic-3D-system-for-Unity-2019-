@@ -7359,6 +7359,20 @@ public class Stereo3D : MonoBehaviour
                 renderTexture.Create();
                 cam.targetTexture = renderTexture;
 
+                for (int i = 0; i < additionalS3DCamerasStruct.Length; i++)
+                    if (additionalS3DCamerasStruct[i].camera)
+                    {
+#if HDRP
+                        additionalS3DCamerasStruct[i].renderTexture = RT_Make();
+                        additionalS3DCamerasStruct[i].camera.targetTexture = additionalS3DCamerasStruct[i].renderTexture;
+#else
+#if URP
+                        if (method != Method.Two_Displays_MirrorX && method != Method.Two_Displays_MirrorY) //fix overlay cameras unmatched output properties in Unity 2021 as not set targetTexture if using blit to screen
+#endif
+                            additionalS3DCamerasStruct[i].camera.targetTexture = renderTexture;
+#endif
+                    }
+
                 if (canvasCamera)
                     //canvasCamera.targetTexture = renderTexture_left;
                     canvasCamera.targetTexture = renderTexture;
