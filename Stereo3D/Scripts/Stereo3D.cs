@@ -306,7 +306,7 @@ public class Stereo3D : MonoBehaviour
     RectTransform tooltipBackgroundRect;
     Text tooltipText;
     Text FPSText;
-    Text S3DSettingsText;
+    //Text S3DSettingsText;
     EventTrigger trigger;
     EventTrigger.Entry entry;
     float GUI_autoshowTimer;
@@ -410,6 +410,15 @@ public class Stereo3D : MonoBehaviour
     //bool lastS3DEnabledFake, S3DEnabledFake;
     int counter;
     IntPtr renderTexturePtr;
+    bool fullscreen;
+    Vector2 lastWindowedViewportSize;
+    //Vector2 lastWindowedViewportSize = new Vector2(Screen.width, Screen.height);
+
+    //Vector2 camPixelSize;
+    //Vector2 camScaledPixelSize;
+    //Vector2 screenSize;
+    //Vector2 displayMainSystemSize;
+    //GUIStyle style = new GUIStyle();
 
     //public void Awake()
     void Awake()
@@ -487,6 +496,9 @@ public class Stereo3D : MonoBehaviour
             if(RTFormat == RenderTextureFormat.ARGB32 && SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.RGB111110Float))
                 RTFormat = RenderTextureFormat.RGB111110Float; //preffered fastest format as default ARGB32 but supported HDR post process(like lamp glow in 3D Sample Extra Unity 2019)
 #endif
+
+            if (!Screen.fullScreen)
+                lastWindowedViewportSize = new Vector2(Screen.width, Screen.height);
         }
     }
 
@@ -1536,7 +1548,7 @@ public class Stereo3D : MonoBehaviour
             tooltipText = tooltip.transform.Find("Text (Legacy)").GetComponent<Text>();
             //TooltipShow("HellO \nTesT");
             FPSText = panel.Find("Text (Legacy)_FPS").GetComponent<Text>();
-            S3DSettingsText = panel.Find("Text_S3D_Settings").GetComponent<Text>();
+            //S3DSettingsText = panel.Find("Text_S3D_Settings").GetComponent<Text>();
 
             //Invoke("InputFieldCaretMaterial_SetFields", Time.deltaTime);
 
@@ -1863,6 +1875,9 @@ public class Stereo3D : MonoBehaviour
 //                }
 //            }
 //#endif
+
+            ////style = new GUIStyle();
+            //style.normal.textColor = Color.green;
         }
     }
 
@@ -2507,6 +2522,7 @@ public class Stereo3D : MonoBehaviour
     //float vCamSelectedTimer;
     bool oddFrame;
     //RenderTexture nullRT;
+    int firstRow;
 
     //void VCamUnselect()
     //{
@@ -2572,6 +2588,24 @@ public class Stereo3D : MonoBehaviour
             //}
             //#endif
         }
+   //     else
+		 //   if (method == Method.Interlace_Horizontal)
+			//{
+   //             //throw;
+
+			//	float windowTopBorder = windowRect->bottom - windowRect->top - viewportBounds.Height;
+			//	float lastFirstRow = firstRow;
+			//	firstRow = Screen.mainWindowPosition + windowTopBorder + ((int)viewportBounds.Height & 1 ? 1 : 0); //+ 0 or 1 to compensate inverted rows order in shader due odd rows number
+
+			//	if (lastFirstRow != PS_BufferData.firstRow)
+			//		PS_Buffer_Set();
+
+			//	float lastFirstColumn = PS_BufferData.firstColumn;
+			//	PS_BufferData.firstColumn = (float)windowRect->left;
+
+			//	if (lastFirstColumn != PS_BufferData.firstColumn)
+			//		PS_Buffer_Set();
+			//}
 
         //if (cam.nearClipPlane == -1 && vCam != null && UnityEditor.Selection.activeObject == vCam.VirtualCameraGameObject)
         //    //if (debug) Debug.Log("UnityEditor.Selection.activeObject == vCam.VirtualCameraGameObject");
@@ -2815,7 +2849,7 @@ public class Stereo3D : MonoBehaviour
         //FPSText.text = "test";
         //FPSText.text = FPS.ToString();
         FPSText.text = averageFPS.ToString() + " FPS";
-        S3DSettingsText.text = counter + " " + renderTexturePtr;
+        //S3DSettingsText.text = counter + " " + renderTexturePtr;
         //FPSText.text = Screen.currentResolution.width.ToString() + " FPS";
         //canvasCamData = canvasCamera.GetComponent<HDAdditionalCameraData>();
         //if (debug) Debug.Log("OnEnable panelDepth as screen distance = " + 1 / (1 - panelDepth));
@@ -3236,14 +3270,60 @@ public class Stereo3D : MonoBehaviour
         //   //if (debug) Debug.Log("caret == null");
         //}
 
-        if (Screen.fullScreen && method.ToString().Contains("Interlace") && (Screen.width != Display.main.systemWidth || Screen.height != Display.main.systemHeight))
+        //if (Screen.fullScreen && method.ToString().Contains("Interlace") && (Screen.width != Display.main.systemWidth || Screen.height != Display.main.systemHeight))
+        //{
+        //    Screen.SetResolution(Display.main.systemWidth, Display.main.systemHeight, Screen.fullScreen);
+        //    Resize();
+        //}
+        //else
+        if (Screen.width != viewportSize.x || Screen.height != viewportSize.y)
+        //if (Screen.width != viewportSize.x || Screen.height != viewportSize.y || fullscreen != Screen.fullScreen)
         {
-            Screen.SetResolution(Display.main.systemWidth, Display.main.systemHeight, Screen.fullScreen);
+            //if (fullscreen != Screen.fullScreen)
+            //{
+            //    if (Screen.fullScreen)
+            //        Screen.SetResolution(Display.main.systemWidth, Display.main.systemHeight, true);
+            //    else
+            //    {
+            //        //lastWindowedViewportSize = new Vector2(Screen.width, Screen.height);
+            //        Screen.SetResolution((int)lastWindowedViewportSize.x, (int)lastWindowedViewportSize.y, false);
+            //    }
+            //}
+
+//fullscreen = Screen.fullScreen;
+
+#if !UNITY_2022_1_OR_NEWER
+            if (!Screen.fullScreen)
+                lastWindowedViewportSize = new Vector2(Screen.width, Screen.height);
+#endif
+
             Resize();
         }
+#if !UNITY_2022_1_OR_NEWER
         else
-            if (Screen.width != viewportSize.x || Screen.height != viewportSize.y)
-            Resize();
+            if (fullscreen != Screen.fullScreen)
+            {
+                fullscreen = Screen.fullScreen;
+
+                if (!fullscreen)
+                {
+                    if (lastWindowedViewportSize != Vector2.zero)
+                        Screen.SetResolution((int)lastWindowedViewportSize.x, (int)lastWindowedViewportSize.y, false);
+                }
+#if !UNITY_2020_1_OR_NEWER
+                else
+                    Screen.SetResolution(Display.main.systemWidth, Display.main.systemHeight, true);
+#endif
+
+
+                //viewportSize = new Vector2(Display.main.systemWidth, Display.main.systemHeight);
+
+                //Resize();
+                //counter++;
+                //Aspect_Set();
+                //Invoke("Resize", Time.deltaTime * 8);
+            }
+#endif
 
         if (GUIOpened)
         {
@@ -4393,7 +4473,44 @@ public class Stereo3D : MonoBehaviour
         //        camera_left.GetComponent<BlitToScreen>().enabled = false;
         //        camera_right.GetComponent<BlitToScreen>().enabled = false;
         //    }
+
+        //camPixelSize.x = cam.pixelWidth;
+        //camPixelSize.y = cam.pixelHeight;
+
+        //camScaledPixelSize.x = cam.scaledPixelWidth;
+        //camScaledPixelSize.y = cam.scaledPixelHeight;
+
+        //screenSize.x = Screen.width;
+        //screenSize.y = Screen.height;
+        ////Screen.fullScreen
+
+        //displayMainSystemSize.x = Display.main.systemWidth;
+        //displayMainSystemSize.y = Display.main.systemHeight;
     }
+
+    //void OnGUI() 
+    //{
+    //    GUILayout.BeginArea(new Rect (10,50,0,0),
+    //        "camPixelSize.x: " + camPixelSize.x.ToString() + 
+    //        "\ncamPixelSize.y: " + camPixelSize.y.ToString() +
+    //        "\ncamScaledPixelSize.x: " + camScaledPixelSize.x.ToString() + 
+    //        "\ncamScaledPixelSize.y: " + camScaledPixelSize.y.ToString() +
+    //        "\nscreenSize.x: " + screenSize.x.ToString() + 
+    //        "\nscreenSize.y: " + screenSize.y.ToString() +
+    //        "\ndisplayMainSystemSize.x: " + displayMainSystemSize.x.ToString() + 
+    //        "\ndisplayMainSystemSize.y: " + displayMainSystemSize.y.ToString() +
+    //        "\nimageWidth: " + imageWidth.ToString() +
+    //        "\nrtWidth: " + rtWidth.ToString() +
+    //        "\nrtHeight: " + rtHeight.ToString() +
+    //        "\nlastWindowedViewportSize.x: " + lastWindowedViewportSize.x.ToString() +
+    //        "\nlastWindowedViewportSize.y: " + lastWindowedViewportSize.y.ToString() +
+    //        "\naspect: " + aspect.ToString() +
+    //        "\nScreen.fullScreen: " + Screen.fullScreen.ToString() +
+    //        "\nScreen.fullScreenMode: " + Screen.fullScreenMode.ToString()
+    //        , style
+    //        );
+    //    GUILayout.EndArea();
+    //}
 
     //void OnOffToggle()
     //{
@@ -5120,25 +5237,34 @@ public class Stereo3D : MonoBehaviour
     }
 
     float aspect;
+    //int lastScreenWidth;
 
     void Resize()
     {
-        counter++;
-        //if (debug) Debug.Log("Resize");
-
-        //if (Screen.fullScreen)
-        //    viewportSize = new Vector2(Display.main.systemWidth, Display.main.systemHeight);
+        //if (Screen.width != 1920)
+        //{
+        //    //lastScreenWidth = Screen.width;
+        //    Invoke("Resize", Time.deltaTime);
+        //}
         //else
+        {
+            counter++;
+            //if (debug) Debug.Log("Resize");
+
+            //if (Screen.fullScreen)
+            //    viewportSize = new Vector2(Display.main.systemWidth, Display.main.systemHeight);
+            //else
             viewportSize = new Vector2(Screen.width, Screen.height);
 
-        //viewportSize = new Vector2(viewportSize.x * cam.rect.width, viewportSize.y * cam.rect.height);
-        //viewportSize = new Vector2(cam.pixelWidth, cam.pixelHeight);
-        //aspect = viewportSize.x / viewportSize.y;
-        //aspect = viewportSize.x / viewportSize.y;
-        //aspect = viewportSize.x / viewportSize.y;
-        //canvas.GetComponent<RectTransform>().sizeDelta = new Vector2(viewportSize.x, viewportSize.y);
-        //canvas.GetComponent<RectTransform>().localPosition = new Vector3(0, 0, viewportSize.x * 0.5f);
-        Aspect_Set();
+            //viewportSize = new Vector2(viewportSize.x * cam.rect.width, viewportSize.y * cam.rect.height);
+            //viewportSize = new Vector2(cam.pixelWidth, cam.pixelHeight);
+            //aspect = viewportSize.x / viewportSize.y;
+            //aspect = viewportSize.x / viewportSize.y;
+            //aspect = viewportSize.x / viewportSize.y;
+            //canvas.GetComponent<RectTransform>().sizeDelta = new Vector2(viewportSize.x, viewportSize.y);
+            //canvas.GetComponent<RectTransform>().localPosition = new Vector3(0, 0, viewportSize.x * 0.5f);
+            Aspect_Set();
+        }
     }
 
     //Rect pixelRect;
@@ -7358,20 +7484,6 @@ public class Stereo3D : MonoBehaviour
                 renderTexture = RT_Make();
                 renderTexture.Create();
                 cam.targetTexture = renderTexture;
-
-                for (int i = 0; i < additionalS3DCamerasStruct.Length; i++)
-                    if (additionalS3DCamerasStruct[i].camera)
-                    {
-#if HDRP
-                        additionalS3DCamerasStruct[i].renderTexture = RT_Make();
-                        additionalS3DCamerasStruct[i].camera.targetTexture = additionalS3DCamerasStruct[i].renderTexture;
-#else
-#if URP
-                        if (method != Method.Two_Displays_MirrorX && method != Method.Two_Displays_MirrorY) //fix overlay cameras unmatched output properties in Unity 2021 as not set targetTexture if using blit to screen
-#endif
-                            additionalS3DCamerasStruct[i].camera.targetTexture = renderTexture;
-#endif
-                    }
 
                 if (canvasCamera)
                     //canvasCamera.targetTexture = renderTexture_left;

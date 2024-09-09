@@ -11,6 +11,7 @@ Shader "Stereo3D Screen Quad"
 
 	   _Columns ("Columns", Int) = 1
 	   _Rows ("Rows", Int) = 1
+	   //_FirstRow ("FirstRow", Int) = 0
 	   _OddFrame ("OddFrame", Int) = 0
 	   _FlipX ("FlipX", Int) = 0
 	   _FlipY ("FlipY", Int) = 0
@@ -98,6 +99,7 @@ Shader "Stereo3D Screen Quad"
 				//right /= 8;
 
 				uint row = i.uv.y * _Rows;
+				//uint row = i.uv.y * _Rows + _FirstRow;
 				//uint odd = row - row / 2 * 2;
 				uint odd = row & 1 ? 1 : 0;
 				return odd == 0 ? left : right;
