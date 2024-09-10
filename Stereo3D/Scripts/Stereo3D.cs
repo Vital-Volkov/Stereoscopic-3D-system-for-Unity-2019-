@@ -12,6 +12,8 @@
 // Tested on Unity 2018, 2019 and 2020 with default render + `Post Processing Stack v2`, URP, and HDRP.
 // Enjoy.
 
+//#define localDebug
+
 using UnityEngine;
 using UnityEngine.Rendering;
 #if URP
@@ -408,17 +410,22 @@ public class Stereo3D : MonoBehaviour
     //RenderTextureFormat defaultRTFormat;
     bool lastHide2DCursor;
     //bool lastS3DEnabledFake, S3DEnabledFake;
-    int counter;
-    IntPtr renderTexturePtr;
+    //int counter;
+    //IntPtr renderTexturePtr_left;
     bool fullscreen;
     Vector2 lastWindowedViewportSize;
     //Vector2 lastWindowedViewportSize = new Vector2(Screen.width, Screen.height);
 
-    //Vector2 camPixelSize;
-    //Vector2 camScaledPixelSize;
-    //Vector2 screenSize;
-    //Vector2 displayMainSystemSize;
-    //GUIStyle style = new GUIStyle();
+#if localDebug
+    Text S3DSettingsText;
+    int counter;
+    IntPtr renderTexturePtr_left;
+    Vector2 camPixelSize;
+    Vector2 camScaledPixelSize;
+    Vector2 screenSize;
+    Vector2 displayMainSystemSize;
+    GUIStyle style = new GUIStyle();
+#endif
 
     //public void Awake()
     void Awake()
@@ -1876,8 +1883,11 @@ public class Stereo3D : MonoBehaviour
 //            }
 //#endif
 
-            ////style = new GUIStyle();
-            //style.normal.textColor = Color.green;
+#if localDebug
+            S3DSettingsText = panel.Find("Text_S3D_Settings").GetComponent<Text>();
+            //style = new GUIStyle();
+            style.normal.textColor = Color.green;
+#endif
         }
     }
 
@@ -2523,6 +2533,7 @@ public class Stereo3D : MonoBehaviour
     bool oddFrame;
     //RenderTexture nullRT;
     int firstRow;
+    int firstColumn;
 
     //void VCamUnselect()
     //{
@@ -2588,24 +2599,33 @@ public class Stereo3D : MonoBehaviour
             //}
             //#endif
         }
-   //     else
-		 //   if (method == Method.Interlace_Horizontal)
-			//{
-   //             //throw;
+#if UNITY_2021_2_OR_NEWER
+        else
+		    if (method.ToString().Contains("Interlace"))
+			{
+                //throw;
 
-			//	float windowTopBorder = windowRect->bottom - windowRect->top - viewportBounds.Height;
-			//	float lastFirstRow = firstRow;
-			//	firstRow = Screen.mainWindowPosition + windowTopBorder + ((int)viewportBounds.Height & 1 ? 1 : 0); //+ 0 or 1 to compensate inverted rows order in shader due odd rows number
+				int windowTopBorder = 31;
+				float lastFirstRow = firstRow;
+				float lastFirstColumn = firstColumn;
 
-			//	if (lastFirstRow != PS_BufferData.firstRow)
-			//		PS_Buffer_Set();
+                if (!Screen.fullScreen)
+                {
+				    firstRow = Screen.mainWindowPosition.y + windowTopBorder + ((int)viewportSize.y & 1); //+ 0 or 1 to compensate inverted rows order in shader due odd rows number
+				    //firstRow = Display.main.systemHeight - (Screen.mainWindowPosition.y + windowTopBorder + (int)viewportSize.y + ((int)viewportSize.y & 1)); //+ 0 or 1 to compensate inverted rows order in shader due odd rows number
+				    //firstRow = Screen.mainWindowPosition.y; //+ 0 or 1 to compensate inverted rows order in shader due odd rows number
+				    firstColumn = Screen.mainWindowPosition.x + 1;
+                }
+                else
+                    firstColumn = firstRow = 0;
 
-			//	float lastFirstColumn = PS_BufferData.firstColumn;
-			//	PS_BufferData.firstColumn = (float)windowRect->left;
+				if (lastFirstRow != firstRow)
+					S3DMaterial.SetInt("_FirstRow", firstRow);
 
-			//	if (lastFirstColumn != PS_BufferData.firstColumn)
-			//		PS_Buffer_Set();
-			//}
+				if (lastFirstColumn != firstColumn)
+					S3DMaterial.SetInt("_FirstColumn", firstColumn);
+			}
+#endif
 
         //if (cam.nearClipPlane == -1 && vCam != null && UnityEditor.Selection.activeObject == vCam.VirtualCameraGameObject)
         //    //if (debug) Debug.Log("UnityEditor.Selection.activeObject == vCam.VirtualCameraGameObject");
@@ -2849,7 +2869,9 @@ public class Stereo3D : MonoBehaviour
         //FPSText.text = "test";
         //FPSText.text = FPS.ToString();
         FPSText.text = averageFPS.ToString() + " FPS";
-        //S3DSettingsText.text = counter + " " + renderTexturePtr;
+#if localDebug
+        S3DSettingsText.text = counter + " " + renderTexturePtr_left;
+#endif
         //FPSText.text = Screen.currentResolution.width.ToString() + " FPS";
         //canvasCamData = canvasCamera.GetComponent<HDAdditionalCameraData>();
         //if (debug) Debug.Log("OnEnable panelDepth as screen distance = " + 1 / (1 - panelDepth));
@@ -4462,55 +4484,61 @@ public class Stereo3D : MonoBehaviour
 //            }
 //        }
 
-        //if (method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
-        //    if (!(canvasCamera_left && canvasCamera_left.isActiveAndEnabled))
-        //    {
-        //        camera_left.GetComponent<BlitToScreen>().enabled = true;
-        //        camera_right.GetComponent<BlitToScreen>().enabled = true;
-        //    }
-        //    else
-        //    {
-        //        camera_left.GetComponent<BlitToScreen>().enabled = false;
-        //        camera_right.GetComponent<BlitToScreen>().enabled = false;
-        //    }
+//if (method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
+//    if (!(canvasCamera_left && canvasCamera_left.isActiveAndEnabled))
+//    {
+//        camera_left.GetComponent<BlitToScreen>().enabled = true;
+//        camera_right.GetComponent<BlitToScreen>().enabled = true;
+//    }
+//    else
+//    {
+//        camera_left.GetComponent<BlitToScreen>().enabled = false;
+//        camera_right.GetComponent<BlitToScreen>().enabled = false;
+//    }
 
-        //camPixelSize.x = cam.pixelWidth;
-        //camPixelSize.y = cam.pixelHeight;
+#if localDebug
+        camPixelSize.x = cam.pixelWidth;
+        camPixelSize.y = cam.pixelHeight;
 
-        //camScaledPixelSize.x = cam.scaledPixelWidth;
-        //camScaledPixelSize.y = cam.scaledPixelHeight;
+        camScaledPixelSize.x = cam.scaledPixelWidth;
+        camScaledPixelSize.y = cam.scaledPixelHeight;
 
-        //screenSize.x = Screen.width;
-        //screenSize.y = Screen.height;
-        ////Screen.fullScreen
+        screenSize.x = Screen.width;
+        screenSize.y = Screen.height;
+        //Screen.fullScreen
 
-        //displayMainSystemSize.x = Display.main.systemWidth;
-        //displayMainSystemSize.y = Display.main.systemHeight;
+        displayMainSystemSize.x = Display.main.systemWidth;
+        displayMainSystemSize.y = Display.main.systemHeight;
+#endif
     }
 
-    //void OnGUI() 
-    //{
-    //    GUILayout.BeginArea(new Rect (10,50,0,0),
-    //        "camPixelSize.x: " + camPixelSize.x.ToString() + 
-    //        "\ncamPixelSize.y: " + camPixelSize.y.ToString() +
-    //        "\ncamScaledPixelSize.x: " + camScaledPixelSize.x.ToString() + 
-    //        "\ncamScaledPixelSize.y: " + camScaledPixelSize.y.ToString() +
-    //        "\nscreenSize.x: " + screenSize.x.ToString() + 
-    //        "\nscreenSize.y: " + screenSize.y.ToString() +
-    //        "\ndisplayMainSystemSize.x: " + displayMainSystemSize.x.ToString() + 
-    //        "\ndisplayMainSystemSize.y: " + displayMainSystemSize.y.ToString() +
-    //        "\nimageWidth: " + imageWidth.ToString() +
-    //        "\nrtWidth: " + rtWidth.ToString() +
-    //        "\nrtHeight: " + rtHeight.ToString() +
-    //        "\nlastWindowedViewportSize.x: " + lastWindowedViewportSize.x.ToString() +
-    //        "\nlastWindowedViewportSize.y: " + lastWindowedViewportSize.y.ToString() +
-    //        "\naspect: " + aspect.ToString() +
-    //        "\nScreen.fullScreen: " + Screen.fullScreen.ToString() +
-    //        "\nScreen.fullScreenMode: " + Screen.fullScreenMode.ToString()
-    //        , style
-    //        );
-    //    GUILayout.EndArea();
-    //}
+#if localDebug
+    void OnGUI() 
+    {
+        GUILayout.BeginArea(new Rect (10,50,0,0),
+            "camPixelSize.x: " + camPixelSize.x.ToString() + 
+            "\ncamPixelSize.y: " + camPixelSize.y.ToString() +
+            "\ncamScaledPixelSize.x: " + camScaledPixelSize.x.ToString() + 
+            "\ncamScaledPixelSize.y: " + camScaledPixelSize.y.ToString() +
+            "\nscreenSize.x: " + screenSize.x.ToString() + 
+            "\nscreenSize.y: " + screenSize.y.ToString() +
+            "\ndisplayMainSystemSize.x: " + displayMainSystemSize.x.ToString() + 
+            "\ndisplayMainSystemSize.y: " + displayMainSystemSize.y.ToString() +
+            "\nimageWidth: " + imageWidth.ToString() +
+            "\nrtWidth: " + rtWidth.ToString() +
+            "\nrtHeight: " + rtHeight.ToString() +
+            "\nlastWindowedViewportSize.x: " + lastWindowedViewportSize.x.ToString() +
+            "\nlastWindowedViewportSize.y: " + lastWindowedViewportSize.y.ToString() +
+            "\naspect: " + aspect.ToString() +
+            "\nfirstRow: " + firstRow.ToString() +
+            "\nfirstColumn: " + firstColumn.ToString() +
+            "\nScreen.fullScreen: " + Screen.fullScreen.ToString() +
+            "\nScreen.fullScreenMode: " + Screen.fullScreenMode.ToString()
+            , style
+            );
+        GUILayout.EndArea();
+    }
+#endif
 
     //void OnOffToggle()
     //{
@@ -5248,7 +5276,9 @@ public class Stereo3D : MonoBehaviour
         //}
         //else
         {
+#if localDebug
             counter++;
+#endif
             //if (debug) Debug.Log("Resize");
 
             //if (Screen.fullScreen)
@@ -7238,9 +7268,9 @@ public class Stereo3D : MonoBehaviour
 //                if (nativeRenderingPlugin)
 //                {
 //                    //SetDataFromUnity(renderTexture_left.GetNativeTexturePtr(), renderTexture_right.GetNativeTexturePtr(), renderTexture_left.width, renderTexture_left.height, S3DEnabled);
-//                    renderTexturePtr = renderTexture_left.GetNativeTexturePtr();
-//                    //SetDataFromUnity(renderTexturePtr, renderTexture_right.GetNativeTexturePtr(), renderTexture_left.width, renderTexture_left.height, S3DEnabled);
-//                    SetDataFromUnity(renderTexturePtr, renderTexture_right.GetNativeTexturePtr(), S3DEnabled, method);
+//                    renderTexturePtr_left = renderTexture_left.GetNativeTexturePtr();
+//                    //SetDataFromUnity(renderTexturePtr_left, renderTexture_right.GetNativeTexturePtr(), renderTexture_left.width, renderTexture_left.height, S3DEnabled);
+//                    SetDataFromUnity(renderTexturePtr_left, renderTexture_right.GetNativeTexturePtr(), S3DEnabled, method);
 //                }
 //#endif
                 if (nativeRenderingPlugin)
@@ -7491,10 +7521,10 @@ public class Stereo3D : MonoBehaviour
 
 //#if !UNITY_EDITOR
 //                //SetDataFromUnity(renderTexture_left.GetNativeTexturePtr(), IntPtr.Zero, renderTexture_left.width, renderTexture_left.height, S3DEnabled);
-//                //renderTexturePtr = renderTexture_left.GetNativeTexturePtr();
-//                renderTexturePtr = renderTexture.GetNativeTexturePtr();
-//                //SetDataFromUnity(renderTexturePtr, IntPtr.Zero, renderTexture_left.width, renderTexture_left.height, S3DEnabled);
-//                SetDataFromUnity(renderTexturePtr, IntPtr.Zero, S3DEnabled, method);
+//                //renderTexturePtr_left = renderTexture_left.GetNativeTexturePtr();
+//                renderTexturePtr_left = renderTexture.GetNativeTexturePtr();
+//                //SetDataFromUnity(renderTexturePtr_left, IntPtr.Zero, renderTexture_left.width, renderTexture_left.height, S3DEnabled);
+//                SetDataFromUnity(renderTexturePtr_left, IntPtr.Zero, S3DEnabled, method);
 //#endif
                 NativeRenderingPluginData_Set(renderTexture, null);
             }
@@ -7637,20 +7667,20 @@ public class Stereo3D : MonoBehaviour
     void NativeRenderingPluginData_Set(RenderTexture RT_left, RenderTexture RT_right)
     {
 #if !UNITY_EDITOR
+#if !localDebug
                 IntPtr renderTexturePtr_left = IntPtr.Zero;
+#endif
                 IntPtr renderTexturePtr_right = IntPtr.Zero;
 
                 if (RT_left)
-                    //renderTexturePtr_left = RT_left.GetNativeTexturePtr();
-                    renderTexturePtr = RT_left.GetNativeTexturePtr();
-                    //renderTexturePtr = RT_left.colorBuffer.GetNativeRenderBufferPtr();
+                    renderTexturePtr_left = RT_left.GetNativeTexturePtr();
+                    //renderTexturePtr_left = RT_left.colorBuffer.GetNativeRenderBufferPtr();
 
                 if (RT_right)
                     renderTexturePtr_right = RT_right.GetNativeTexturePtr();
                     //renderTexturePtr_right = RT_right.colorBuffer.GetNativeRenderBufferPtr();
 
-                //SetDataFromUnity(renderTexturePtr_left, renderTexturePtr_right, S3DEnabled, method);
-                SetDataFromUnity(renderTexturePtr, renderTexturePtr_right, S3DEnabled, method);
+                SetDataFromUnity(renderTexturePtr_left, renderTexturePtr_right, S3DEnabled, method);
 #endif
     }
 
