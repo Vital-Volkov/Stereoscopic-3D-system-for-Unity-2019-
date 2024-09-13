@@ -427,6 +427,68 @@ public class Stereo3D : MonoBehaviour
     GUIStyle style = new GUIStyle();
 #endif
 
+struct tagRECT
+{
+    public int    left;
+    public int    top;
+    public int    right;
+    public int    bottom;
+};
+
+    static IntPtr window;
+    //static IntPtr windowRectPtr;
+    static tagRECT windowRect;
+    //unsafe static tagRECT* windowRectPtr;
+    static tagRECT clientRect;
+    static bool getWindowRectFromWin32ApiResult;
+    //static string windowRectString;
+	int windowLeftBorder;
+	int windowTopBorder;
+
+#if UNITY_STANDALONE_WIN || UNITY_EDITOR
+    //[DllImport("user32.dll", EntryPoint = "FindWindow")]
+    //public static extern IntPtr FindWindow(System.String className, System.String windowName);
+    [DllImport("user32.dll", EntryPoint = "GetActiveWindow")]
+    public static extern IntPtr GetActiveWindow();
+    //[DllImport("user32.dll", EntryPoint = "SetWindowPos")]
+    //private static extern bool SetWindowPos(IntPtr hwnd, int hWndInsertAfter, int x, int Y, int cx, int cy, int wFlags);
+    [DllImport("user32.dll", EntryPoint = "GetWindowRect")]
+    //private static extern bool GetWindowRect(IntPtr hwnd, IntPtr windowRectPtr);
+    private static extern bool GetWindowRect(IntPtr hwnd, out tagRECT rect);
+    //unsafe private static extern bool GetWindowRect(IntPtr hwnd, tagRECT* rect);
+    [DllImport("user32.dll", EntryPoint = "GetClientRect")]
+    private static extern bool GetClientRect(IntPtr hwnd, out tagRECT rect);
+
+    public static void GetWindowFromWin32Api()
+    {
+        //window = FindWindow(null, Application.productName);
+        window = GetActiveWindow();
+    }
+
+    public static void GetWindowRectFromWin32Api()
+    //unsafe public static void GetWindowRectFromWin32Api()
+    {
+        //windowRectPtr = null;
+        //getWindowRectFromWin32ApiResult = GetWindowRect(FindWindow(null, Application.productName), windowRect);
+        getWindowRectFromWin32ApiResult = GetWindowRect(window, out windowRect);
+        getWindowRectFromWin32ApiResult = GetClientRect(window, out clientRect);
+        //getWindowRectFromWin32ApiResult = GetWindowRect(window, windowRectPtr);
+        //windowRect = (tagRECT)windowRectPtr;
+        //windowRect.left = windowRectPtr->left;
+        //windowRectString = windowRect->ToString();
+        //windowRectString = windowRect.left.ToString() + " " + windowRect.top.ToString() + " " + windowRect.right.ToString() + " " + windowRect.bottom.ToString();
+        //windowRectString = $"left {windowRect.left.ToString()} top {windowRect.top.ToString()} right {windowRect.right.ToString()} bottom {windowRect.bottom.ToString()}";
+        //windowRectString = windowRectPtr->left.ToString() + " " + windowRectPtr->right.ToString() + " " + windowRectPtr->top.ToString() + " " + windowRectPtr->bottom.ToString();
+    }
+
+    //public static void SetPositionFromWin32Api(int x, int y, int resX = 0, int resY = 0)
+    //{
+    //    //SetWindowPos(FindWindow(null, Application.productName), 0, x, y, resX, resY, resX * resY == 0 ? 1 : 0);
+    //    //SetWindowPos(GetActiveWindow(), 0, x, y, resX, resY, resX * resY == 0 ? 1 : 0);
+    //    SetWindowPos(window, 0, x, y, resX, resY, resX * resY == 0 ? 1 : 0);
+    //}
+#endif
+
     //public void Awake()
     void Awake()
     {
@@ -437,6 +499,18 @@ public class Stereo3D : MonoBehaviour
              GameObject.Find("SceneCamera").GetComponent<Camera>().pixelRect also not correct OnEnable
              EditorWindow.GetWindow<SceneView>().camera.pixelRect works but changing active window in player to scene view
              */
+
+            GetWindowFromWin32Api();
+
+            //windowRect = new tagRECT();
+            //windowRect.left = 10;
+            //windowRect.top = 10;
+            //windowRect.right = 800;
+            //windowRect.bottom = 600;
+
+            //GetWindowRectFromWin32Api();
+            //SetPositionFromWin32Api(100, 100, 1920, 1080);
+            GetWindowRectFromWin32Api();
 
             //if (Screen.fullScreen)
             //    Screen.SetResolution(1920, 1080, Screen.fullScreen);
@@ -2599,22 +2673,53 @@ public class Stereo3D : MonoBehaviour
             //}
             //#endif
         }
-#if UNITY_2021_2_OR_NEWER
+//#if UNITY_2021_2_OR_NEWER
+//        else
+//		    if (method.ToString().Contains("Interlace"))
+//			{
+//                //throw;
+
+//				int windowTopBorder = 31;
+//				float lastFirstRow = firstRow;
+//				float lastFirstColumn = firstColumn;
+
+//                if (!Screen.fullScreen)
+//                {
+//				    firstRow = Screen.mainWindowPosition.y + windowTopBorder + ((int)viewportSize.y & 1); //+ 0 or 1 to compensate inverted rows order in shader due odd rows number
+//				    //firstRow = Display.main.systemHeight - (Screen.mainWindowPosition.y + windowTopBorder + (int)viewportSize.y + ((int)viewportSize.y & 1)); //+ 0 or 1 to compensate inverted rows order in shader due odd rows number
+//				    //firstRow = Screen.mainWindowPosition.y; //+ 0 or 1 to compensate inverted rows order in shader due odd rows number
+//				    firstColumn = Screen.mainWindowPosition.x + 1;
+//                }
+//                else
+//                    firstColumn = firstRow = 0;
+
+//				if (lastFirstRow != firstRow)
+//					S3DMaterial.SetInt("_FirstRow", firstRow);
+
+//				if (lastFirstColumn != firstColumn)
+//					S3DMaterial.SetInt("_FirstColumn", firstColumn);
+//			}
+//#endif
         else
 		    if (method.ToString().Contains("Interlace"))
 			{
-                //throw;
+                //GetWindowFromWin32Api();
+                GetWindowRectFromWin32Api();
 
-				int windowTopBorder = 31;
+				//int windowTopBorder = 31;
+				//int windowLeftBorder = (windowRect.right - windowRect.left - (int)viewportSize.x) / 2;
+				//int windowTopBorder = windowRect.bottom - windowRect.top - (int)viewportSize.y - windowLeftBorder;
+				windowLeftBorder = (windowRect.right - windowRect.left - (int)viewportSize.x) / 2;
+				windowTopBorder = windowRect.bottom - windowRect.top - (int)viewportSize.y - windowLeftBorder;
 				float lastFirstRow = firstRow;
 				float lastFirstColumn = firstColumn;
 
                 if (!Screen.fullScreen)
                 {
-				    firstRow = Screen.mainWindowPosition.y + windowTopBorder + ((int)viewportSize.y & 1); //+ 0 or 1 to compensate inverted rows order in shader due odd rows number
+				    firstRow = windowRect.top + windowTopBorder + ((int)viewportSize.y & 1); //+ 0 or 1 to compensate inverted rows order in shader due odd rows number
 				    //firstRow = Display.main.systemHeight - (Screen.mainWindowPosition.y + windowTopBorder + (int)viewportSize.y + ((int)viewportSize.y & 1)); //+ 0 or 1 to compensate inverted rows order in shader due odd rows number
 				    //firstRow = Screen.mainWindowPosition.y; //+ 0 or 1 to compensate inverted rows order in shader due odd rows number
-				    firstColumn = Screen.mainWindowPosition.x + 1;
+				    firstColumn = windowRect.left + windowLeftBorder;
                 }
                 else
                     firstColumn = firstRow = 0;
@@ -2625,7 +2730,6 @@ public class Stereo3D : MonoBehaviour
 				if (lastFirstColumn != firstColumn)
 					S3DMaterial.SetInt("_FirstColumn", firstColumn);
 			}
-#endif
 
         //if (cam.nearClipPlane == -1 && vCam != null && UnityEditor.Selection.activeObject == vCam.VirtualCameraGameObject)
         //    //if (debug) Debug.Log("UnityEditor.Selection.activeObject == vCam.VirtualCameraGameObject");
@@ -4532,6 +4636,20 @@ public class Stereo3D : MonoBehaviour
             "\naspect: " + aspect.ToString() +
             "\nfirstRow: " + firstRow.ToString() +
             "\nfirstColumn: " + firstColumn.ToString() +
+            "\nwindow: " + window.ToString() +
+            "\nwindowRectTest: " + getWindowRectFromWin32ApiResult.ToString() +
+            //"\nwindowRectPtr: " + windowRectPtr.ToString() +
+            //"\nwindowRect.left: " + windowRect->left.ToString() +
+            //"\nwindowRect.right: " + windowRect->right.ToString() +
+            //"\nwindowRect.top: " + windowRect->top.ToString() +
+            //"\nwindowRect.bottom: " + windowRect->bottom.ToString() +
+            //"\nwindowRect: " + windowRectString +
+            //"\nwindowRect: " + $"left {windowRect.left.ToString()} top {windowRect.top.ToString()} right {windowRect.right.ToString()} bottom {windowRect.bottom.ToString()}" +
+            //"\nclientRect: " + $"left {clientRect.left.ToString()} top {clientRect.top.ToString()} right {clientRect.right.ToString()} bottom {clientRect.bottom.ToString()}" +
+            $"\nwindowRect left {windowRect.left.ToString()} top {windowRect.top.ToString()} right {windowRect.right.ToString()} bottom {windowRect.bottom.ToString()}" +
+            $"\nclientRect left {clientRect.left.ToString()} top {clientRect.top.ToString()} right {clientRect.right.ToString()} bottom {clientRect.bottom.ToString()}" +
+            "\nwindowLeftBorder: " + windowLeftBorder.ToString() +
+            "\nwindowTopBorder: " + windowTopBorder.ToString() +
             "\nScreen.fullScreen: " + Screen.fullScreen.ToString() +
             "\nScreen.fullScreenMode: " + Screen.fullScreenMode.ToString()
             , style
@@ -5285,6 +5403,8 @@ public class Stereo3D : MonoBehaviour
             //    viewportSize = new Vector2(Display.main.systemWidth, Display.main.systemHeight);
             //else
             viewportSize = new Vector2(Screen.width, Screen.height);
+            //GetClientRect(window, out clientRect);
+            //viewportSize = new Vector2(clientRect.right - clientRect.left, clientRect.bottom - clientRect.top);
 
             //viewportSize = new Vector2(viewportSize.x * cam.rect.width, viewportSize.y * cam.rect.height);
             //viewportSize = new Vector2(cam.pixelWidth, cam.pixelHeight);
