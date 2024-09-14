@@ -12,7 +12,7 @@
 // Tested on Unity 2018, 2019 and 2020 with default render + `Post Processing Stack v2`, URP, and HDRP.
 // Enjoy.
 
-//#define localDebug
+#define localDebug
 
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -31,6 +31,7 @@ using System.Runtime.Serialization.Formatters.Binary;
 using System.Collections;
 using System.Collections.Generic;
 using System.Reflection;
+using UnityEditor;
 //using static Unity.VisualScripting.Member;
 
 #if INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
@@ -143,8 +144,8 @@ public class Stereo3D : MonoBehaviour
     //public Vector2 panelDepthMinMax = new Vector2(1, 100);
     public Vector2 panelDepthMinMax = new Vector2(0, 1);
     public bool GUIAsOverlay = true; //(S3D panel renders with it own camera as overlay on render texture or S3D panel renders by scene S3D cameras)
-    public bool GUISizeKeep = true; //keep size of the canvas while resize window
-    public bool GUIOpened = true; //GUI window visible or not on the start
+    public bool GUISizeKeep = true; //keep size of the canvas while resize windowHandler
+    public bool GUIOpened = true; //GUI windowHandler visible or not on the start
     public float GUIAutoshowTime = 3; //automatically show GUI duration in seconds when S3D setting changes by hotkeys
     public float toolTipShowDelay = 3; //delay in seconds after mouse stop while hovering before toolTip shows
     public bool hide2DCursor;
@@ -185,8 +186,8 @@ public class Stereo3D : MonoBehaviour
     IDisposable inputSystem_KeyListener;
     //StarterAssetsInputs starterAssetsInputs;
 #else
-    //public KeyCode GUIKey = KeyCode.Tab; //GUI window show/hide Key
-    public KeyCode GUIKey = KeyCode.Keypad0; //GUI window show/hide Key
+    //public KeyCode GUIKey = KeyCode.Tab; //GUI windowHandler show/hide Key
+    public KeyCode GUIKey = KeyCode.Keypad0; //GUI windowHandler show/hide Key
     public KeyCode S3DKey = KeyCode.KeypadMultiply; //S3D enable/disable shortcut Key and hold "LeftControl" Key to swap left-right cameras
     public KeyCode increaseKey = KeyCode.KeypadPlus; //increase Field Of View shortcut Key + hold "Shift" Key to faster change + hold "LeftControl" Key to increase virtual IPD if "matchUserIPD" unchecked
     public KeyCode decreaseKey = KeyCode.KeypadMinus; //decrease Field Of View shortcut Key + hold "Shift" Key to faster change + hold "LeftControl" Key to decrease virtual IPD if "matchUserIPD" unchecked
@@ -413,8 +414,10 @@ public class Stereo3D : MonoBehaviour
     //int counter;
     //IntPtr renderTexturePtr_left;
     bool fullscreen;
+#if !UNITY_2022_1_OR_NEWER
     Vector2 lastWindowedViewportSize;
     //Vector2 lastWindowedViewportSize = new Vector2(Screen.width, Screen.height);
+#endif
 
 #if localDebug
     Text S3DSettingsText;
@@ -427,6 +430,8 @@ public class Stereo3D : MonoBehaviour
     GUIStyle style = new GUIStyle();
 #endif
 
+    //#if UNITY_STANDALONE_WIN || UNITY_EDITOR
+#if UNITY_STANDALONE_WIN && !UNITY_EDITOR
 struct tagRECT
 {
     public int    left;
@@ -435,17 +440,16 @@ struct tagRECT
     public int    bottom;
 };
 
-    static IntPtr window;
+    static IntPtr windowHandler;
     //static IntPtr windowRectPtr;
     static tagRECT windowRect;
     //unsafe static tagRECT* windowRectPtr;
-    static tagRECT clientRect;
-    static bool getWindowRectFromWin32ApiResult;
+    //static tagRECT clientRect;
+    //static bool getWindowRectFromWin32ApiResult;
     //static string windowRectString;
 	int windowLeftBorder;
 	int windowTopBorder;
 
-#if UNITY_STANDALONE_WIN || UNITY_EDITOR
     //[DllImport("user32.dll", EntryPoint = "FindWindow")]
     //public static extern IntPtr FindWindow(System.String className, System.String windowName);
     [DllImport("user32.dll", EntryPoint = "GetActiveWindow")]
@@ -459,34 +463,50 @@ struct tagRECT
     [DllImport("user32.dll", EntryPoint = "GetClientRect")]
     private static extern bool GetClientRect(IntPtr hwnd, out tagRECT rect);
 
-    public static void GetWindowFromWin32Api()
-    {
-        //window = FindWindow(null, Application.productName);
-        window = GetActiveWindow();
-    }
+    //public static void GetWindowFromWin32Api()
+    //{
+    //    //windowHandler = FindWindow(null, Application.productName);
+    //    windowHandler = GetActiveWindow();
+    //}
 
-    public static void GetWindowRectFromWin32Api()
-    //unsafe public static void GetWindowRectFromWin32Api()
-    {
-        //windowRectPtr = null;
-        //getWindowRectFromWin32ApiResult = GetWindowRect(FindWindow(null, Application.productName), windowRect);
-        getWindowRectFromWin32ApiResult = GetWindowRect(window, out windowRect);
-        getWindowRectFromWin32ApiResult = GetClientRect(window, out clientRect);
-        //getWindowRectFromWin32ApiResult = GetWindowRect(window, windowRectPtr);
-        //windowRect = (tagRECT)windowRectPtr;
-        //windowRect.left = windowRectPtr->left;
-        //windowRectString = windowRect->ToString();
-        //windowRectString = windowRect.left.ToString() + " " + windowRect.top.ToString() + " " + windowRect.right.ToString() + " " + windowRect.bottom.ToString();
-        //windowRectString = $"left {windowRect.left.ToString()} top {windowRect.top.ToString()} right {windowRect.right.ToString()} bottom {windowRect.bottom.ToString()}";
-        //windowRectString = windowRectPtr->left.ToString() + " " + windowRectPtr->right.ToString() + " " + windowRectPtr->top.ToString() + " " + windowRectPtr->bottom.ToString();
-    }
+    //public static void GetWindowRectFromWin32Api()
+    ////unsafe public static void GetWindowRectFromWin32Api()
+    //{
+    //    //windowRectPtr = null;
+    //    //getWindowRectFromWin32ApiResult = GetWindowRect(FindWindow(null, Application.productName), windowRect);
+    //    getWindowRectFromWin32ApiResult = GetWindowRect(windowHandler, out windowRect);
+    //    getWindowRectFromWin32ApiResult = GetClientRect(windowHandler, out clientRect);
+    //    //getWindowRectFromWin32ApiResult = GetWindowRect(windowHandler, windowRectPtr);
+    //    //windowRect = (tagRECT)windowRectPtr;
+    //    //windowRect.left = windowRectPtr->left;
+    //    //windowRectString = windowRect->ToString();
+    //    //windowRectString = windowRect.left.ToString() + " " + windowRect.top.ToString() + " " + windowRect.right.ToString() + " " + windowRect.bottom.ToString();
+    //    //windowRectString = $"left {windowRect.left.ToString()} top {windowRect.top.ToString()} right {windowRect.right.ToString()} bottom {windowRect.bottom.ToString()}";
+    //    //windowRectString = windowRectPtr->left.ToString() + " " + windowRectPtr->right.ToString() + " " + windowRectPtr->top.ToString() + " " + windowRectPtr->bottom.ToString();
+    //}
 
     //public static void SetPositionFromWin32Api(int x, int y, int resX = 0, int resY = 0)
     //{
     //    //SetWindowPos(FindWindow(null, Application.productName), 0, x, y, resX, resY, resX * resY == 0 ? 1 : 0);
     //    //SetWindowPos(GetActiveWindow(), 0, x, y, resX, resY, resX * resY == 0 ? 1 : 0);
-    //    SetWindowPos(window, 0, x, y, resX, resY, resX * resY == 0 ? 1 : 0);
+    //    SetWindowPos(windowHandler, 0, x, y, resX, resY, resX * resY == 0 ? 1 : 0);
     //}
+#endif
+
+    //Type editorViewportType;
+    //Rect editorViewportRect;
+
+    //private Rect GetMainGameViewPosition()
+    //{
+    //    //System.Reflection.Assembly assembly = typeof(EditorWindow).Assembly;
+    //    //Type type = assembly.GetType("UnityEditor.GameView");
+    //    //editorViewportType = assembly.GetType("UnityEditor.GameView");
+    //    EditorWindow gameview = EditorWindow.GetWindow(typeof(EditorWindow).Assembly.GetType("UnityEditor.GameView"));
+    //    return gameview.position;
+    //}
+
+#if UNITY_EDITOR
+    EditorWindow gameview;
 #endif
 
     //public void Awake()
@@ -497,10 +517,17 @@ struct tagRECT
             if (debug) Debug.Log("Awake");
             /* Screen.width is not correct OnEnable so viewportWidth need to be set here or at variable declaration and update only on changing
              GameObject.Find("SceneCamera").GetComponent<Camera>().pixelRect also not correct OnEnable
-             EditorWindow.GetWindow<SceneView>().camera.pixelRect works but changing active window in player to scene view
+             EditorWindow.GetWindow<SceneView>().camera.pixelRect works but changing active windowHandler in player to scene view
              */
 
-            GetWindowFromWin32Api();
+#if UNITY_EDITOR
+            gameview = EditorWindow.GetWindow(typeof(EditorWindow).Assembly.GetType("UnityEditor.GameView"));
+#endif
+
+#if UNITY_STANDALONE_WIN && !UNITY_EDITOR
+            //GetWindowFromWin32Api();
+            windowHandler = GetActiveWindow();
+#endif
 
             //windowRect = new tagRECT();
             //windowRect.left = 10;
@@ -510,7 +537,7 @@ struct tagRECT
 
             //GetWindowRectFromWin32Api();
             //SetPositionFromWin32Api(100, 100, 1920, 1080);
-            GetWindowRectFromWin32Api();
+            //GetWindowRectFromWin32Api();
 
             //if (Screen.fullScreen)
             //    Screen.SetResolution(1920, 1080, Screen.fullScreen);
@@ -578,8 +605,10 @@ struct tagRECT
                 RTFormat = RenderTextureFormat.RGB111110Float; //preffered fastest format as default ARGB32 but supported HDR post process(like lamp glow in 3D Sample Extra Unity 2019)
 #endif
 
+#if !UNITY_2022_1_OR_NEWER
             if (!Screen.fullScreen)
                 lastWindowedViewportSize = new Vector2(Screen.width, Screen.height);
+#endif
         }
     }
 
@@ -2703,26 +2732,36 @@ struct tagRECT
         else
 		    if (method.ToString().Contains("Interlace"))
 			{
+				float lastFirstRow = firstRow;
+				float lastFirstColumn = firstColumn;
+
+#if UNITY_EDITOR
+                firstRow = (int)(gameview.position.y + gameview.rootVisualElement.worldBound.y + gameview.position.height - viewportSize.y) + ((int)viewportSize.y & 1);
+                firstColumn = (int)(gameview.position.x + gameview.rootVisualElement.worldBound.x);
+#elif UNITY_STANDALONE_WIN
                 //GetWindowFromWin32Api();
-                GetWindowRectFromWin32Api();
+                //GetWindowRectFromWin32Api();
+                GetWindowRect(windowHandler, out windowRect);
+                //GetClientRect(windowHandler, out clientRect);
 
 				//int windowTopBorder = 31;
 				//int windowLeftBorder = (windowRect.right - windowRect.left - (int)viewportSize.x) / 2;
 				//int windowTopBorder = windowRect.bottom - windowRect.top - (int)viewportSize.y - windowLeftBorder;
 				windowLeftBorder = (windowRect.right - windowRect.left - (int)viewportSize.x) / 2;
 				windowTopBorder = windowRect.bottom - windowRect.top - (int)viewportSize.y - windowLeftBorder;
-				float lastFirstRow = firstRow;
-				float lastFirstColumn = firstColumn;
+				//float lastFirstRow = firstRow;
+				//float lastFirstColumn = firstColumn;
 
                 if (!Screen.fullScreen)
                 {
-				    firstRow = windowRect.top + windowTopBorder + ((int)viewportSize.y & 1); //+ 0 or 1 to compensate inverted rows order in shader due odd rows number
+                    firstRow = windowRect.top + windowTopBorder + ((int)viewportSize.y & 1); //+ 0 or 1 to compensate inverted rows order in shader due odd rows number
 				    //firstRow = Display.main.systemHeight - (Screen.mainWindowPosition.y + windowTopBorder + (int)viewportSize.y + ((int)viewportSize.y & 1)); //+ 0 or 1 to compensate inverted rows order in shader due odd rows number
 				    //firstRow = Screen.mainWindowPosition.y; //+ 0 or 1 to compensate inverted rows order in shader due odd rows number
 				    firstColumn = windowRect.left + windowLeftBorder;
                 }
                 else
                     firstColumn = firstRow = 0;
+#endif
 
 				if (lastFirstRow != firstRow)
 					S3DMaterial.SetInt("_FirstRow", firstRow);
@@ -3492,7 +3531,7 @@ struct tagRECT
             //cursorLocalPos.x = ((pointerPosition.x / viewportSize.x - canvas.worldCamera.rect.x) / canvas.worldCamera.rect.width - .5f) * canvasWidthWithOffset;
             //cursorLocalPos.y = ((pointerPosition.y / viewportSize.y - canvas.worldCamera.rect.y) / canvas.worldCamera.rect.height - 1) * canvasSize.y;
 
-            Vector2 viewportLeftBottomPos = new Vector2(Mathf.Clamp01(canvas.worldCamera.rect.x), Mathf.Clamp01(canvas.worldCamera.rect.y)); //viewport LeftBottom & RightTop corner coordinates inside render window
+            Vector2 viewportLeftBottomPos = new Vector2(Mathf.Clamp01(canvas.worldCamera.rect.x), Mathf.Clamp01(canvas.worldCamera.rect.y)); //viewport LeftBottom & RightTop corner coordinates inside render windowHandler
             Vector2 viewportRightTopPos = new Vector2(Mathf.Clamp01(canvas.worldCamera.rect.xMax), Mathf.Clamp01(canvas.worldCamera.rect.yMax));
             Rect viewportRect = new Rect(viewportLeftBottomPos.x, viewportLeftBottomPos.y, viewportRightTopPos.x - viewportLeftBottomPos.x, viewportRightTopPos.y - viewportLeftBottomPos.y);
             //if (debug) Debug.Log("viewportRect.x " + viewportRect.x + " viewportRect.width " + viewportRect.width);
@@ -4631,13 +4670,19 @@ struct tagRECT
             "\nimageWidth: " + imageWidth.ToString() +
             "\nrtWidth: " + rtWidth.ToString() +
             "\nrtHeight: " + rtHeight.ToString() +
+#if !UNITY_2022_1_OR_NEWER
             "\nlastWindowedViewportSize.x: " + lastWindowedViewportSize.x.ToString() +
             "\nlastWindowedViewportSize.y: " + lastWindowedViewportSize.y.ToString() +
+#endif
             "\naspect: " + aspect.ToString() +
             "\nfirstRow: " + firstRow.ToString() +
             "\nfirstColumn: " + firstColumn.ToString() +
-            "\nwindow: " + window.ToString() +
-            "\nwindowRectTest: " + getWindowRectFromWin32ApiResult.ToString() +
+#if UNITY_EDITOR
+            "\ngameview.position: " + gameview.position +
+            "\ngameview.rootVisualElement.worldBound: " + gameview.rootVisualElement.worldBound +
+#elif UNITY_STANDALONE_WIN
+            "\nwindow: " + windowHandler.ToString() +
+            //"\nwindowRectTest: " + getWindowRectFromWin32ApiResult.ToString() +
             //"\nwindowRectPtr: " + windowRectPtr.ToString() +
             //"\nwindowRect.left: " + windowRect->left.ToString() +
             //"\nwindowRect.right: " + windowRect->right.ToString() +
@@ -4647,9 +4692,12 @@ struct tagRECT
             //"\nwindowRect: " + $"left {windowRect.left.ToString()} top {windowRect.top.ToString()} right {windowRect.right.ToString()} bottom {windowRect.bottom.ToString()}" +
             //"\nclientRect: " + $"left {clientRect.left.ToString()} top {clientRect.top.ToString()} right {clientRect.right.ToString()} bottom {clientRect.bottom.ToString()}" +
             $"\nwindowRect left {windowRect.left.ToString()} top {windowRect.top.ToString()} right {windowRect.right.ToString()} bottom {windowRect.bottom.ToString()}" +
-            $"\nclientRect left {clientRect.left.ToString()} top {clientRect.top.ToString()} right {clientRect.right.ToString()} bottom {clientRect.bottom.ToString()}" +
+            //$"\nclientRect left {clientRect.left.ToString()} top {clientRect.top.ToString()} right {clientRect.right.ToString()} bottom {clientRect.bottom.ToString()}" +
+            //"\neditorViewportType: " + editorViewportType +
+            //"\neditorViewportRect: " + editorViewportRect +
             "\nwindowLeftBorder: " + windowLeftBorder.ToString() +
             "\nwindowTopBorder: " + windowTopBorder.ToString() +
+#endif
             "\nScreen.fullScreen: " + Screen.fullScreen.ToString() +
             "\nScreen.fullScreenMode: " + Screen.fullScreenMode.ToString()
             , style
@@ -5190,7 +5238,7 @@ struct tagRECT
                 canvas.renderMode = RenderMode.WorldSpace;
                 canvas.worldCamera = canvasRayCam;
                 //canvas.transform.localRotation = Quaternion.identity;
-                //canvasCamera.targetTexture = renderTexture_left; //required to clear the screen window when the main camera viewport rectangle is not fully occupied
+                //canvasCamera.targetTexture = renderTexture_left; //required to clear the screen windowHandler when the main camera viewport rectangle is not fully occupied
 //#if HDRP
 //                //canvasCamData.clearColorMode = HDAdditionalCameraData.ClearColorMode.Color;
 //                canvasCamData_left.clearColorMode = canvasCamData_right.clearColorMode = HDAdditionalCameraData.ClearColorMode.Color;
@@ -5207,7 +5255,7 @@ struct tagRECT
                 //if (canvasCamera.targetTexture == null)
                 //{
                 //    if (debug) Debug.Log("canvasCamera.targetTexture == null");
-                //    canvasCamera.targetTexture = renderTexture_left; //required to clear the screen window when the main camera viewport rectangle is not fully occupied
+                //    canvasCamera.targetTexture = renderTexture_left; //required to clear the screen windowHandler when the main camera viewport rectangle is not fully occupied
                 //}
 
                 //canvasCamera.enabled = true;
@@ -5403,7 +5451,7 @@ struct tagRECT
             //    viewportSize = new Vector2(Display.main.systemWidth, Display.main.systemHeight);
             //else
             viewportSize = new Vector2(Screen.width, Screen.height);
-            //GetClientRect(window, out clientRect);
+            //GetClientRect(windowHandler, out clientRect);
             //viewportSize = new Vector2(clientRect.right - clientRect.left, clientRect.bottom - clientRect.top);
 
             //viewportSize = new Vector2(viewportSize.x * cam.rect.width, viewportSize.y * cam.rect.height);
@@ -10460,7 +10508,7 @@ void CustomBlit(RenderTexture source, RenderTexture destination, Material materi
     //  GUILayout.EndVertical();
     //    GUILayout.EndHorizontal();
 
-    //    GUI.DragWindow(new Rect(0, 0, 640, 20)); //make GUI window draggable by top
+    //    GUI.DragWindow(new Rect(0, 0, 640, 20)); //make GUI windowHandler draggable by top
     //}
 
     //string StringCheck(string str)
