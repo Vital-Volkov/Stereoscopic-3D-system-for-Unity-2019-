@@ -8030,6 +8030,11 @@ struct tagRECT
         //else
             rt = new RenderTexture(rtWidth, rtHeight, 24, RTFormat);
 
+#if !UNITY_2021_1_OR_NEWER
+        if ((int)rt.graphicsFormat == 142 || (int)rt.graphicsFormat == 143)
+                rt.graphicsFormat = UnityEngine.Experimental.Rendering.GraphicsFormat.B8G8R8A8_UNorm;
+#endif
+
         //RenderTextureDescriptor desc = new RenderTextureDescriptor(); //unflipped for use with bindMS = true custom antialiasing resolving samples in shader
         ////RenderTextureDescriptor desc = new RenderTextureDescriptor(rtWidth, rtHeight, RTFormat, 24);
         //desc.width = rtWidth;
