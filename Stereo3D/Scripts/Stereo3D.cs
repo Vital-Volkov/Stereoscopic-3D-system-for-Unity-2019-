@@ -154,6 +154,7 @@ public class Stereo3D : MonoBehaviour
     public bool cloneCamera = true;
     public GameObject cameraPrefab; //if empty, Stereo3D cameras are copies of the main cam. Set prefab if need custom settings &/or components
     public RenderTextureFormat RTFormat;
+    //public UnityEngine.Experimental.Rendering.GraphicsFormat RTFormat;
     //public RenderTextureFormat RTFormat = RenderTextureFormat.DefaultHDR; //DefaultHDR(16bitFloat) be able to contain Post Process Effects and give fps gain from 328 to 343. In my case RGB111110Float is fastest - 346fps.
     //public bool setMatrixDirectly = true; //shift image Vanish points to User IPD directly via camera Matrix(gives fps boost) or via camera's "physically" settings "lensShift"(required for Post Processing Stack V2 pack as it resets matrix and yields incorrect aspect)
     public string slotName = "User1";
@@ -247,6 +248,7 @@ public class Stereo3D : MonoBehaviour
     bool lastGUISizeKeep;
     GameObject lastCameraPrefab;
     RenderTextureFormat lastRTFormat;
+    //UnityEngine.Experimental.Rendering.GraphicsFormat lastRTFormat;
     //bool lastSetMatrixDirectly;
     //InterlaceType lastInterlaceType;
     //Color lastAnaglyphLeftColor;
@@ -600,10 +602,10 @@ struct tagRECT
             modifier3ActionPath = modifier3Action.bindings[0].path;
 #endif
 
-#if !HDRP
-            if(RTFormat == RenderTextureFormat.ARGB32 && SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.RGB111110Float))
-                RTFormat = RenderTextureFormat.RGB111110Float; //preffered fastest format as default ARGB32 but supported HDR post process(like lamp glow in 3D Sample Extra Unity 2019)
-#endif
+//#if !HDRP
+//            if(RTFormat == RenderTextureFormat.ARGB32 && SystemInfo.SupportsRenderTextureFormat(RenderTextureFormat.RGB111110Float))
+//                RTFormat = RenderTextureFormat.RGB111110Float; //preffered fastest format as default ARGB32 but supported HDR post process(like lamp glow in 3D Sample Extra Unity 2019)
+//#endif
 
 #if !UNITY_2022_1_OR_NEWER
             if (!Screen.fullScreen)
@@ -628,6 +630,14 @@ struct tagRECT
             //if (debug) Debug.Log("viewportSize " + viewportSize);
             //List<Type> types = GetAllTypesInAssembly(new string[] { "Assembly-CSharp" });
             //if (debug) Debug.Log(types.Count);
+
+            //if (!SystemInfo.IsFormatSupported(RTFormat, UnityEngine.Experimental.Rendering.FormatUsage.Render))
+            //{
+            //    //if (debug)
+            //        Debug.Log($"`{RTFormat}` is not supported for Render usage on this platform. Fallback to `R8G8B8A8_UNorm`");
+
+            //    RTFormat = UnityEngine.Experimental.Rendering.GraphicsFormat.R8G8B8A8_UNorm;
+            //}
 
             //foreach (var type in types)
             //{
@@ -2434,7 +2444,7 @@ struct tagRECT
 	// For this example, we'll call into plugin's SetTimeFromUnity
 	// function and pass the current time so the plugin can animate.
 
-#if !UNITY_EDITOR
+//#if !UNITY_EDITOR
 //#if (UNITY_IPHONE || UNITY_WEBGL) && !UNITY_EDITOR
 //	[DllImport ("__Internal")]
 //#else
@@ -2452,7 +2462,10 @@ struct tagRECT
 #endif
 	//private static extern void SetDataFromUnity(System.IntPtr texture, int w, int h);
 	//private static extern void SetDataFromUnity(System.IntPtr textureLeft, System.IntPtr textureRight, int w, int h, bool S3DEnabled);
-	private static extern void SetDataFromUnity(System.IntPtr textureLeft, System.IntPtr textureRight, bool S3DEnabled, Method method);
+	//private static extern void SetDataFromUnity(System.IntPtr textureLeft, System.IntPtr textureRight, bool S3DEnabled, Method method);
+	//private static extern void SetDataFromUnity(System.IntPtr textureLeft, System.IntPtr textureRight, bool S3DEnabled, Method method, RenderTextureFormat RTFormat);
+	//private static extern void SetDataFromUnity(System.IntPtr textureLeft, System.IntPtr textureRight, bool S3DEnabled, Method method, UnityEngine.Experimental.Rendering.GraphicsFormat graphicsFormat);
+	private static extern void SetDataFromUnity(System.IntPtr textureLeft, System.IntPtr textureRight, bool S3DEnabled, Method method, UnityEngine.Experimental.Rendering.GraphicsFormat graphicsFormat, bool linear);
 
 //	// We'll pass native pointer to the mesh vertex buffer.
 //	// Also passing source unmodified mesh data.
@@ -2475,7 +2488,7 @@ struct tagRECT
 	[DllImport ("__Internal")]
 	private static extern void RegisterPlugin();
 #endif
-#endif
+//#endif
 
     private IEnumerator coroutine;
 
@@ -2551,7 +2564,7 @@ struct tagRECT
             // The plugin can distinguish between different
             // things it needs to do based on this ID.
             // For our simple plugin, it does not matter which ID we pass here.
-#if !UNITY_EDITOR
+//#if !UNITY_EDITOR
             //if (method == Method.Direct3D11)
             if (nativeRenderingPlugin)
             {
@@ -2560,7 +2573,7 @@ struct tagRECT
                 //SetDataFromUnity(renderTexture_left.GetNativeTexturePtr(), renderTexture_right.GetNativeTexturePtr(), renderTexture_left.width, renderTexture_left.height, S3DEnabledFake);
 			    GL.IssuePluginEvent(GetRenderEventFunc(), 1);
             }
-#endif
+//#endif
         }
     }
 
@@ -2644,6 +2657,9 @@ struct tagRECT
     //        vCamSelected = false;
     //}
 
+    //float lastTime;
+    //uint formatCounter;
+
     void Update()
     {
         //if (debug) Debug.Log("lastAdditionalS3DTopmostCamera " + lastAdditionalS3DTopmostCamera);
@@ -2652,6 +2668,18 @@ struct tagRECT
         //if (debug) Debug.Log("cam.projectionMatrix " + cam.projectionMatrix);
         //if (debug) Debug.Log(Cinemachine.CinemachineBrain.SoloCamera);
         oddFrame = !oddFrame;
+
+        //Debug.Log((int)UnityEngine.Experimental.Rendering.GraphicsFormat.B8G8R8_SRGB);
+
+        ////if (Time.time - lastTime >= 1 && formatCounter < 152)
+        //if (Time.time - lastTime >= 1 && formatCounter < 29)
+        //{
+        //    lastTime = Time.time;
+        //    Debug.Log(formatCounter);
+        //    //RTFormat = (UnityEngine.Experimental.Rendering.GraphicsFormat)formatCounter;
+        //    RTFormat = (RenderTextureFormat)formatCounter;
+        //    formatCounter++;
+        //}
 
         if (S3DEnabled && method == Method.Sequential)
         {
@@ -5777,7 +5805,8 @@ struct tagRECT
 
     void CursorRestore()
     {
-        Debug.Log("CursorRestore");
+        if (debug)
+            Debug.Log("CursorRestore");
 
 //if (inputSystem)
 //#if STARTER_ASSETS_PACKAGES_CHECKED
@@ -7834,7 +7863,7 @@ struct tagRECT
 
     void NativeRenderingPluginData_Set(RenderTexture RT_left, RenderTexture RT_right)
     {
-#if !UNITY_EDITOR
+//#if !UNITY_EDITOR
 #if !localDebug
                 IntPtr renderTexturePtr_left = IntPtr.Zero;
 #endif
@@ -7848,8 +7877,13 @@ struct tagRECT
                     renderTexturePtr_right = RT_right.GetNativeTexturePtr();
                     //renderTexturePtr_right = RT_right.colorBuffer.GetNativeRenderBufferPtr();
 
-                SetDataFromUnity(renderTexturePtr_left, renderTexturePtr_right, S3DEnabled, method);
-#endif
+                //SetDataFromUnity(renderTexturePtr_left, renderTexturePtr_right, S3DEnabled, method);
+                //SetDataFromUnity(renderTexturePtr_left, renderTexturePtr_right, S3DEnabled, method, RTFormat);
+                Debug.Log(RT_left.graphicsFormat);
+                Debug.Log("sRGB: " + RT_left.sRGB);
+                //SetDataFromUnity(renderTexturePtr_left, renderTexturePtr_right, S3DEnabled, method, RT_left.graphicsFormat);
+                SetDataFromUnity(renderTexturePtr_left, renderTexturePtr_right, S3DEnabled, method, RT_left.graphicsFormat, QualitySettings.activeColorSpace == ColorSpace.Linear ? true : false);
+//#endif
     }
 
     void TopMostCamera_Set()
