@@ -144,8 +144,8 @@ public class Stereo3D : MonoBehaviour
     //public Vector2 panelDepthMinMax = new Vector2(1, 100);
     public Vector2 panelDepthMinMax = new Vector2(0, 1);
     public bool GUIAsOverlay = true; //(S3D panel renders with it own camera as overlay on render texture or S3D panel renders by scene S3D cameras)
-    public bool GUISizeKeep = true; //keep size of the canvas while resize windowHandler
-    public bool GUIOpened = true; //GUI windowHandler visible or not on the start
+    public bool GUISizeKeep = true; //keep size of the canvas while resize window
+    public bool GUIOpened = true; //GUI window visible or not on the start
     public float GUIAutoshowTime = 3; //automatically show GUI duration in seconds when S3D setting changes by hotkeys
     public float toolTipShowDelay = 3; //delay in seconds after mouse stop while hovering before toolTip shows
     public bool hide2DCursor;
@@ -187,8 +187,8 @@ public class Stereo3D : MonoBehaviour
     IDisposable inputSystem_KeyListener;
     //StarterAssetsInputs starterAssetsInputs;
 #else
-    //public KeyCode GUIKey = KeyCode.Tab; //GUI windowHandler show/hide Key
-    public KeyCode GUIKey = KeyCode.Keypad0; //GUI windowHandler show/hide Key
+    //public KeyCode GUIKey = KeyCode.Tab; //GUI window show/hide Key
+    public KeyCode GUIKey = KeyCode.Keypad0; //GUI window show/hide Key
     public KeyCode S3DKey = KeyCode.KeypadMultiply; //S3D enable/disable shortcut Key and hold "LeftControl" Key to swap left-right cameras
     public KeyCode increaseKey = KeyCode.KeypadPlus; //increase Field Of View shortcut Key + hold "Shift" Key to faster change + hold "LeftControl" Key to increase virtual IPD if "matchUserIPD" unchecked
     public KeyCode decreaseKey = KeyCode.KeypadMinus; //decrease Field Of View shortcut Key + hold "Shift" Key to faster change + hold "LeftControl" Key to decrease virtual IPD if "matchUserIPD" unchecked
@@ -276,9 +276,25 @@ public class Stereo3D : MonoBehaviour
     //Transform cursorTransform;
     Vector2 canvasDefaultSize;
     Vector2 canvasSize;
-    Vector2 viewportSize = new Vector2(Screen.width, Screen.height);
-    //Vector2 viewportSize = new Vector2(Display.main.systemWidth, Display.main.systemHeight);
+    Vector2 clientSize = new Vector2(Screen.width, Screen.height);
+    //Vector2 clientSize = new Vector2(Display.main.systemWidth, Display.main.systemHeight);
+    //Vector2 clientSize;
     //Vector2 viewportSize;
+
+    struct Int2
+    {
+        public int x;
+        public int y;
+
+        public Int2(int x, int y)
+        {
+            this.x = x; 
+            this.y = y;
+        }
+    }
+
+    Int2 viewportSize;
+
     Transform panel;
     Toggle enableS3D_toggle;
     Toggle swapLR_toggle;
@@ -519,7 +535,7 @@ struct tagRECT
             if (debug) Debug.Log("Awake");
             /* Screen.width is not correct OnEnable so viewportWidth need to be set here or at variable declaration and update only on changing
              GameObject.Find("SceneCamera").GetComponent<Camera>().pixelRect also not correct OnEnable
-             EditorWindow.GetWindow<SceneView>().camera.pixelRect works but changing active windowHandler in player to scene view
+             EditorWindow.GetWindow<SceneView>().camera.pixelRect works but changing active window to scene view
              */
 
 #if UNITY_EDITOR
@@ -627,7 +643,7 @@ struct tagRECT
         if (!name.Contains("(Clone)"))
         {
             if (debug) Debug.Log("OnEnable cameraDataStructIsReady " + cameraDataStructIsReady);
-            //if (debug) Debug.Log("viewportSize " + viewportSize);
+            //if (debug) Debug.Log("clientSize " + clientSize);
             //List<Type> types = GetAllTypesInAssembly(new string[] { "Assembly-CSharp" });
             //if (debug) Debug.Log(types.Count);
 
@@ -2670,6 +2686,7 @@ struct tagRECT
         oddFrame = !oddFrame;
 
         //Debug.Log((int)UnityEngine.Experimental.Rendering.GraphicsFormat.B8G8R8_SRGB);
+        //Debug.Log(cam.pixelWidth);
 
         ////if (Time.time - lastTime >= 1 && formatCounter < 152)
         //if (Time.time - lastTime >= 1 && formatCounter < 29)
@@ -2742,8 +2759,8 @@ struct tagRECT
 
 //                if (!Screen.fullScreen)
 //                {
-//				    firstRow = Screen.mainWindowPosition.y + windowTopBorder + ((int)viewportSize.y & 1); //+ 0 or 1 to compensate inverted rows order in shader due odd rows number
-//				    //firstRow = Display.main.systemHeight - (Screen.mainWindowPosition.y + windowTopBorder + (int)viewportSize.y + ((int)viewportSize.y & 1)); //+ 0 or 1 to compensate inverted rows order in shader due odd rows number
+//				    firstRow = Screen.mainWindowPosition.y + windowTopBorder + ((int)clientSize.y & 1); //+ 0 or 1 to compensate inverted rows order in shader due odd rows number
+//				    //firstRow = Display.main.systemHeight - (Screen.mainWindowPosition.y + windowTopBorder + (int)clientSize.y + ((int)clientSize.y & 1)); //+ 0 or 1 to compensate inverted rows order in shader due odd rows number
 //				    //firstRow = Screen.mainWindowPosition.y; //+ 0 or 1 to compensate inverted rows order in shader due odd rows number
 //				    firstColumn = Screen.mainWindowPosition.x + 1;
 //                }
@@ -2764,7 +2781,7 @@ struct tagRECT
 				float lastFirstColumn = firstColumn;
 
 #if UNITY_EDITOR
-                firstRow = (int)(gameview.position.y + gameview.rootVisualElement.worldBound.y + gameview.position.height - viewportSize.y) + ((int)viewportSize.y & 1);
+                firstRow = (int)(gameview.position.y + gameview.rootVisualElement.worldBound.y + gameview.position.height - clientSize.y) + ((int)clientSize.y & 1);
                 firstColumn = (int)(gameview.position.x + gameview.rootVisualElement.worldBound.x);
 #elif UNITY_STANDALONE_WIN
                 //GetWindowFromWin32Api();
@@ -2773,17 +2790,17 @@ struct tagRECT
                 //GetClientRect(windowHandler, out clientRect);
 
 				//int windowTopBorder = 31;
-				//int windowLeftBorder = (windowRect.right - windowRect.left - (int)viewportSize.x) / 2;
-				//int windowTopBorder = windowRect.bottom - windowRect.top - (int)viewportSize.y - windowLeftBorder;
-				windowLeftBorder = (windowRect.right - windowRect.left - (int)viewportSize.x) / 2;
-				windowTopBorder = windowRect.bottom - windowRect.top - (int)viewportSize.y - windowLeftBorder;
+				//int windowLeftBorder = (windowRect.right - windowRect.left - (int)clientSize.x) / 2;
+				//int windowTopBorder = windowRect.bottom - windowRect.top - (int)clientSize.y - windowLeftBorder;
+				windowLeftBorder = (windowRect.right - windowRect.left - (int)clientSize.x) / 2;
+				windowTopBorder = windowRect.bottom - windowRect.top - (int)clientSize.y - windowLeftBorder;
 				//float lastFirstRow = firstRow;
 				//float lastFirstColumn = firstColumn;
 
                 if (!Screen.fullScreen)
                 {
-                    firstRow = windowRect.top + windowTopBorder + ((int)viewportSize.y & 1); //+ 0 or 1 to compensate inverted rows order in shader due odd rows number
-				    //firstRow = Display.main.systemHeight - (Screen.mainWindowPosition.y + windowTopBorder + (int)viewportSize.y + ((int)viewportSize.y & 1)); //+ 0 or 1 to compensate inverted rows order in shader due odd rows number
+                    firstRow = windowRect.top + windowTopBorder + ((int)clientSize.y & 1); //+ 0 or 1 to compensate inverted rows order in shader due odd rows number
+				    //firstRow = Display.main.systemHeight - (Screen.mainWindowPosition.y + windowTopBorder + (int)clientSize.y + ((int)clientSize.y & 1)); //+ 0 or 1 to compensate inverted rows order in shader due odd rows number
 				    //firstRow = Screen.mainWindowPosition.y; //+ 0 or 1 to compensate inverted rows order in shader due odd rows number
 				    firstColumn = windowRect.left + windowLeftBorder;
                 }
@@ -3042,6 +3059,7 @@ struct tagRECT
         FPSText.text = averageFPS.ToString() + " FPS";
 #if localDebug
         S3DSettingsText.text = counter + " " + renderTexturePtr_left;
+        //S3DSettingsText.text = $"ResizeCount: {counter} cam.pixelWidth: {cam.pixelWidth} canvasSize.x: {canvasSize.x}";
 #endif
         //FPSText.text = Screen.currentResolution.width.ToString() + " FPS";
         //canvasCamData = canvasCamera.GetComponent<HDAdditionalCameraData>();
@@ -3469,8 +3487,8 @@ struct tagRECT
         //    Resize();
         //}
         //else
-        if (Screen.width != viewportSize.x || Screen.height != viewportSize.y)
-        //if (Screen.width != viewportSize.x || Screen.height != viewportSize.y || fullscreen != Screen.fullScreen)
+        if (Screen.width != clientSize.x || Screen.height != clientSize.y)
+        //if (Screen.width != clientSize.x || Screen.height != clientSize.y || fullscreen != Screen.fullScreen)
         {
             //if (fullscreen != Screen.fullScreen)
             //{
@@ -3509,7 +3527,7 @@ struct tagRECT
 #endif
 
 
-                //viewportSize = new Vector2(Display.main.systemWidth, Display.main.systemHeight);
+                //clientSize = new Vector2(Display.main.systemWidth, Display.main.systemHeight);
 
                 //Resize();
                 //counter++;
@@ -3521,21 +3539,21 @@ struct tagRECT
         if (GUIOpened)
         {
             //if (debug) Debug.Log(Input.mousePosition);
-            //cursorRectTransform.anchoredPosition = new Vector2(Input.mousePosition.x / viewportSize.x * canvasSize.x - canvasSize.x * 0.5f, Input.mousePosition.y / viewportSize.y * canvasSize.y - canvasSize.y);
-            //cursorLocalPos = new Vector2(Input.mousePosition.x / viewportSize.x * canvasSize.x - canvasSize.x * 0.5f, Input.mousePosition.y / viewportSize.y * canvasSize.y - canvasSize.y);
-            //cursorLocalPos = new Vector2((Input.mousePosition.x - cam.rect.x * viewportSize.x) / cam.pixelWidth * canvasSize.x - canvasSize.x * 0.5f, (Input.mousePosition.y - cam.rect.y * viewportSize.y) / cam.pixelHeight * canvasSize.y - canvasSize.y);
-            //cursorLocalPos.x = ((Input.mousePosition.x - cam.rect.x * viewportSize.x) / cam.pixelWidth - .5f) * canvasSize.x * (1 + canvasEdgeOffset);
-            //cursorLocalPos.x = (Input.mousePosition.x / viewportSize.x - .5f) * canvasSize.x * (1 + canvasEdgeOffset);
-            //cursorLocalPos.x = (Input.mousePosition.x / viewportSize.x - .5f) * canvasWidthWithOffset;
-            //cursorLocalPos.x = ((Input.mousePosition.x - cam.rect.x * viewportSize.x) / cam.pixelWidth - .5f) * canvasSize.x + virtualIPD * .0005f * ((int)eyePriority - 1) / canvas.GetComponent<RectTransform>().lossyScale.x;
-            //cursorLocalPos.y = ((Input.mousePosition.y - cam.rect.y * viewportSize.y) / cam.pixelHeight - 1) * canvasSize.y;
-            //cursorLocalPos.y = (Input.mousePosition.y / viewportSize.y - 1) * canvasSize.y;
+            //cursorRectTransform.anchoredPosition = new Vector2(Input.mousePosition.x / clientSize.x * canvasSize.x - canvasSize.x * 0.5f, Input.mousePosition.y / clientSize.y * canvasSize.y - canvasSize.y);
+            //cursorLocalPos = new Vector2(Input.mousePosition.x / clientSize.x * canvasSize.x - canvasSize.x * 0.5f, Input.mousePosition.y / clientSize.y * canvasSize.y - canvasSize.y);
+            //cursorLocalPos = new Vector2((Input.mousePosition.x - cam.rect.x * clientSize.x) / cam.pixelWidth * canvasSize.x - canvasSize.x * 0.5f, (Input.mousePosition.y - cam.rect.y * clientSize.y) / cam.pixelHeight * canvasSize.y - canvasSize.y);
+            //cursorLocalPos.x = ((Input.mousePosition.x - cam.rect.x * clientSize.x) / cam.pixelWidth - .5f) * canvasSize.x * (1 + canvasEdgeOffset);
+            //cursorLocalPos.x = (Input.mousePosition.x / clientSize.x - .5f) * canvasSize.x * (1 + canvasEdgeOffset);
+            //cursorLocalPos.x = (Input.mousePosition.x / clientSize.x - .5f) * canvasWidthWithOffset;
+            //cursorLocalPos.x = ((Input.mousePosition.x - cam.rect.x * clientSize.x) / cam.pixelWidth - .5f) * canvasSize.x + virtualIPD * .0005f * ((int)eyePriority - 1) / canvas.GetComponent<RectTransform>().lossyScale.x;
+            //cursorLocalPos.y = ((Input.mousePosition.y - cam.rect.y * clientSize.y) / cam.pixelHeight - 1) * canvasSize.y;
+            //cursorLocalPos.y = (Input.mousePosition.y / clientSize.y - 1) * canvasSize.y;
 
             Vector2 pointerPosition;
 
 #if INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
-            //cursorLocalPos.x = (Pointer.current.position.value.x / viewportSize.x - .5f) * canvasWidthWithOffset;
-            //cursorLocalPos.y = (Pointer.current.position.value.y / viewportSize.y - 1) * canvasSize.y;
+            //cursorLocalPos.x = (Pointer.current.position.value.x / clientSize.x - .5f) * canvasWidthWithOffset;
+            //cursorLocalPos.y = (Pointer.current.position.value.y / clientSize.y - 1) * canvasSize.y;
             //pointerPosition.x = Pointer.current.position.value.x;
             //pointerPosition.y = Pointer.current.position.value.y;
             //pointerPosition.x = UnityEngine.InputSystem.Pointer.current.position.value.x;
@@ -3544,31 +3562,31 @@ struct tagRECT
             pointerPosition = UnityEngine.InputSystem.Pointer.current.position.ReadValue(); //for Input System below and above 1.5
             //pointerPosition = Mouse.current.position.ReadValue();
 #else
-            //cursorLocalPos.x = (Input.mousePosition.x / viewportSize.x - .5f) * canvasWidthWithOffset;
-            //cursorLocalPos.y = (Input.mousePosition.y / viewportSize.y - 1) * canvasSize.y;
+            //cursorLocalPos.x = (Input.mousePosition.x / clientSize.x - .5f) * canvasWidthWithOffset;
+            //cursorLocalPos.y = (Input.mousePosition.y / clientSize.y - 1) * canvasSize.y;
             pointerPosition.x = Input.mousePosition.x;
             pointerPosition.y = Input.mousePosition.y;
 #endif
 
-            //cursorLocalPos.x = (pointerPosition.x / viewportSize.x - .5f) * canvasWidthWithOffset;
-            //cursorLocalPos.y = (pointerPosition.y / viewportSize.y - 1) * canvasSize.y;
-            //if (debug) Debug.Log((pointerPosition.y / viewportSize.y - cam.rect.y) / cam.rect.height - 1);
+            //cursorLocalPos.x = (pointerPosition.x / clientSize.x - .5f) * canvasWidthWithOffset;
+            //cursorLocalPos.y = (pointerPosition.y / clientSize.y - 1) * canvasSize.y;
+            //if (debug) Debug.Log((pointerPosition.y / clientSize.y - cam.rect.y) / cam.rect.height - 1);
             //Camera canvasWorldCam = canvas.worldCamera;
-            //cursorLocalPos.x = ((pointerPosition.x / viewportSize.x - canvasWorldCam.rect.x) / canvasWorldCam.rect.width - .5f) * canvasWidthWithOffset;
-            //cursorLocalPos.y = ((pointerPosition.y / viewportSize.y - canvasWorldCam.rect.y) / canvasWorldCam.rect.height - 1) * canvasSize.y;
-            //cursorLocalPos.x = ((pointerPosition.x / viewportSize.x - canvas.worldCamera.rect.x) / canvas.worldCamera.rect.width - .5f) * canvasWidthWithOffset;
-            //cursorLocalPos.y = ((pointerPosition.y / viewportSize.y - canvas.worldCamera.rect.y) / canvas.worldCamera.rect.height - 1) * canvasSize.y;
+            //cursorLocalPos.x = ((pointerPosition.x / clientSize.x - canvasWorldCam.rect.x) / canvasWorldCam.rect.width - .5f) * canvasWidthWithOffset;
+            //cursorLocalPos.y = ((pointerPosition.y / clientSize.y - canvasWorldCam.rect.y) / canvasWorldCam.rect.height - 1) * canvasSize.y;
+            //cursorLocalPos.x = ((pointerPosition.x / clientSize.x - canvas.worldCamera.rect.x) / canvas.worldCamera.rect.width - .5f) * canvasWidthWithOffset;
+            //cursorLocalPos.y = ((pointerPosition.y / clientSize.y - canvas.worldCamera.rect.y) / canvas.worldCamera.rect.height - 1) * canvasSize.y;
 
-            Vector2 viewportLeftBottomPos = new Vector2(Mathf.Clamp01(canvas.worldCamera.rect.x), Mathf.Clamp01(canvas.worldCamera.rect.y)); //viewport LeftBottom & RightTop corner coordinates inside render windowHandler
+            Vector2 viewportLeftBottomPos = new Vector2(Mathf.Clamp01(canvas.worldCamera.rect.x), Mathf.Clamp01(canvas.worldCamera.rect.y)); //viewport LeftBottom & RightTop corner coordinates inside render window
             Vector2 viewportRightTopPos = new Vector2(Mathf.Clamp01(canvas.worldCamera.rect.xMax), Mathf.Clamp01(canvas.worldCamera.rect.yMax));
             Rect viewportRect = new Rect(viewportLeftBottomPos.x, viewportLeftBottomPos.y, viewportRightTopPos.x - viewportLeftBottomPos.x, viewportRightTopPos.y - viewportLeftBottomPos.y);
             //if (debug) Debug.Log("viewportRect.x " + viewportRect.x + " viewportRect.width " + viewportRect.width);
             //if (debug) Debug.Log("canvas.worldCamera.rect.x " + canvas.worldCamera.rect.x + " canvas.worldCamera.rect.xMin " + canvas.worldCamera.rect.xMin);
-            cursorLocalPos.x = ((pointerPosition.x / viewportSize.x - viewportRect.x) / viewportRect.width - .5f) * canvasWidthWithOffset;
-            cursorLocalPos.y = ((pointerPosition.y / viewportSize.y - viewportRect.y) / viewportRect.height - 1) * canvasSize.y;
+            cursorLocalPos.x = ((pointerPosition.x / clientSize.x - viewportRect.x) / viewportRect.width - .5f) * canvasWidthWithOffset;
+            cursorLocalPos.y = ((pointerPosition.y / clientSize.y - viewportRect.y) / viewportRect.height - 1) * canvasSize.y;
 
             cursorRectTransform.anchoredPosition = cursorLocalPos;
-            //cursorTransform.localPosition = new Vector2(Input.mousePosition.x / viewportSize.x * canvasSize.x - canvasSize.x * 0.5f, Input.mousePosition.y / viewportSize.y * canvasSize.y - canvasSize.y * 0.5f);
+            //cursorTransform.localPosition = new Vector2(Input.mousePosition.x / clientSize.x * canvasSize.x - canvasSize.x * 0.5f, Input.mousePosition.y / clientSize.y * canvasSize.y - canvasSize.y * 0.5f);
             //canvas.worldCamera.ViewportPointToRay(Vector3.zero);
             //EventSystem eSys = EventSystem.current;
             //eSys.
@@ -3777,7 +3795,7 @@ struct tagRECT
                 //}
                 //else
                 //{
-                //    cam.aspect = viewportSize.x / viewportSize.y;
+                //    cam.aspect = clientSize.x / clientSize.y;
                 //}
 
                 //if (method == Method.Direct3D11)
@@ -4709,7 +4727,7 @@ struct tagRECT
             "\ngameview.position: " + gameview.position +
             "\ngameview.rootVisualElement.worldBound: " + gameview.rootVisualElement.worldBound +
 #elif UNITY_STANDALONE_WIN
-            "\nwindow: " + windowHandler.ToString() +
+            "\nwindowHandler: " + windowHandler.ToString() +
             //"\nwindowRectTest: " + getWindowRectFromWin32ApiResult.ToString() +
             //"\nwindowRectPtr: " + windowRectPtr.ToString() +
             //"\nwindowRect.left: " + windowRect->left.ToString() +
@@ -5266,7 +5284,7 @@ struct tagRECT
                 canvas.renderMode = RenderMode.WorldSpace;
                 canvas.worldCamera = canvasRayCam;
                 //canvas.transform.localRotation = Quaternion.identity;
-                //canvasCamera.targetTexture = renderTexture_left; //required to clear the screen windowHandler when the main camera viewport rectangle is not fully occupied
+                //canvasCamera.targetTexture = renderTexture_left; //required to clear the screen window when the main camera viewport rectangle is not fully occupied
 //#if HDRP
 //                //canvasCamData.clearColorMode = HDAdditionalCameraData.ClearColorMode.Color;
 //                canvasCamData_left.clearColorMode = canvasCamData_right.clearColorMode = HDAdditionalCameraData.ClearColorMode.Color;
@@ -5283,7 +5301,7 @@ struct tagRECT
                 //if (canvasCamera.targetTexture == null)
                 //{
                 //    if (debug) Debug.Log("canvasCamera.targetTexture == null");
-                //    canvasCamera.targetTexture = renderTexture_left; //required to clear the screen windowHandler when the main camera viewport rectangle is not fully occupied
+                //    canvasCamera.targetTexture = renderTexture_left; //required to clear the screen window when the main camera viewport rectangle is not fully occupied
                 //}
 
                 //canvasCamera.enabled = true;
@@ -5369,12 +5387,12 @@ struct tagRECT
                 canvas.renderMode = RenderMode.ScreenSpaceCamera;
                 //canvas.worldCamera = cam;
                 canvas.worldCamera = canvasCamera;
-                //canvas.GetComponent<CanvasScaler>().scaleFactor = viewportSize.y / canvasSize.y;
-                canvas.GetComponent<CanvasScaler>().scaleFactor = viewportSize.y / canvasSize.y * canvasCamera.rect.height;
-                //canvas.GetComponent<CanvasScaler>().scaleFactor = viewportSize.y / canvasSize.y * cam.rect.height;
+                //canvas.GetComponent<CanvasScaler>().scaleFactor = clientSize.y / canvasSize.y;
+                canvas.GetComponent<CanvasScaler>().scaleFactor = clientSize.y / canvasSize.y * canvasCamera.rect.height;
+                //canvas.GetComponent<CanvasScaler>().scaleFactor = clientSize.y / canvasSize.y * cam.rect.height;
                 //canvas.GetComponent<CanvasScaler>().uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
                 //canvas.GetComponent<CanvasScaler>().referenceResolution = canvasSize;
-                //if (debug) Debug.Log("canvasSize " + canvasSize + " viewportSize " + viewportSize);
+                //if (debug) Debug.Log("canvasSize " + canvasSize + " clientSize " + clientSize);
                 //canvas.planeDistance = cam.farClipPlane * .5f;
                 canvas.planeDistance = canvasCamera.farClipPlane;
             }
@@ -5476,20 +5494,21 @@ struct tagRECT
             //if (debug) Debug.Log("Resize");
 
             //if (Screen.fullScreen)
-            //    viewportSize = new Vector2(Display.main.systemWidth, Display.main.systemHeight);
+            //    clientSize = new Vector2(Display.main.systemWidth, Display.main.systemHeight);
             //else
-            viewportSize = new Vector2(Screen.width, Screen.height);
+            clientSize = new Vector2(Screen.width, Screen.height);
             //GetClientRect(windowHandler, out clientRect);
-            //viewportSize = new Vector2(clientRect.right - clientRect.left, clientRect.bottom - clientRect.top);
+            //clientSize = new Vector2(clientRect.right - clientRect.left, clientRect.bottom - clientRect.top);
 
-            //viewportSize = new Vector2(viewportSize.x * cam.rect.width, viewportSize.y * cam.rect.height);
-            //viewportSize = new Vector2(cam.pixelWidth, cam.pixelHeight);
-            //aspect = viewportSize.x / viewportSize.y;
-            //aspect = viewportSize.x / viewportSize.y;
-            //aspect = viewportSize.x / viewportSize.y;
-            //canvas.GetComponent<RectTransform>().sizeDelta = new Vector2(viewportSize.x, viewportSize.y);
-            //canvas.GetComponent<RectTransform>().localPosition = new Vector3(0, 0, viewportSize.x * 0.5f);
+            //clientSize = new Vector2(clientSize.x * cam.rect.width, clientSize.y * cam.rect.height);
+            //clientSize = new Vector2(cam.pixelWidth, cam.pixelHeight);
+            //aspect = clientSize.x / clientSize.y;
+            //aspect = clientSize.x / clientSize.y;
+            //aspect = clientSize.x / clientSize.y;
+            //canvas.GetComponent<RectTransform>().sizeDelta = new Vector2(clientSize.x, clientSize.y);
+            //canvas.GetComponent<RectTransform>().localPosition = new Vector3(0, 0, clientSize.x * 0.5f);
             Aspect_Set();
+            //Invoke("Aspect_Set", 1);
         }
     }
 
@@ -5497,8 +5516,28 @@ struct tagRECT
 
     void Aspect_Set()
     {
+        //Debug.Log(cam.pixelWidth);
         //aspect = cam.aspect;
-        aspect = cam.pixelWidth / (float)cam.pixelHeight;
+
+        //int viewportSize.x = cam.pixelWidth;
+        //int viewportSize.y = cam.pixelHeight;
+        //int viewportSize.x;
+        //int viewportSize.y;
+
+        Render_Release(); //cam.pixelWidth not updating if camera rendering to texture so release renderTexture first
+
+        //RenderTexture currentRT = cam.targetTexture;
+        //cam.targetTexture = null;
+
+        //if (cam.targetTexture) //cam.pixelWidth not updating if camera rendering to texture so get it from camera without renderTexture
+        //    viewportSize = new Int2(camera_left.pixelWidth, camera_left.pixelHeight);
+        //else
+            viewportSize = new Int2(cam.pixelWidth, cam.pixelHeight);
+
+        //cam.targetTexture = currentRT;
+
+        //aspect = cam.pixelWidth / (float)cam.pixelHeight;
+        aspect = viewportSize.x / (float)viewportSize.y;
 
         ////if (S3DEnabled && method == Method.SideBySide_HMD)
         //if (S3DEnabled && (method == Method.SideBySide_HMD || method == Method.SideBySide_Full))
@@ -5525,18 +5564,28 @@ struct tagRECT
         //    canvasSize = new Vector2(canvasSize.y * aspect, canvasSize.y);
 
         if (GUISizeKeep)
-            canvasSize = new Vector2(cam.pixelWidth, cam.pixelWidth / aspect);
+            //canvasSize = new Vector2(cam.pixelWidth, cam.pixelWidth / aspect);
+            canvasSize = new Vector2(viewportSize.x, viewportSize.x / aspect);
         else
             canvasSize = new Vector2(canvasDefaultSize.y * aspect, canvasDefaultSize.y);
+
+//#if localDebug
+//        if (S3DSettingsText)
+//        {
+//            //S3DSettingsText.text = counter + " " + renderTexturePtr_left;
+//            //S3DSettingsText.text = $"ResizeCount: {counter} cam.pixelWidth: {cam.pixelWidth} canvasSize.x: {canvasSize.x}";
+//            S3DSettingsText.text = $"cam.pixelWidth: {cam.pixelWidth} Height: {cam.pixelHeight} viewportSize.x: {viewportSize.x} y: {viewportSize.y}";
+//        }
+//#endif
 
         //if (debug) Debug.Log("Aspect_Set Resize cam.rect " + cam.rect);
         if (debug) Debug.Log("Aspect_Set aspect " + aspect);
         //if (debug) Debug.Log("Aspect_Set cam.pixelWidth " + cam.pixelWidth + " cam.pixelHeight " + cam.pixelHeight);
 
         //if (method == Method.Two_Displays_MirrorX)
-        //    pixelRect = new Rect((1 - cam.rect.x) * viewportSize.x - cam.pixelWidth, cam.rect.y * viewportSize.y, cam.pixelWidth, cam.pixelHeight);
+        //    pixelRect = new Rect((1 - cam.rect.x) * clientSize.x - cam.pixelWidth, cam.rect.y * clientSize.y, cam.pixelWidth, cam.pixelHeight);
         //else
-        //    pixelRect = new Rect(cam.rect.x * viewportSize.x, (1 - cam.rect.y) * viewportSize.y - cam.pixelHeight, cam.pixelWidth, cam.pixelHeight);
+        //    pixelRect = new Rect(cam.rect.x * clientSize.x, (1 - cam.rect.y) * clientSize.y - cam.pixelHeight, cam.pixelWidth, cam.pixelHeight);
 
         //ViewSet();
         FOV_Set();
@@ -6496,7 +6545,8 @@ struct tagRECT
         //    }
 
         //imageWidth = cam.pixelWidth * pixelPitch; //real size of rendered image on screen
-        imageWidth = cam.pixelWidth * 25.4f / PPI; //real size of rendered image on screen
+        //imageWidth = cam.pixelWidth * 25.4f / PPI; //real size of rendered image on screen
+        imageWidth = viewportSize.x * 25.4f / PPI; //real size of rendered image on screen
 
         if (method == Method.SideBySide_HMD)
             imageWidth *= .5f;
@@ -6511,7 +6561,8 @@ struct tagRECT
         //oneRowShift = 0;
 
         if (!optimize && method == Method.Interlace_Horizontal)
-            oneRowShift = 2f / cam.pixelHeight;
+            //oneRowShift = 2f / cam.pixelHeight;
+            oneRowShift = 2f / viewportSize.y;
         else
             oneRowShift = 0;
 
@@ -6943,8 +6994,8 @@ struct tagRECT
         //rtHeight = cam.pixelHeight;
         //rtWidth = Screen.width;
         //rtHeight = Screen.height;
-        rtWidth = (int)viewportSize.x;
-        rtHeight = (int)viewportSize.y;
+        rtWidth = (int)clientSize.x;
+        rtHeight = (int)clientSize.y;
 
 //#if URP || HDRP
         camera_left.rect = camera_right.rect = cam.rect;
@@ -7599,6 +7650,11 @@ struct tagRECT
 
                     //if (method == Method.Sequential)
                     //    RenderPipelineManager.beginContextRendering += RenderTexture_Reset; //add render context
+
+#if !(URP || HDRP)
+                    if (!nativeRenderingPlugin)
+                        cam.gameObject.AddComponent<OnRenderImageDelegate>().RenderImageEvent += OnRenderImageEventMain;
+#endif
                 }
 //#if URP || HDRP
                 else
@@ -7711,6 +7767,20 @@ struct tagRECT
                 renderTexture = RT_Make();
                 renderTexture.Create();
                 cam.targetTexture = renderTexture;
+
+                for (int i = 0; i < additionalS3DCamerasStruct.Length; i++)
+                    if (additionalS3DCamerasStruct[i].camera)
+                    {
+#if HDRP
+                        additionalS3DCamerasStruct[i].renderTexture = RT_Make();
+                        additionalS3DCamerasStruct[i].camera.targetTexture = additionalS3DCamerasStruct[i].renderTexture;
+#else
+#if URP
+                        if (method != Method.Two_Displays_MirrorX && method != Method.Two_Displays_MirrorY) //fix overlay cameras unmatched output properties in Unity 2021 as not set targetTexture if using blit to screen
+#endif
+                            additionalS3DCamerasStruct[i].camera.targetTexture = renderTexture;
+#endif
+                    }
 
                 if (canvasCamera)
                     //canvasCamera.targetTexture = renderTexture_left;
@@ -9376,15 +9446,16 @@ struct tagRECT
 #else
 
     //ignored in SRP(URP or HDRP) but in default render via cam buffer even empty function give fps gain from 294 to 308
-    void OnRenderImage(RenderTexture source, RenderTexture destination) //works only in the default render pipeline
+    //void OnRenderImage(RenderTexture source, RenderTexture destination) //works only in the default render pipeline
     //void OnPostRender() //works only in the default render pipeline //not working if antialiasing set in quality settings
     //void PostRender(Camera c) //works only in the default render pipeline
+    void OnRenderImageEventMain(RenderTexture source, RenderTexture destination, Camera c)
     {
         //if (debug) Debug.Log("OnRenderImage");
         //if (debug) Debug.Log("OnRenderImage Camera.current: " + Camera.current);
 
         //if (defaultRender) //commented till SRP don't go here
-        if (S3DEnabled)
+        //if (S3DEnabled)
         {
             //if (method == Method.Two_Displays || method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
             //{
@@ -9442,8 +9513,20 @@ struct tagRECT
                 cam.rect = camRect;
             }
         }
-        else
-            Graphics.Blit(source, destination);
+        //else
+        //{
+        //    //if (nativeRenderingPlugin)
+        //    //{
+        //    //    //Rect camRect = cam.rect;
+        //    //    //cam.rect = Rect.MinMaxRect(0, 0, 1, 1); //set temporary rect required before Graphics.Blit to blit render texture correctly with no fullscreen rect
+        //    //    //Graphics.Blit(source, null as RenderTexture);
+        //    //    CustomBlit(source, destination, S3DMaterial, 7, false, false);
+        //    //    //cam.rect = camRect;
+        //    //}
+        //    //else
+        //        Graphics.Blit(source, destination);
+
+        //}
     }
 
     //public RenderTexture renderTextureTarget;
@@ -9777,13 +9860,13 @@ void CustomBlit(RenderTexture source, RenderTexture destination, Material materi
         //GL.Clear(true, true, Color.clear);
         GL.LoadOrtho();    // Set up Ortho-Perspective Transform
         //GL.LoadIdentity();
-        //GL.Viewport(new Rect(cam.rect.x * viewportSize.x, cam.rect.y * viewportSize.y, cam.rect.width * viewportSize.x, cam.rect.height * viewportSize.y));
+        //GL.Viewport(new Rect(cam.rect.x * clientSize.x, cam.rect.y * clientSize.y, cam.rect.width * clientSize.x, cam.rect.height * clientSize.y));
         //GL.Viewport(pixelRect);
 
-        //GL.Viewport(new Rect(flipX ? (1 - cam.rect.x) * viewportSize.x - cam.pixelWidth : cam.rect.x * viewportSize.x, 
-        //    flipY ? (1 - cam.rect.y) * viewportSize.y - cam.pixelHeight : cam.rect.y * viewportSize.y, 
-        //    cam.rect.width * viewportSize.x, 
-        //    cam.rect.height * viewportSize.y));
+        //GL.Viewport(new Rect(flipX ? (1 - cam.rect.x) * clientSize.x - cam.pixelWidth : cam.rect.x * clientSize.x, 
+        //    flipY ? (1 - cam.rect.y) * clientSize.y - cam.pixelHeight : cam.rect.y * clientSize.y, 
+        //    cam.rect.width * clientSize.x, 
+        //    cam.rect.height * clientSize.y));
 
         GL.Begin(GL.QUADS);
 
@@ -10110,6 +10193,7 @@ void CustomBlit(RenderTexture source, RenderTexture destination, Material materi
         //Destroy(camera_left.gameObject.GetComponent<OnRenderImageDelegate>());
         //Destroy(camera_right.gameObject.GetComponent<OnRenderImageDelegate>());
         OnRenderImageEvent_Remove();
+        Destroy(cam.GetComponent<OnRenderImageDelegate>());
 #endif
         //cam.targetTexture = null;
         //camera_left.targetTexture = null;
@@ -10547,7 +10631,7 @@ void CustomBlit(RenderTexture source, RenderTexture destination, Material materi
     //  GUILayout.EndVertical();
     //    GUILayout.EndHorizontal();
 
-    //    GUI.DragWindow(new Rect(0, 0, 640, 20)); //make GUI windowHandler draggable by top
+    //    GUI.DragWindow(new Rect(0, 0, 640, 20)); //make GUI window draggable by top
     //}
 
     //string StringCheck(string str)
