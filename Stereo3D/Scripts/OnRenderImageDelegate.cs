@@ -27,7 +27,7 @@ public class OnRenderImageDelegate : MonoBehaviour
     public void OnRenderImage(RenderTexture src, RenderTexture dest)
     //public void OnPostRender()
     {
-        Debug.Log("OnRenderImage(RenderTexture src, RenderTexture dest)");
+        //Debug.Log("OnRenderImage(RenderTexture src, RenderTexture dest)");
 
         if (RenderImageEvent != null)
             //RenderImageEvent(src, dest);

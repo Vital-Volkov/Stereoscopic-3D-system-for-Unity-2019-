@@ -1,16 +1,26 @@
 
-// Stereoscopic 3D system by Vital Volkov
-// Usage:
-// Add this script to any Camera to make it Stereoscopic.
-// 1) The main parameter for the correct size of `User IPD`(Interpupillary distance) in millimeters is `PPI`(Pixels Per Inch) or `Pixel Pitch`(distance between pixel centers) of the screen. Required for precision to calculate screen width.
-// The system will try to autodetect `PPI` of the screen (In my case PPI = 96 on 23 inch LG D2342P monitor). If correct `PPI` failed autodetected from the screen then find one of two in Tech Specs of your screen and set it manually.
-// 2) If PPI or Pixel Pitch is set correctly then "User IPD" will have real distance in millimeters and for precision realistic Stereo3D vision, it must be set the same as user real IPD.
-// If you don't know your IPD you can measure it with a mirror and ruler - put a ruler on the mirror in front of your face. Close right eye and move such that left eye pupillary look at themself through Zero mark on a scale of Ruler, at this moment, is important to stay still, close the left eye and open the right eye, and look at the right eye pupillary in the mirror through the Ruler scale and you will see your IPD in millimeters. 
-// 3) Select the Stereo 3D Method. Set your real `User IPD` in the Stereo 3D system and go. If you don't see Stereo 3D then toggle `Swap Left-Right Cameras`. If you want to see virtual reality in a different size feel then uncheck the `Match User IPD` mark and set `Virtual IPD` larger than `User IPD` for toy world and vise versa.
-// 4) `Screen Distance` shows the distance between eyes and screen where real FOV(Field Of View) will match the virtual FOV. So, measure the distance from your eyes position to screen, tune FOV till `Screen Distance` matches the measured one and you get the most realistic view.
-// 5) Default shortcut Keys: `Tab` Show/Hide S3D settings panel. Numpad `*` On/Off Stereo3D and `Left Ctrl + *` swap left-right cameras. `+`,`-` FOV tune. `Ctrl` + `+`,`-` Virtual IPD tune if unlocked from `User IPD`(`Match User IPD` unchecked). Hold `Shift` for a faster tune.
-// Tested on Unity 2018, 2019 and 2020 with default render + `Post Processing Stack v2`, URP, and HDRP.
-// Enjoy.
+/*
+ Stereoscopic 3D system by Vital Volkov
+
+ Add this script to any Camera to make it Stereoscopic.
+ 1) The main parameter for the correct size of `User IPD`(Interpupillary distance) in millimeters is `PPI`(Pixels Per Inch) or `Pixel Pitch`(distance between pixel centers) of the screen. Required for precision to calculate screen width.
+ The system will try to autodetect `PPI` of the screen (In my case PPI = 96 on 23 inch LG D2342P monitor). If correct `PPI` failed autodetected from the screen then find one of two in Tech Specs of your screen and set it manually.
+ 2) If PPI or Pixel Pitch is set correctly then "User IPD" will have real distance in millimeters and for precision realistic Stereo3D vision, it must be set the same as user real IPD.
+ If you don't know your IPD you can measure it with a mirror and ruler - put a ruler on the mirror in front of your face. Close right eye and move such that left eye pupillary look at themself through Zero mark on a scale of Ruler, at this moment, is important to stay still, close the left eye and open the right eye, and look at the right eye pupillary in the mirror through the Ruler scale and you will see your IPD in millimeters. 
+ 3) Select the Stereo 3D Method.Set your real `User IPD` in the Stereo 3D system and go.If you don't see Stereo 3D then toggle `Swap Left-Right Cameras`. If you want to see virtual reality in a different size feel then uncheck the `Match User IPD` mark and set `Virtual IPD` larger than `User IPD` for toy world and vise versa.
+ 4) `Screen Distance` shows the distance between eyes and screen where real FOV(Field Of View) will match the virtual FOV.So, measure the distance from your eyes position to screen, tune FOV till `Screen Distance` matches the measured one and you get the most realistic view.
+ 5) Default shortcut Keys: 
+    Numpad `0` Show/Hide S3D settings panel. 
+    Numpad `.` On/Off Stereo3D
+    `Left Ctrl + Numpad `.` save S3D settings to `slot Name`.
+    Hold Numpad `.` for 1 second to load S3D settings from `slot Name`.
+    `Left Shift + Numpad `.` swap left-right cameras.
+    Numpad `+`,`-` FOV tune.
+    `Left Ctrl` + Numpad `+`,`-` Virtual IPD tune if unlocked from `User IPD`(`Match User IPD` unchecked).
+    Hold `Shift` for a faster tune.
+
+ Tested on Unity 2019, 2020, 2021 and 2022 with default render + `Post Processing Stack v2`, URP and HDRP.
+*/
 
 //#define localDebug
 
@@ -189,7 +199,7 @@ public class Stereo3D : MonoBehaviour
 #else
     //public KeyCode GUIKey = KeyCode.Tab; //GUI window show/hide Key
     public KeyCode GUIKey = KeyCode.Keypad0; //GUI window show/hide Key
-    public KeyCode S3DKey = KeyCode.KeypadMultiply; //S3D enable/disable shortcut Key and hold "LeftControl" Key to swap left-right cameras
+    public KeyCode S3DKey = KeyCode.KeypadPeriod; //S3D enable/disable shortcut Key and hold "LeftControl" Key to swap left-right cameras
     public KeyCode increaseKey = KeyCode.KeypadPlus; //increase Field Of View shortcut Key + hold "Shift" Key to faster change + hold "LeftControl" Key to increase virtual IPD if "matchUserIPD" unchecked
     public KeyCode decreaseKey = KeyCode.KeypadMinus; //decrease Field Of View shortcut Key + hold "Shift" Key to faster change + hold "LeftControl" Key to decrease virtual IPD if "matchUserIPD" unchecked
 #endif
@@ -3708,7 +3718,7 @@ struct tagRECT
             //if (cam.projectionMatrix == Matrix4x4.zero)
             //    cam.projectionMatrix = camMatrix;
 
-            if (cam.rect != Rect.MinMaxRect(0, 0, 1, 1))
+            if (!nativeRenderingPlugin && cam.rect != Rect.MinMaxRect(0, 0, 1, 1))
 #if URP || HDRP
                 if (lastS3DEnabled)
                     RenderPipelineManager.beginCameraRendering += PreRenderClearScreen;
@@ -3781,7 +3791,7 @@ struct tagRECT
 //                GUIAsOverlay = GUIAsOverlayState;
 //#endif
 
-                if (cam.rect != Rect.MinMaxRect(0, 0, 1, 1))
+                if (!nativeRenderingPlugin && cam.rect != Rect.MinMaxRect(0, 0, 1, 1))
 #if URP || HDRP
                 if (method == Method.Two_Displays)
                     RenderPipelineManager.beginCameraRendering += PreRenderClearScreen;
@@ -5746,7 +5756,7 @@ struct tagRECT
                 GUIMaterial_Set();
 #if HDRP
                 //if (method == Method.Two_Displays && (additionalS3DTopmostCameraIndex != -1 || GUIAsOverlay))
-                if (GUIAsOverlay)
+                if (!nativeRenderingPlugin && GUIAsOverlay)
                 {
                     if (!S3DEnabled)
                         cam.targetTexture = renderTexture;
@@ -5793,7 +5803,7 @@ struct tagRECT
 ////#if URP
 #if HDRP
                 //if (method == Method.Two_Displays && additionalS3DTopmostCameraIndex == -1)
-                if (GUIAsOverlay && additionalS3DTopmostCameraIndex == -1)
+                if (!nativeRenderingPlugin && GUIAsOverlay && additionalS3DTopmostCameraIndex == -1)
                 {
                     cam.targetTexture = null;
 
@@ -7313,7 +7323,7 @@ struct tagRECT
                 //    Display.displays[1].Activate();
                 //TargetDisplays_Set();
 
-                if (method.ToString().Contains("Two_Displays"))
+                //if (method.ToString().Contains("Two_Displays"))
                     if (Display.displays.Length < 2)
                     {
                         //GameObject staticTooltip = Instantiate(cursorRectTransform.Find("Tooltip").gameObject);
@@ -7431,7 +7441,7 @@ struct tagRECT
 //                }
 //#endif
 
-                if (nativeRenderingPlugin)
+                if (nativeRenderingPlugin && method == Method.Two_Displays)
                 {
                     renderTexture_left = RT_Make();
                     renderTexture_right = RT_Make();
@@ -7440,6 +7450,8 @@ struct tagRECT
 
                     camera_left.targetTexture = renderTexture_left;
                     camera_right.targetTexture = renderTexture_right;
+
+                    AdditionalCamerasRenderTexture_S3DOnSet();
 
                     if (canvasCamera)
                     {
@@ -7502,7 +7514,7 @@ struct tagRECT
                 //|| GUIAsOverlay && GUIVisible || additionalS3DCamerasStruct != null //not working as not null even with additionalS3DCamerasStruct.Length == 0
                 //|| GUIAsOverlay && GUIVisible || additionalS3DCamerasStruct.Length != 0
                 //|| GUIAsOverlay && GUIVisible || additionalS3DTopmostCameraIndex != -1
-                || GUIAsOverlay || additionalS3DTopmostCameraIndex != -1
+                || GUIAsOverlay || additionalS3DTopmostCameraIndex != -1 || nativeRenderingPlugin
 #endif
                 )
             {
@@ -7532,7 +7544,7 @@ struct tagRECT
 
                 if (method != Method.Two_Displays
 #if HDRP
-                || additionalS3DTopmostCameraIndex != -1
+                || additionalS3DTopmostCameraIndex != -1 || nativeRenderingPlugin
 #endif
                 )
                 {
@@ -7556,30 +7568,32 @@ struct tagRECT
                 //            c.camera_right.targetTexture = c.renderTexture_right;
                 //        }
 
-                //if (additionalS3DCamerasStruct != null)
-                for (int i = 0; i < additionalS3DCamerasStruct.Length; i++)
-                    if (additionalS3DCamerasStruct[i].camera)
-                    {
-                        //additionalS3DCamerasStruct[i].camera_left.targetDisplay = additionalS3DCamerasStruct[i].camera_right.targetDisplay = 0;
-                        //additionalS3DCamerasStruct[i].camera_left.rect = additionalS3DCamerasStruct[i].camera_right.rect = Rect.MinMaxRect(0, 0, 1, 1);
-#if HDRP
-                        //additionalS3DCamerasStruct[i].renderTexture_left = new RenderTexture(renderTexture_left);
-                        //additionalS3DCamerasStruct[i].renderTexture_right = new RenderTexture(renderTexture_right);
-                        additionalS3DCamerasStruct[i].renderTexture_left = RT_Make();
-                        additionalS3DCamerasStruct[i].renderTexture_right = RT_Make();
-                        additionalS3DCamerasStruct[i].camera_left.targetTexture = additionalS3DCamerasStruct[i].renderTexture_left;
-                        additionalS3DCamerasStruct[i].camera_right.targetTexture = additionalS3DCamerasStruct[i].renderTexture_right;
-#else
-//#elif !URP
-#if URP
-                        if (method != Method.Two_Displays_MirrorX && method != Method.Two_Displays_MirrorY) //fix overlay cameras unmatched output properties in Unity 2021 as not set targetTexture if using blit to screen
-#endif
-                        {
-                            additionalS3DCamerasStruct[i].camera_left.targetTexture = renderTexture_left;
-                            additionalS3DCamerasStruct[i].camera_right.targetTexture = renderTexture_right;
-                        }
-#endif
-                    }
+//                //if (additionalS3DCamerasStruct != null)
+//                for (int i = 0; i < additionalS3DCamerasStruct.Length; i++)
+//                    if (additionalS3DCamerasStruct[i].camera)
+//                    {
+//                        //additionalS3DCamerasStruct[i].camera_left.targetDisplay = additionalS3DCamerasStruct[i].camera_right.targetDisplay = 0;
+//                        //additionalS3DCamerasStruct[i].camera_left.rect = additionalS3DCamerasStruct[i].camera_right.rect = Rect.MinMaxRect(0, 0, 1, 1);
+//#if HDRP
+//                        //additionalS3DCamerasStruct[i].renderTexture_left = new RenderTexture(renderTexture_left);
+//                        //additionalS3DCamerasStruct[i].renderTexture_right = new RenderTexture(renderTexture_right);
+//                        additionalS3DCamerasStruct[i].renderTexture_left = RT_Make();
+//                        additionalS3DCamerasStruct[i].renderTexture_right = RT_Make();
+//                        additionalS3DCamerasStruct[i].camera_left.targetTexture = additionalS3DCamerasStruct[i].renderTexture_left;
+//                        additionalS3DCamerasStruct[i].camera_right.targetTexture = additionalS3DCamerasStruct[i].renderTexture_right;
+//#else
+////#elif !URP
+//#if URP
+//                        if (method != Method.Two_Displays_MirrorX && method != Method.Two_Displays_MirrorY) //fix overlay cameras unmatched output properties in Unity 2021 as not set targetTexture if using blit to screen
+//#endif
+//                        {
+//                            additionalS3DCamerasStruct[i].camera_left.targetTexture = renderTexture_left;
+//                            additionalS3DCamerasStruct[i].camera_right.targetTexture = renderTexture_right;
+//                        }
+//#endif
+//                    }
+
+                AdditionalCamerasRenderTexture_S3DOnSet();
 
                 if (canvasCamera)
                 {
@@ -7718,6 +7732,33 @@ struct tagRECT
                 //}
             }
 
+            void AdditionalCamerasRenderTexture_S3DOnSet()
+            {
+                        for (int i = 0; i < additionalS3DCamerasStruct.Length; i++)
+                            if (additionalS3DCamerasStruct[i].camera)
+                            {
+                                //additionalS3DCamerasStruct[i].camera_left.targetDisplay = additionalS3DCamerasStruct[i].camera_right.targetDisplay = 0;
+                                //additionalS3DCamerasStruct[i].camera_left.rect = additionalS3DCamerasStruct[i].camera_right.rect = Rect.MinMaxRect(0, 0, 1, 1);
+#if HDRP
+                                //additionalS3DCamerasStruct[i].renderTexture_left = new RenderTexture(renderTexture_left);
+                                //additionalS3DCamerasStruct[i].renderTexture_right = new RenderTexture(renderTexture_right);
+                                additionalS3DCamerasStruct[i].renderTexture_left = RT_Make();
+                                additionalS3DCamerasStruct[i].renderTexture_right = RT_Make();
+                                additionalS3DCamerasStruct[i].camera_left.targetTexture = additionalS3DCamerasStruct[i].renderTexture_left;
+                                additionalS3DCamerasStruct[i].camera_right.targetTexture = additionalS3DCamerasStruct[i].renderTexture_right;
+#else
+//#elif !URP
+#if URP
+                                if (method != Method.Two_Displays_MirrorX && method != Method.Two_Displays_MirrorY) //fix overlay cameras unmatched output properties in Unity 2021 as not set targetTexture if using blit to screen
+#endif
+                                {
+                                    additionalS3DCamerasStruct[i].camera_left.targetTexture = renderTexture_left;
+                                    additionalS3DCamerasStruct[i].camera_right.targetTexture = renderTexture_right;
+                                }
+#endif
+                            }
+            }
+
 //#if !(URP || HDRP)
 //            //clearFrameCount = 0;
 //            Camera.onPreRender += PreRenderClearScreen;
@@ -7757,6 +7798,7 @@ struct tagRECT
             cameraRestore();
             StaticTooltip_Destroy();
 
+#if !HDRP
             //if (method == Method.Direct3D11)
             if (nativeRenderingPlugin)
             {
@@ -7771,15 +7813,10 @@ struct tagRECT
                 for (int i = 0; i < additionalS3DCamerasStruct.Length; i++)
                     if (additionalS3DCamerasStruct[i].camera)
                     {
-#if HDRP
-                        additionalS3DCamerasStruct[i].renderTexture = RT_Make();
-                        additionalS3DCamerasStruct[i].camera.targetTexture = additionalS3DCamerasStruct[i].renderTexture;
-#else
 #if URP
                         if (method != Method.Two_Displays_MirrorX && method != Method.Two_Displays_MirrorY) //fix overlay cameras unmatched output properties in Unity 2021 as not set targetTexture if using blit to screen
 #endif
                             additionalS3DCamerasStruct[i].camera.targetTexture = renderTexture;
-#endif
                     }
 
                 if (canvasCamera)
@@ -7796,6 +7833,7 @@ struct tagRECT
                 NativeRenderingPluginData_Set(renderTexture, null);
             }
             else
+#endif
             {
             //renderTexture = RT_Make();
             //cam.targetTexture = renderTexture;
@@ -7806,16 +7844,20 @@ struct tagRECT
             if (
 //#if HDRP
                 //additionalS3DCameras.Count != 0 || 
-                additionalS3DTopmostCameraIndex != -1 ||
+                additionalS3DTopmostCameraIndex != -1
 //#endif
                 //canvasCamera && canvasCamera.isActiveAndEnabled
-                GUIAsOverlay
+                || GUIAsOverlay || nativeRenderingPlugin
                 )
             {
                 //if (debug) Debug.Log("Canvas1");
                 renderTexture = RT_Make();
+                renderTexture.Create();
 
-                if (additionalS3DTopmostCameraIndex != -1)
+                if (nativeRenderingPlugin)
+                    NativeRenderingPluginData_Set(renderTexture, null);
+
+                if (additionalS3DTopmostCameraIndex != -1 || nativeRenderingPlugin)
                     cam.targetTexture = renderTexture;
 
                 //if (additionalS3DCameras.Count != 0 || canvasCamera && canvasCamera.isActiveAndEnabled)
@@ -7933,6 +7975,8 @@ struct tagRECT
 
     void NativeRenderingPluginData_Set(RenderTexture RT_left, RenderTexture RT_right)
     {
+        Debug.Log("NativeRenderingPluginData_Set");
+
 //#if !UNITY_EDITOR
 #if !localDebug
                 IntPtr renderTexturePtr_left = IntPtr.Zero;
@@ -8053,15 +8097,18 @@ struct tagRECT
                 //RenderPipelineManager.endCameraRendering += RenderTexture_BlitToRenderTexture; //blit Render Texture to main Render Texture(required for HDRP overlay cameras) after render is finished
                 RenderPipelineManager.endFrameRendering += RenderTexture_BlitToRenderTexture; //blit Render Texture to main Render Texture(required for HDRP overlay cameras) after render is finished
 
-            //RenderPipelineManager.endCameraRendering += RenderTexture_BlitToScreen; //blit Render Texture to scren after render is finished
-            RenderPipelineManager.endFrameRendering += RenderTexture_BlitToScreen; //blit Render Texture to scren after render is finished
-            //RenderPipelineManager.beginCameraRendering += RenderTexture_Reset; //required reset Render Texture after set it to null for blit to screen
-            RenderPipelineManager.beginFrameRendering += RenderTexture_Reset; //required reset Render Texture after set it to null for blit to screen
+            if (!nativeRenderingPlugin)
+            {
+                //RenderPipelineManager.endCameraRendering += RenderTexture_BlitToScreen; //blit Render Texture to scren after render is finished
+                RenderPipelineManager.endFrameRendering += RenderTexture_BlitToScreen; //blit Render Texture to scren after render is finished
+                //RenderPipelineManager.beginCameraRendering += RenderTexture_Reset; //required reset Render Texture after set it to null for blit to screen
+                RenderPipelineManager.beginFrameRendering += RenderTexture_Reset; //required reset Render Texture after set it to null for blit to screen
+            }
         }
         else
             if (method != Method.Two_Displays)
             {
-                if (S3DEnabled)
+                if (S3DEnabled && !nativeRenderingPlugin)
                     //RenderPipelineManager.endCameraRendering += RenderQuad; //draw fullscreen quad at main camera with S3D combined output by S3D shader
                     RenderPipelineManager.endFrameRendering += RenderQuad; //draw fullscreen quad at main camera with S3D combined output by S3D shader
                     //RenderPipelineManager.endContextRendering += RenderQuad; //draw fullscreen quad at main camera with S3D combined output by S3D shader
@@ -8071,7 +8118,7 @@ struct tagRECT
                     //RenderPipelineManager.endCameraRendering += RenderTexture_BlitToRenderTexture; //blit Render Texture to main Render Texture(required for HDRP overlay cameras) after render is finished
                     RenderPipelineManager.endFrameRendering += RenderTexture_BlitToRenderTexture; //blit Render Texture to main Render Texture(required for HDRP overlay cameras) after render is finished
 
-            if (!S3DEnabled)
+                if (!S3DEnabled && !nativeRenderingPlugin)
                     if (additionalS3DTopmostCameraIndex != -1 || GUIAsOverlay && GUIVisible)
                     {
                         //RenderPipelineManager.endCameraRendering += RenderTexture_BlitToScreen; //blit Render Texture to scren after render is finished
@@ -9652,10 +9699,10 @@ struct tagRECT
         //    BlitToScreen(c, RenderTextureFlipMaterial);
 
         c.targetTexture = null;
-#if UNITY_2022_1_OR_NEWER
-        Rect r = c.rect;
-        c.rect = Rect.MinMaxRect(0, 0, 1, 1);
-#endif
+//#if UNITY_2022_1_OR_NEWER
+//        Rect r = c.rect;
+//        c.rect = Rect.MinMaxRect(0, 0, 1, 1);
+//#endif
 
         if (c.name.Contains("_left"))
         {
@@ -9711,9 +9758,9 @@ struct tagRECT
             //Graphics.Blit(renderTexture_right, null as RenderTexture);
             //CustomBlit(false, false, renderTexture_right, S3DMaterial);
 
-#if UNITY_2022_1_OR_NEWER
-        c.rect = r;
-#endif
+//#if UNITY_2022_1_OR_NEWER
+//        c.rect = r;
+//#endif
     }
 
     //void BlitToScreen(Camera c, Material m)
