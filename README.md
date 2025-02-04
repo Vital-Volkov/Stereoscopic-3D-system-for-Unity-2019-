@@ -30,6 +30,12 @@ Set `User IPD` to your own interpupillary distance(IPD) for a realistic view wit
 Uncheck `Match user IPD` and set `Virtual IPD`(Cameras IPD in the virtual world) larger than your own IPD for toy world effect and vice versa.  
 `Screen Distance` will show how far from the screen your eyes should be(camera's point) where Real and Virtual FOV will match and you get a 100% realistic view. (Very important for Vehicle Simulators).
 
+## License
+
+This software is licensed under the terms of the [MIT](LICENSE).
+
+The license file was added at revision [5b41b7f](https://github.com/Vital-Volkov/Stereoscopic-3D-system-for-Unity-2019-/commit/5b41b7f) on 2025-02-04, but you may consider that the license applies to all prior revisions as well.
+
 ## Donate
 <a href="https://paypal.me/VitalVolkov/"><img src="PayPal.svg" height="40"></a>
 
