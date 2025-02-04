@@ -37,7 +37,6 @@ This software is licensed under the terms of the [MIT](LICENSE).
 The license file was added at revision [5b41b7f](https://github.com/Vital-Volkov/Stereoscopic-3D-system-for-Unity-2019-/commit/5b41b7f) on 2025-02-04, but you may consider that the license applies to all prior revisions as well.
 
 ## Donate
-<a href="https://paypal.me/VitalVolkov/"><img src="PayPal.svg" height="40"></a>
 
 Bitcoin `bc1qf0af260q970f3ryrmlcde62jk4h6zhj08rkkjz`  
 Litecoin `LVHktaDKWkyK96H2vcmvNWYx2nMkcysA2J`  
