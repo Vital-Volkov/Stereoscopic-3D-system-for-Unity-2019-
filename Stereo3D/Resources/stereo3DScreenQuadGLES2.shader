@@ -10,7 +10,9 @@ Shader "Stereo3D Screen Quad GLES2" //for GLES2 with vertex positions on input a
 	   _RightCol ("Right Color", Color) = (0, 1, 1)
 
 	   _Columns ("Columns", Int) = 1
+	   _FirstColumn ("FirstColumn", Int) = 0
 	   _Rows ("Rows", Int) = 1
+	   _FirstRow ("FirstRow", Int) = 0
 	   _OddFrame ("OddFrame", Int) = 0
 	}
 
@@ -49,6 +51,7 @@ Shader "Stereo3D Screen Quad GLES2" //for GLES2 with vertex positions on input a
 			}
 
 			int _Rows;
+			int _FirstRow;
 			Texture2D  _LeftTex;
 			Texture2D  _RightTex;
 			SamplerState clamp_point_sampler;
@@ -70,7 +73,8 @@ Shader "Stereo3D Screen Quad GLES2" //for GLES2 with vertex positions on input a
 				//left /= 8;
 				//right /= 8;
 
-				uint row = i.uv.y * _Rows;
+				//uint row = i.uv.y * _Rows;
+				uint row = i.uv.y * _Rows + _FirstRow;
 				//uint odd = row - row / 2 * 2;
 				uint odd = row & 1 ? 1 : 0;
 				return odd == 0 ? left : right;
@@ -111,6 +115,7 @@ Shader "Stereo3D Screen Quad GLES2" //for GLES2 with vertex positions on input a
 			}
 
 			int _Columns;
+			int _FirstColumn;
 			Texture2D  _LeftTex;
 			Texture2D  _RightTex;
 			SamplerState clamp_point_sampler;
@@ -120,7 +125,8 @@ Shader "Stereo3D Screen Quad GLES2" //for GLES2 with vertex positions on input a
 				float4 left = _LeftTex.Sample(clamp_point_sampler, i.uv);
 				float4 right = _RightTex.Sample(clamp_point_sampler, i.uv);
 
-				uint column = i.uv.x * _Columns;
+				//uint column = i.uv.x * _Columns;
+				uint column = i.uv.x * _Columns + _FirstColumn;
 				//uint odd = column - column / 2 * 2;
 				uint odd = column & 1 ? 1 : 0;
 				return odd == 0 ? left : right;
@@ -159,7 +165,9 @@ Shader "Stereo3D Screen Quad GLES2" //for GLES2 with vertex positions on input a
 			}
 
 			int _Columns;
+			int _FirstColumn;
 			int _Rows;
+			int _FirstRow;
 			Texture2D  _LeftTex;
 			Texture2D  _RightTex;
 			SamplerState clamp_point_sampler;
@@ -169,8 +177,10 @@ Shader "Stereo3D Screen Quad GLES2" //for GLES2 with vertex positions on input a
 				float4 left = _LeftTex.Sample(clamp_point_sampler, i.uv);
 				float4 right = _RightTex.Sample(clamp_point_sampler, i.uv);
 
-				uint row = i.uv.y * _Rows;
-				uint column = i.uv.x * _Columns;
+				// uint row = i.uv.y * _Rows;
+				// uint column = i.uv.x * _Columns;
+				uint row = i.uv.y * _Rows + _FirstRow;
+				uint column = i.uv.x * _Columns + _FirstColumn;
 				//uint oddRow = row - row / 2 * 2;
 				uint oddRow = row & 1 ? 1 : 0;
 				//uint oddColumn = column - column / 2 * 2;
@@ -214,11 +224,13 @@ Shader "Stereo3D Screen Quad GLES2" //for GLES2 with vertex positions on input a
 
 			Texture2D  _LeftTex;
 			Texture2D  _RightTex;
-			SamplerState repeat_point_sampler;
+			//SamplerState repeat_point_sampler;
+			SamplerState clamp_point_sampler;
 
 			float4 frag(vertexDataOutput i) : SV_Target
 			{
-				return i.uv.x < 1 ? _LeftTex.Sample(repeat_point_sampler, i.uv) : _RightTex.Sample(repeat_point_sampler, i.uv - float2(1, 0));
+				//return i.uv.x < 1 ? _LeftTex.Sample(repeat_point_sampler, i.uv) : _RightTex.Sample(repeat_point_sampler, i.uv - float2(1, 0));
+				return i.uv.x < 0.5f ? _LeftTex.Sample(clamp_point_sampler, float2(i.uv.x * 2, i.uv.y)) : _RightTex.Sample(clamp_point_sampler, float2(i.uv.x * 2 - 1, i.uv.y));
 			}
 			ENDCG
 		}
@@ -254,11 +266,13 @@ Shader "Stereo3D Screen Quad GLES2" //for GLES2 with vertex positions on input a
 
 			Texture2D  _LeftTex;
 			Texture2D  _RightTex;
-			SamplerState repeat_point_sampler;
+			//SamplerState repeat_point_sampler;
+			SamplerState clamp_point_sampler;
 
 			float4 frag(vertexDataOutput i) : SV_Target
 			{
-				return i.uv.y < 1 ? _LeftTex.Sample(repeat_point_sampler, i.uv) : _RightTex.Sample(repeat_point_sampler, i.uv - float2(0, 1));
+				//return i.uv.y < 1 ? _LeftTex.Sample(repeat_point_sampler, i.uv) : _RightTex.Sample(repeat_point_sampler, i.uv - float2(0, 1));
+				return i.uv.y < 0.5f ? _LeftTex.Sample(clamp_point_sampler, float2(i.uv.x, i.uv.y * 2)) : _RightTex.Sample(clamp_point_sampler, float2(i.uv.x, i.uv.y * 2 - 1));
 			}
 			ENDCG
 		}
@@ -295,11 +309,11 @@ Shader "Stereo3D Screen Quad GLES2" //for GLES2 with vertex positions on input a
 			Texture2D  _LeftTex;
 			Texture2D  _RightTex;
 			int _OddFrame;
-			SamplerState repeat_point_sampler;
+			SamplerState clamp_point_sampler;
 
 			float4 frag(vertexDataOutput i) : SV_Target
 			{
-				return _OddFrame == 0 ? _LeftTex.Sample(repeat_point_sampler, i.uv) : _RightTex.Sample(repeat_point_sampler, i.uv);
+				return _OddFrame == 0 ? _LeftTex.Sample(clamp_point_sampler, i.uv) : _RightTex.Sample(clamp_point_sampler, i.uv);
 			}
 			ENDCG
 		}
@@ -348,7 +362,7 @@ Shader "Stereo3D Screen Quad GLES2" //for GLES2 with vertex positions on input a
 			ENDCG
 		}
 
-		//pass7 flip for Method.Two_Displays_MirrorX & Method.Two_Displays_MirrorY
+		//pass7 Method.Two_Displays & Method.Two_Displays_MirrorX & Method.Two_Displays_MirrorY
 		Pass
 		{
 			CGPROGRAM

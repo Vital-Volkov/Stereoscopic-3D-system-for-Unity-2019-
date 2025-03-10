@@ -20,19 +20,20 @@ public class OnRenderImageDelegate : MonoBehaviour
     }
 
 
-    //public delegate void RenderImageDelegate(RenderTexture src, RenderTexture dest);
-    public delegate void RenderImageDelegate(RenderTexture src, RenderTexture dest, Camera c);
+    //public delegate void RenderImageDelegate(RenderTexture src, RenderTexture dst);
+    public delegate void RenderImageDelegate(RenderTexture src, RenderTexture dst, Camera c);
     //public delegate void RenderImageDelegate(Camera c);
     public event RenderImageDelegate RenderImageEvent;
-    public void OnRenderImage(RenderTexture src, RenderTexture dest)
+    public void OnRenderImage(RenderTexture src, RenderTexture dst)
     //public void OnPostRender()
     {
-        //Debug.Log("OnRenderImage(RenderTexture src, RenderTexture dest)");
+        //Debug.Log("OnRenderImage(RenderTexture src, RenderTexture dst)");
 
         if (RenderImageEvent != null)
-            //RenderImageEvent(src, dest);
-            //RenderImageEvent(src, dest, GetComponent<Camera>());
-            RenderImageEvent(src, dest, cam);
+            //RenderImageEvent(src, dst);
+            //RenderImageEvent(src, dst, GetComponent<Camera>());
+            RenderImageEvent(src, dst, cam);
+            //RenderImageEvent(cam);
             //RenderImageEvent(GetComponent<Camera>());
 
         //Debug.Log("OnRenderImageDelegate OnRenderImage " + Time.time);

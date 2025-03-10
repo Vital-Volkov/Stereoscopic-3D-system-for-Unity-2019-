@@ -31,8 +31,8 @@ Shader "Stereo3D Screen Quad"
 			#pragma fragment frag
 			#pragma exclude_renderers gles
 		
-			StructuredBuffer<float2> verticesPosBuffer;
-			StructuredBuffer<float2> verticesUVBuffer;
+			// StructuredBuffer<float2> verticesPosBuffer;
+			// StructuredBuffer<float2> verticesUVBuffer;
 
 			struct vertexDataOutput
 			{
@@ -43,34 +43,36 @@ Shader "Stereo3D Screen Quad"
 			vertexDataOutput vert(uint vertexID : SV_VertexID)
 			{
 				vertexDataOutput o;
-				o.pos = float4(verticesPosBuffer[vertexID], 0, 1);
-				o.uv = verticesUVBuffer[vertexID];
+				// o.pos = float4(verticesPosBuffer[vertexID], 0, 1);
+				// o.uv = verticesUVBuffer[vertexID];
 
 				//o.pos = float4(0, 0, 0, 1);
 
-				//if (vertexID == 0)
-				//{
-				//	o.pos.xy = float2(-1, -1);
-				//	o.uv = float2(0, 0);
-				//}
-				//else
-				//	if (vertexID == 1)
-				//	{
-				//		o.pos.xy = float2(-1, 1);
-				//		o.uv = float2(0, 1);
-				//	}
-				//	else
-				//		if (vertexID == 2)
-				//		{
-				//			o.pos.xy = float2(1, 1);
-				//			o.uv = float2(1, 1);
-				//		}
-				//		else
-				//			if (vertexID == 3)
-				//			{
-				//				o.pos.xy = float2(1, -1);
-				//				o.uv = float2(1, 0);
-				//			}
+				if (vertexID == 0)
+				{
+					o.pos.xy = float2(-1, -1);
+					o.uv = float2(0, 0);
+				}
+				else
+					if (vertexID == 1)
+					{
+						o.pos.xy = float2(-1, 1);
+						o.uv = float2(0, 1);
+					}
+					else
+						if (vertexID == 2)
+						{
+							o.pos.xy = float2(1, 1);
+							o.uv = float2(1, 1);
+						}
+						else
+							if (vertexID == 3)
+							{
+								o.pos.xy = float2(1, -1);
+								o.uv = float2(1, 0);
+							}
+
+				o.pos = float4(o.pos.xy, 0, 1);
 
 				return o;
 			}
@@ -119,8 +121,8 @@ Shader "Stereo3D Screen Quad"
 			#pragma fragment frag
 			#pragma exclude_renderers gles
 		
-			StructuredBuffer<float2> verticesPosBuffer;
-			StructuredBuffer<float2> verticesUVBuffer;
+			// StructuredBuffer<float2> verticesPosBuffer;
+			// StructuredBuffer<float2> verticesUVBuffer;
 
 			struct vertexDataOutput
 			{
@@ -131,8 +133,35 @@ Shader "Stereo3D Screen Quad"
 			vertexDataOutput vert(uint vertexID : SV_VertexID)
 			{
 				vertexDataOutput o;
-				o.pos = float4(verticesPosBuffer[vertexID], 0, 1);
-				o.uv = verticesUVBuffer[vertexID];
+				// o.pos = float4(verticesPosBuffer[vertexID], 0, 1);
+				// o.uv = verticesUVBuffer[vertexID];
+
+				if (vertexID == 0)
+				{
+					o.pos.xy = float2(-1, -1);
+					o.uv = float2(0, 0);
+				}
+				else
+					if (vertexID == 1)
+					{
+						o.pos.xy = float2(-1, 1);
+						o.uv = float2(0, 1);
+					}
+					else
+						if (vertexID == 2)
+						{
+							o.pos.xy = float2(1, 1);
+							o.uv = float2(1, 1);
+						}
+						else
+							if (vertexID == 3)
+							{
+								o.pos.xy = float2(1, -1);
+								o.uv = float2(1, 0);
+							}
+
+				o.pos = float4(o.pos.xy, 0, 1);
+
 				return o;
 			}
 
@@ -165,8 +194,8 @@ Shader "Stereo3D Screen Quad"
 			#pragma fragment frag
 			#pragma exclude_renderers gles
 		
-			StructuredBuffer<float2> verticesPosBuffer;
-			StructuredBuffer<float2> verticesUVBuffer;
+			// StructuredBuffer<float2> verticesPosBuffer;
+			// StructuredBuffer<float2> verticesUVBuffer;
 
 			struct vertexDataOutput
 			{
@@ -177,8 +206,35 @@ Shader "Stereo3D Screen Quad"
 			vertexDataOutput vert(uint vertexID : SV_VertexID)
 			{
 				vertexDataOutput o;
-				o.pos = float4(verticesPosBuffer[vertexID], 0, 1);
-				o.uv = verticesUVBuffer[vertexID];
+				// o.pos = float4(verticesPosBuffer[vertexID], 0, 1);
+				// o.uv = verticesUVBuffer[vertexID];
+
+				if (vertexID == 0)
+				{
+					o.pos.xy = float2(-1, -1);
+					o.uv = float2(0, 0);
+				}
+				else
+					if (vertexID == 1)
+					{
+						o.pos.xy = float2(-1, 1);
+						o.uv = float2(0, 1);
+					}
+					else
+						if (vertexID == 2)
+						{
+							o.pos.xy = float2(1, 1);
+							o.uv = float2(1, 1);
+						}
+						else
+							if (vertexID == 3)
+							{
+								o.pos.xy = float2(1, -1);
+								o.uv = float2(1, 0);
+							}
+
+				o.pos = float4(o.pos.xy, 0, 1);
+
 				return o;
 			}
 
@@ -219,8 +275,8 @@ Shader "Stereo3D Screen Quad"
 			#pragma fragment frag
 			#pragma exclude_renderers gles
 
-			StructuredBuffer<float2> verticesPosBuffer;
-			StructuredBuffer<float2> verticesUVBuffer;
+			// StructuredBuffer<float2> verticesPosBuffer;
+			// StructuredBuffer<float2> verticesUVBuffer;
 
 			struct vertexDataOutput
 			{
@@ -231,19 +287,48 @@ Shader "Stereo3D Screen Quad"
 			vertexDataOutput vert(uint vertexID : SV_VertexID)
 			{
 				vertexDataOutput o;
-				o.pos = float4(verticesPosBuffer[vertexID], 0, 1);
-				o.uv = verticesUVBuffer[vertexID];
+				// o.pos = float4(verticesPosBuffer[vertexID], 0, 1);
+				// o.uv = verticesUVBuffer[vertexID];
+
+				if (vertexID == 0)
+				{
+					o.pos.xy = float2(-1, -1);
+					o.uv = float2(0, 0);
+				}
+				else
+					if (vertexID == 1)
+					{
+						o.pos.xy = float2(-1, 1);
+						o.uv = float2(0, 1);
+					}
+					else
+						if (vertexID == 2)
+						{
+							o.pos.xy = float2(1, 1);
+							o.uv = float2(1, 1);
+						}
+						else
+							if (vertexID == 3)
+							{
+								o.pos.xy = float2(1, -1);
+								o.uv = float2(1, 0);
+							}
+
+				o.pos = float4(o.pos.xy, 0, 1);
+
 				return o;
 			}
 
 			Texture2D  _LeftTex;
 			Texture2D  _RightTex;
-			SamplerState repeat_point_sampler;
+			//SamplerState repeat_point_sampler;
+			SamplerState clamp_point_sampler;
 
 			float4 frag(vertexDataOutput i) : SV_Target
 			{
 				//return i.uv.x < 1 ? _LeftTex.Sample(repeat_point_sampler, i.uv) : _RightTex.Sample(repeat_point_sampler, i.uv);
-				return i.uv.x < 1 ? _LeftTex.Sample(repeat_point_sampler, i.uv) : _RightTex.Sample(repeat_point_sampler, i.uv - float2(1, 0));
+				//return i.uv.x < 1 ? _LeftTex.Sample(repeat_point_sampler, i.uv) : _RightTex.Sample(repeat_point_sampler, i.uv - float2(1, 0));
+				return i.uv.x < 0.5f ? _LeftTex.Sample(clamp_point_sampler, float2(i.uv.x * 2, i.uv.y)) : _RightTex.Sample(clamp_point_sampler, float2(i.uv.x * 2 - 1, i.uv.y));
 			}
 			ENDCG
 		}
@@ -256,8 +341,8 @@ Shader "Stereo3D Screen Quad"
 			#pragma fragment frag
 			#pragma exclude_renderers gles
 
-			StructuredBuffer<float2> verticesPosBuffer;
-			StructuredBuffer<float2> verticesUVBuffer;
+			// StructuredBuffer<float2> verticesPosBuffer;
+			// StructuredBuffer<float2> verticesUVBuffer;
 
 			struct vertexDataOutput
 			{
@@ -268,19 +353,48 @@ Shader "Stereo3D Screen Quad"
 			vertexDataOutput vert(uint vertexID : SV_VertexID)
 			{
 				vertexDataOutput o;
-				o.pos = float4(verticesPosBuffer[vertexID], 0, 1);
-				o.uv = verticesUVBuffer[vertexID];
+				// o.pos = float4(verticesPosBuffer[vertexID], 0, 1);
+				// o.uv = verticesUVBuffer[vertexID];
+
+				if (vertexID == 0)
+				{
+					o.pos.xy = float2(-1, -1);
+					o.uv = float2(0, 0);
+				}
+				else
+					if (vertexID == 1)
+					{
+						o.pos.xy = float2(-1, 1);
+						o.uv = float2(0, 1);
+					}
+					else
+						if (vertexID == 2)
+						{
+							o.pos.xy = float2(1, 1);
+							o.uv = float2(1, 1);
+						}
+						else
+							if (vertexID == 3)
+							{
+								o.pos.xy = float2(1, -1);
+								o.uv = float2(1, 0);
+							}
+
+				o.pos = float4(o.pos.xy, 0, 1);
+
 				return o;
 			}
 
 			Texture2D  _LeftTex;
 			Texture2D  _RightTex;
-			SamplerState repeat_point_sampler;
+			//SamplerState repeat_point_sampler;
+			SamplerState clamp_point_sampler;
 
 			float4 frag(vertexDataOutput i) : SV_Target
 			{
 				//return i.uv.y < 1 ? _LeftTex.Sample(repeat_point_sampler, i.uv) : _RightTex.Sample(repeat_point_sampler, i.uv);
-				return i.uv.y < 1 ? _LeftTex.Sample(repeat_point_sampler, i.uv) : _RightTex.Sample(repeat_point_sampler, i.uv - float2(0, 1));
+				//return i.uv.y < 1 ? _LeftTex.Sample(repeat_point_sampler, i.uv) : _RightTex.Sample(repeat_point_sampler, i.uv - float2(0, 1));
+				return i.uv.y < 0.5f ? _LeftTex.Sample(clamp_point_sampler, float2(i.uv.x, i.uv.y * 2)) : _RightTex.Sample(clamp_point_sampler, float2(i.uv.x, i.uv.y * 2 - 1));
 			}
 			ENDCG
 		}
@@ -293,8 +407,8 @@ Shader "Stereo3D Screen Quad"
 			#pragma fragment frag
 			#pragma exclude_renderers gles
 
-			StructuredBuffer<float2> verticesPosBuffer;
-			StructuredBuffer<float2> verticesUVBuffer;
+			// StructuredBuffer<float2> verticesPosBuffer;
+			// StructuredBuffer<float2> verticesUVBuffer;
 
 			struct vertexDataOutput
 			{
@@ -305,19 +419,46 @@ Shader "Stereo3D Screen Quad"
 			vertexDataOutput vert(uint vertexID : SV_VertexID)
 			{
 				vertexDataOutput o;
-				o.pos = float4(verticesPosBuffer[vertexID], 0, 1);
-				o.uv = verticesUVBuffer[vertexID];
+				// o.pos = float4(verticesPosBuffer[vertexID], 0, 1);
+				// o.uv = verticesUVBuffer[vertexID];
+
+				if (vertexID == 0)
+				{
+					o.pos.xy = float2(-1, -1);
+					o.uv = float2(0, 0);
+				}
+				else
+					if (vertexID == 1)
+					{
+						o.pos.xy = float2(-1, 1);
+						o.uv = float2(0, 1);
+					}
+					else
+						if (vertexID == 2)
+						{
+							o.pos.xy = float2(1, 1);
+							o.uv = float2(1, 1);
+						}
+						else
+							if (vertexID == 3)
+							{
+								o.pos.xy = float2(1, -1);
+								o.uv = float2(1, 0);
+							}
+
+				o.pos = float4(o.pos.xy, 0, 1);
+
 				return o;
 			}
 
 			Texture2D  _LeftTex;
 			Texture2D  _RightTex;
 			int _OddFrame;
-			SamplerState repeat_point_sampler;
+			SamplerState clamp_point_sampler;
 
 			float4 frag(vertexDataOutput i) : SV_Target
 			{
-				return _OddFrame == 0 ? _LeftTex.Sample(repeat_point_sampler, i.uv) : _RightTex.Sample(repeat_point_sampler, i.uv);
+				return _OddFrame == 0 ? _LeftTex.Sample(clamp_point_sampler, i.uv) : _RightTex.Sample(clamp_point_sampler, i.uv);
 			}
 			ENDCG
 		}
@@ -330,8 +471,8 @@ Shader "Stereo3D Screen Quad"
 			#pragma fragment frag
 			#pragma exclude_renderers gles
 
-			StructuredBuffer<float2> verticesPosBuffer;
-			StructuredBuffer<float2> verticesUVBuffer;
+			// StructuredBuffer<float2> verticesPosBuffer;
+			// StructuredBuffer<float2> verticesUVBuffer;
 
 			struct vertexDataOutput
 			{
@@ -342,8 +483,35 @@ Shader "Stereo3D Screen Quad"
 			vertexDataOutput vert(uint vertexID : SV_VertexID)
 			{
 				vertexDataOutput o;
-				o.pos = float4(verticesPosBuffer[vertexID], 0, 1);
-				o.uv = verticesUVBuffer[vertexID];
+				// o.pos = float4(verticesPosBuffer[vertexID], 0, 1);
+				// o.uv = verticesUVBuffer[vertexID];
+
+				if (vertexID == 0)
+				{
+					o.pos.xy = float2(-1, -1);
+					o.uv = float2(0, 0);
+				}
+				else
+					if (vertexID == 1)
+					{
+						o.pos.xy = float2(-1, 1);
+						o.uv = float2(0, 1);
+					}
+					else
+						if (vertexID == 2)
+						{
+							o.pos.xy = float2(1, 1);
+							o.uv = float2(1, 1);
+						}
+						else
+							if (vertexID == 3)
+							{
+								o.pos.xy = float2(1, -1);
+								o.uv = float2(1, 0);
+							}
+
+				o.pos = float4(o.pos.xy, 0, 1);
+
 				return o;
 			}
 
@@ -362,7 +530,7 @@ Shader "Stereo3D Screen Quad"
 			ENDCG
 		}
 
-		//pass7 flip for Method.Two_Displays_MirrorX & Method.Two_Displays_MirrorY
+		//pass7 Method.Two_Displays & Method.Two_Displays_MirrorX & Method.Two_Displays_MirrorY with flip
 		Pass
 		{
 			CGPROGRAM
@@ -428,6 +596,104 @@ Shader "Stereo3D Screen Quad"
 				if (_FlipY != 0)
 					//uv.y = uv.y * -1 + 1;
 					uv.y = 1 - uv.y;
+
+				//Output output;
+				//output.uv = float2(
+				//	vertexID & 1 ? 0 : 1,  // x: 0 | 1 | 0 | 1
+				//	vertexID & 2 ? 1 : 0); // y: 1 | 1 | 0 | 0
+				//output.color = float4(output.uv, 1, 1);
+				//output.pos = float4(output.uv, 0, 1);
+				//return output;
+
+				// //color = float3(uv, 1);
+				// //color = float3(1, 1, 1);
+				// //return float4(uv * 2 - 1, 0, 1);
+				// return float4(pos, 0, 1);
+
+				o.pos = float4(pos, 0, 1);
+				o.uv = uv;
+
+				return o;
+			}
+
+			//struct Input
+			//{
+			//	float4 pos : SV_POSITION;
+			//	float2 coords : TEXCOORD0;
+			//	float4 color : COLOR;
+			//};
+
+			//Texture2D SimpleTexture : register(t0);
+			Texture2D _MainTex;
+			SamplerState clamp_point_sampler : register(s0);
+
+			//float4 main(Input input) : SV_TARGET
+			//float4 main(float4 pos : SV_POSITION, float3 color : COLOR) : SV_TARGET
+			//float4 frag(float4 pos : SV_POSITION, float3 color : COLOR, float2 uv : TEXCOORD0) : SV_TARGET
+			float4 frag(float4 pos : SV_POSITION, float2 uv : TEXCOORD0) : SV_TARGET
+			{
+				//return float4(color, 1);
+				//return input.color;
+				return _MainTex.Sample(clamp_point_sampler, uv);
+			}
+			ENDCG
+		}
+
+		//pass8 Method.Two_Displays & Method.Two_Displays_MirrorX & Method.Two_Displays_MirrorY without flip
+		Pass
+		{
+			CGPROGRAM
+			#pragma vertex vert
+			#pragma fragment frag
+			#pragma exclude_renderers gles
+
+			struct vertexDataOutput
+			{
+				float4 pos : SV_POSITION;
+				float2 uv : TEXCOORD0;
+			};
+
+			//Output main(uint vertexID : SV_VertexID)
+			//float4 vert(uint vertexID : SV_VertexID, out float3 color : COLOR, out float2 uv : TEXCOORD0) : SV_POSITION
+			//float4 vert(uint vertexID : SV_VertexID, out float2 uv : TEXCOORD0) : SV_POSITION
+			vertexDataOutput vert(uint vertexID : SV_VertexID)
+			{
+				vertexDataOutput o;
+
+				//uv = float2(
+				//	vertexID & 1 ? 0 : 1,  // x: 0 | 1 | 0 | 1
+				//	vertexID & 2 ? 1 : 0); // y: 1 | 1 | 0 | 0
+
+				float2 pos;
+				float2 uv;
+
+				if (vertexID == 0)
+				{
+					pos = float2(-1, -1);
+					uv = float2(0, 0);
+					//uv = float2(1, 0);
+				}
+				else
+					if (vertexID == 1)
+					{
+						pos = float2(-1, 1);
+						uv = float2(0, 1);
+						//uv = float2(1, 1);
+					}
+					else
+						if (vertexID == 2)
+						{
+							pos = float2(1, 1);
+							uv = float2(1, 1);
+							//uv = float2(0, 1);
+						}
+						else
+							if (vertexID == 3)
+							{
+								pos = float2(1, -1);
+								uv = float2(1, 0);
+								//uv = float2(0, 0);
+							}
 
 				//Output output;
 				//output.uv = float2(
