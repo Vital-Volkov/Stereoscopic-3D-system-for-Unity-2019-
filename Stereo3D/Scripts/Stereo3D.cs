@@ -22,7 +22,7 @@
  Tested on Unity 2019, 2020, 2021 and 2022 with default render + `Post Processing Stack v2`, URP and HDRP.
 */
 
-#define Debug
+//#define Debug
 
 using UnityEngine;
 using UnityEngine.Rendering;
@@ -44,10 +44,12 @@ using System.Runtime.ConstrainedExecution;
 //using static OnRenderImageDelegate;
 using UnityEngine.Events;
 using UnityEngine.Experimental.Rendering;
+//using UnityEngine.UIElements;
 //using static Stereo3D;
 //using static Unity.VisualScripting.Member;
 //using static UnityEditor.Experimental.RestService.PlayerDataFileLocator;
 //using static Unity.VisualScripting.Member;
+//using static UnityEngine.StereoTargetEyeMask;
 
 #if INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
 using UnityEngine.InputSystem;
@@ -161,6 +163,7 @@ public class Stereo3D : MonoBehaviour
     public bool GUIAsOverlay = true; //(S3D panel renders with it own camera as overlay on render texture or S3D panel renders by scene S3D cameras)
     //public bool GUISizeKeep = true; //keep size of the canvas while resize window
     public bool GUIOpened = true; //GUI window visible or not on the start
+    public bool inputFieldAutofocus; //GUI Autoactivate Input Field by mouse hover
     public float GUIAutoshowTime = 3; //automatically show GUI duration in seconds when S3D setting changes by hotkeys
     public float toolTipShowDelay = 3; //delay in seconds after mouse stop while hovering before toolTip shows
     public bool hide2DCursor;
@@ -212,7 +215,8 @@ public class Stereo3D : MonoBehaviour
 
     //public Camera[] additionalS3DCameras;
     public List<Camera> additionalS3DCameras;
-    //public AdditionalS3DCamera[] additionalS3DCamerasStruct;
+    public AdditionalS3DCamera[] additionalS3DCamerasStruct;
+    //AdditionalS3DCamera[] additionalS3DCamerasStruct;
 
     [Serializable]
     public struct CanvasStruct
@@ -225,26 +229,38 @@ public class Stereo3D : MonoBehaviour
     public List<CanvasStruct> S3DCanvases;
 
     public enum BlitToScreenTime {
-        OnPostRender, 
-        OnRenderImage, 
-        OnEndOfFrame 
+#if URP || HDRP
+        endContextRendering,
+#else
+        OnPostRender,
+        OnRenderImage,
+        CommandBuffer,
+#endif
+        OnEndOfFrame
     };
 
     [Header("FPS Boost")]
+#if URP || HDRP
+    public BlitToScreenTime blitTime = BlitToScreenTime.endContextRendering;
+#else
     public BlitToScreenTime blitTime = BlitToScreenTime.OnRenderImage;
     public bool renderTextureSetTargetBuffers;
+#endif
     public bool disableCullingMask; //disable CullingMask for main camera in S3D mode to FPS boost
     public bool nearClipHack; //Hack for FPS gain in SRP(Scriptable Render Pipeline) and required for custom Viewport Rect but can cause terrain gaps(Test Track Demo in Unity 2021)
     public bool matrixKillHack; //Hack for FPS gain from 308 to 328 and required to fix terrain gaps caused by nearClipHack(Test Track Demo in Unity 2021)
     public bool disableMainCam;
 
     [Header("Info")]
+    //public Material defaultMaterial; //generated material
     public Material S3DMaterial; //generated material
+    public MaterialPropertyBlock S3DMaterialPropertyBlock;
     //public RenderTexture rta;
     public Material S3DPanelMaterial; //generated material
-    public Material textureBlitMaterial;
+    //public Material textureBlitMaterial;
     //Material RenderTextureFlipMaterial; //generated material
     //Material RenderTextureFlipMaterial2; //generated material
+    //public Mesh testMesh;
 
     Camera cam;
     //Camera camClone;
@@ -259,6 +275,20 @@ public class Stereo3D : MonoBehaviour
     //float canvasNearClip;
     //Vector2[] verticesPos = new Vector2[4];
     //Vector2[] verticesUV = new Vector2[4];
+    Mesh clientSizeMesh;
+    //Mesh clientSizeMeshFlippedX;
+    Mesh clientSizeMeshFlippedY;
+    Mesh screenBlitMesh;
+    //Mesh screenBlitMeshFlippedX;
+    //Mesh screenBlitMeshFlippedY;
+    Mesh screenBlitMeshFlipped;
+    //Mesh twinQuadMesh; //for SBS & OU with rect
+    //Mesh SingleDisplayBlitMesh;
+    Mesh canvasBlitMesh;
+    //Vector3[] quadMeshVerticesPos = new Vector3[4];
+    CommandBuffer cb_main;
+    CommandBuffer cb_left;
+    CommandBuffer cb_right;
 
     //bool defaultRender;
     float canvasLocalPosZ;
@@ -292,7 +322,9 @@ public class Stereo3D : MonoBehaviour
     string lastSlotName;
     Rect lastCamRect;
     BlitToScreenTime lastBlitToScreenTime;
+#if !(URP || HDRP)
     bool lastRenderTextureSetTargetBuffers;
+#endif
     bool lastDisableCullingMask;
     bool lastNearClipHack;
     bool lastMatrixKillHack;
@@ -381,6 +413,16 @@ public class Stereo3D : MonoBehaviour
     //public BaseInput bInput;
     //bool nearClipHackApplyed;
     CursorLockMode cursorLockModeDefault;
+
+    delegate void NoInputDelegate();
+    NoInputDelegate endOfFrameDelegate;
+    delegate void LeftRightBlitDelegate(int left);
+    delegate void RenderTextureBlitDelegate(
+        //RenderTexture source, 
+        RenderTexture destination);
+
+    LeftRightBlitDelegate canvasBlitDelegate;
+
 #if URP
     UniversalAdditionalCameraData camData;
     UniversalRenderPipelineAsset URPAsset;
@@ -415,6 +457,20 @@ public class Stereo3D : MonoBehaviour
     //RenderTexture canvasRenderTexture_right;
     LayerMask volumeLayerMask;
     LayerMask probeLayerMask;
+    RenderTextureBlitDelegate renderTextureBlitDelegate;
+#else
+    OnRenderImageDelegate onRenderImageDelegate_cameraMain;
+    OnRenderImageDelegate onRenderImageDelegate_cameraLeft;
+    OnRenderImageDelegate onRenderImageDelegate_cameraRight;
+    NoInputDelegate camerasTargetRemoveDelegateLeft;
+    NoInputDelegate camerasTargetRemoveDelegateRight;
+
+    //delegate void BlitToScreenDelegate(RenderTexture rt, Mesh blitMesh, int pass, Display display, Rect pixelRect);
+    delegate void BlitToScreenDelegate(RenderTexture rt, Mesh blitMesh, int pass, Display display);
+    BlitToScreenDelegate blitToScreenDelegate;
+
+    Camera blitCamera_left;
+    Camera blitCamera_right;
 #endif
     //UniversalAdditionalCameraData camCloneData;
     //List<UniversalAdditionalCameraData> oldList;
@@ -423,7 +479,6 @@ public class Stereo3D : MonoBehaviour
     //List<Camera> leftRightCameraStack;
     //Vector2 panel3DdepthMinMax;
     //Vector2 panelOverlayDepthMinMax;
-    AdditionalS3DCamera[] additionalS3DCamerasStruct;
     //bool loaded;
 
 #if POST_PROCESSING_STACK_V2
@@ -666,7 +721,7 @@ struct tagRECT
 	int windowLeftBorder;
 	int windowTopBorder;
     Vector2Int windowSize;
-    bool fullScreen;
+    //bool fullScreen;
 
     //[DllImport("user32", EntryPoint = "FindWindow")]
     //public static extern IntPtr FindWindow(System.String className, System.String windowName);
@@ -712,9 +767,12 @@ struct tagRECT
 #endif
 #endif
 
-    //int clientTopBorder;
-    int clientBottomBorder;
-    int clientLeftBorder;
+    //int clientTopBorderPixels;
+    int clientBottomBorderPixels;
+    int clientLeftBorderPixels;
+    float clientRightBorder;
+    float clientTopBorder;
+    float leftRightGap;
 
     //struct IntRect
     //{
@@ -726,7 +784,8 @@ struct tagRECT
 
     //IntRect camPixelRectInt;
     Rect camRectClampedPixels;
-    Rect camRectClampedPixelsMod;
+    //Rect camRectClampedPixelsFlipped;
+    //Rect blitRectPixels;
     //bool secondWindow;
     //GraphicsFormat graphicsFormat;
 
@@ -770,8 +829,96 @@ struct tagRECT
     //DataForPlugin2 dataForPlugin2;
 
 #if UNITY_EDITOR
-    EditorWindow gameview;
+    EditorWindow gameViewWindow;
+    //Type gameViewType;
+    System.Reflection.FieldInfo zoomAreaField;
+    System.Object zoomAreaFieldValue;
+    System.Reflection.FieldInfo drawAreaField;
+    System.Reflection.FieldInfo scaleField;
+    bool onGameviewSizeChangedRegistered;
+
+    void OnGameviewSizeChanged(UnityEngine.UIElements.GeometryChangedEvent evt)
+    {
+        if (debugLog) Debug.Log("OnGameviewSizeChanged");
+
+        //EditorFirstLineSet();
+        Invoke("EditorFirstLineSet", Time.deltaTime * 16);
+    }
+
+    void EditorFirstLineSet()
+    {
+        //int drawAreaHeight = (int)gameViewWindow.position.height - 21;
+
+        //var zoomAreaField = gameViewType.GetField("m_ZoomArea", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        ////var gameViewWindowField = gameViewType.GetField("m_LastWindowPixelSize", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        //var zoomAreaFieldValue = zoomAreaField.GetValue(gameViewWindow);
+
+        ////var gameViewWindowSubfield = gameViewWindowFieldValue.GetType().GetField("m_Scale", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        ////var gameViewWindowSubfield = gameViewWindowFieldValue.GetType().GetField("m_DrawArea", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        ////var gameViewWindowSubfield = gameViewWindowFieldValue.GetType().GetField("m_Translation", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        ////var gameViewWindowSubfield = gameViewWindowFieldValue.GetType().GetField("m_VBaseRangeMax", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        ////var gameViewWindowSubfieldValue = gameViewWindowSubfield.GetValue(gameViewWindowFieldValue);
+
+        //var drawAreaField = zoomAreaFieldValue.GetType().GetField("m_DrawArea", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        var drawAreaFieldValue = drawAreaField.GetValue(zoomAreaFieldValue);
+
+        ////var scaleField = zoomAreaFieldValue.GetType().GetField("m_Scale", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        //scaleField.SetValue(zoomAreaFieldValue, Vector2.one);
+
+        //var translationSubfield = gameViewWindowFieldValue.GetType().GetField("m_Translation", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+        //var translationSubfieldValue = translationSubfield.GetValue(gameViewWindowFieldValue);
+
+        Rect drawArea = (Rect)drawAreaFieldValue;
+        //int drawAreaHeight = (int)drawArea.height;
+
+        //Vector2 translation = (Vector2)translationSubfieldValue;
+        //float translationY = translation.y;
+
+        //int odd = drawAreaHeight - drawAreaHeight / 2 * 2;
+        int oddRow = 0;
+        int drawAreaBottomBorder = 0;
+        //int oddColumn = 0;
+        //int drawAreaLeftBorder = 0;
+
+        if (drawArea.height > clientSize.y)
+        {
+            //if ((int)drawArea.center.y != drawArea.center.y)
+            if ((int)drawArea.center.y == drawArea.center.y) //inverted
+                //Debug.Log("EditorFirstLineSet (int)drawArea.center.y != drawArea.center.y");
+                oddRow = (int)drawArea.center.y - (int)drawArea.center.y / 2 * 2;
+                //oddRow = 1 - ((int)drawArea.center.y - (int)drawArea.center.y / 2 * 2); //inverted
+
+            //drawAreaBottomBorder = (int)(drawAreaHeight - translationY - clientSize.y / 2);
+            drawAreaBottomBorder = ((int)drawArea.height - clientSize.y) / 2 + oddRow; //not stable to get drawAreaBottomBorder in Editor Game View
+        }
+        //else
+        //{
+        //    //if ((int)drawArea.center.x != drawArea.center.x)
+        //    //    oddColumn = (int)drawArea.center.x - (int)drawArea.center.x / 2 * 2;
+
+        //    if ((int)drawArea.center.y == drawArea.center.y)
+        //        oddColumn = (int)drawArea.center.y - (int)drawArea.center.y / 2 * 2;
+
+        //    drawAreaLeftBorder = ((int)drawArea.width - cam.pixelWidth) / 2 + oddColumn; //not possible to get drawAreaLeftBorder in Editor Game View
+        //}
+
+        //firstRow = screenSize.y - ((int)(gameViewWindow.rootVisualElement.worldBound.y + gameViewWindow.position.y + gameViewWindow.position.height) - clientBottomBorderPixels - (int)((drawAreaHeight - cam.pixelRect.height) / 2.0f)) + odd;
+        //firstRow = screenSize.y - ((int)(gameViewWindow.rootVisualElement.worldBound.y + gameViewWindow.position.y + gameViewWindow.position.height) - drawAreaBottomBorder - clientBottomBorderPixels);
+        //firstRow = screenSize.y - (int)(gameViewWindow.rootVisualElement.worldBound.y + gameViewWindow.position.y + drawArea.y + translationY + clientSize.y / 2.0f);
+        firstRow = screenSize.y - ((int)(gameViewWindow.rootVisualElement.worldBound.y + gameViewWindow.position.y + drawArea.yMax) - drawAreaBottomBorder - clientBottomBorderPixels);
+        firstColumn = (int)(gameViewWindow.rootVisualElement.worldBound.x + gameViewWindow.position.x) + clientLeftBorderPixels;
+        //firstColumn = (int)(gameViewWindow.rootVisualElement.worldBound.x + gameViewWindow.position.x) + drawAreaLeftBorder + clientLeftBorderPixels;
+
+        //if (debugLog) Debug.Log($"EditorFirstLineSet drawAreaHeight: {drawAreaHeight} firstRow: {firstRow} firstColumn: {firstColumn} odd: {odd} drawAreaSubfieldValue: {drawAreaSubfieldValue} translationSubfieldValue: {translationSubfieldValue}");
+        //if (debugLog) Debug.Log($"EditorFirstLineSet drawAreaHeight: {drawArea.height} drawArea.center.y: {drawArea.center.y} oddRow: {oddRow} drawAreaBottomBorder: {drawAreaBottomBorder} firstRow: {firstRow} firstColumn: {firstColumn}");
+        //if (debugLog) Debug.Log($"drawArea: {drawArea} drawArea.center: {drawArea.center} oddColumn: {oddColumn} oddRow: {oddRow} drawAreaLeftBorder: {drawAreaLeftBorder} drawAreaBottomBorder: {drawAreaBottomBorder} firstColumn: {firstColumn} firstRow: {firstRow}");
+        if (debugLog) Debug.Log($"drawArea: {drawArea} drawArea.center: {drawArea.center} oddRow: {oddRow} drawAreaBottomBorder: {drawAreaBottomBorder} firstColumn: {firstColumn} firstRow: {firstRow}");
+
+		S3DMaterial.SetInt("_FirstRow", firstRow);
+		S3DMaterial.SetInt("_FirstColumn", firstColumn);
+    }
 #endif
+
     CURSORINFO cursorInfo;
     ICONINFO iconInfo;
     //BITMAP bmp;
@@ -801,8 +948,8 @@ struct tagRECT
     //    //System.Reflection.Assembly assembly = typeof(EditorWindow).Assembly;
     //    //Type type = assembly.GetType("UnityEditor.GameView");
     //    //editorViewportType = assembly.GetType("UnityEditor.GameView");
-    //    EditorWindow gameview = EditorWindow.GetWindow(typeof(EditorWindow).Assembly.GetType("UnityEditor.GameView"));
-    //    return gameview.position;
+    //    EditorWindow gameViewWindow = EditorWindow.GetWindow(typeof(EditorWindow).Assembly.GetType("UnityEditor.GameView"));
+    //    return gameViewWindow.position;
     //}
 
     void CursorToTexture()
@@ -945,6 +1092,31 @@ struct tagRECT
     //    Cursor.SetCursor(texture, new Vector2(0, 0), CursorMode.Auto);
     //}
 
+    static int[] quadIndicesClockwise = new int[] { 0, 1, 2, 3 };
+    //static int[] quadIndicesCounterclockwise = new int[] { 3, 2, 1, 0 };
+    static int[] twinQuadIndicesClockwise = new int[] { 0, 1, 2, 3, 4, 5, 6, 7 };
+
+    static Vector2[] quadVerticesUV = new Vector2[]{
+        new Vector2(0, 0),
+        new Vector2(0, 1),
+        new Vector2(1, 1),
+        new Vector2(1, 0)
+    };
+
+    static Vector3[] quadVertices = new Vector3[]{
+        quadVerticesUV[0],
+        quadVerticesUV[1],
+        quadVerticesUV[2],
+        quadVerticesUV[3]
+    };
+
+    //static Vector3[] quadVerticesFlippedY = new Vector3[]{
+    //    quadVerticesUV[1],
+    //    quadVerticesUV[0],
+    //    quadVerticesUV[3],
+    //    quadVerticesUV[2]
+    //};
+
     //public void Awake()
     void Awake()
     {
@@ -955,6 +1127,137 @@ struct tagRECT
              GameObject.Find("SceneCamera").GetComponent<Camera>().pixelRect also not correct OnEnable
              EditorWindow.GetWindow<SceneView>().camera.pixelRect works but changing active window to scene view
              */
+
+            cb_main = new CommandBuffer();
+            cb_left = new CommandBuffer();
+            cb_right = new CommandBuffer();
+            cb_main.name = cb_left.name = cb_right.name = "S3D Blit To Screen";
+
+            //for (int i = 1; i < Display.displays.Length; i++)
+            //    Display.displays[i].Activate();
+
+            ////clientSizeMesh = testMesh;
+            clientSizeMesh = new Mesh();
+            ////clientSizeMesh = Instantiate(testMesh);
+
+            //////quadMeshVerticesPos[0] = new Vector2(0, 0);
+            //////quadMeshVerticesPos[1] = new Vector2(1, 0);
+            //////quadMeshVerticesPos[2] = new Vector2(0, 1);
+            //////quadMeshVerticesPos[3] = new Vector2(1, 1);
+            ////quadMeshVerticesPos[0] = new Vector2(0, 0);
+            ////quadMeshVerticesPos[1] = new Vector2(0, 1);
+            ////quadMeshVerticesPos[2] = new Vector2(1, 1);
+            ////quadMeshVerticesPos[3] = new Vector2(1, 0);
+
+            //////verticesUV[0] = new Vector2(0, 0);
+            //////verticesUV[1] = new Vector2(1, 0);
+            //////verticesUV[2] = new Vector2(0, 1);
+            //////verticesUV[3] = new Vector2(1, 1);
+            ////verticesUV[0] = new Vector2(0, 0);
+            ////verticesUV[1] = new Vector2(0, 1);
+            ////verticesUV[2] = new Vector2(1, 1);
+            ////verticesUV[3] = new Vector2(1, 0);
+
+            ////int[] indices = new int[4];
+            ////int[] indices = {0, 1, 2, 3};
+            ////indices[0] = 0;
+            ////indices[1] = 1;
+            ////indices[2] = 2;
+            ////indices[3] = 3;
+            ////indices[0] = 0;
+            ////indices[1] = 1;
+            ////indices[2] = 3;
+            ////indices[3] = 2;
+
+            ////quadMesh.vertices = quadMeshVerticesPos;
+            ////quadMesh.uv = verticesUV;
+
+            ////quadMesh.vertices = new Vector3[]{
+            ////    new Vector2(0, 0), 
+            ////    new Vector2(0, 1), 
+            ////    new Vector2(1, 1), 
+            ////    new Vector2(1, 0)
+            ////};
+
+            //quadMesh.vertices = new Vector3[]{
+            //    new Vector3(0, 0, 0),
+            //    new Vector3(0, 1, 0),
+            //    new Vector3(1, 1, 0),
+            //    new Vector3(1, 0, 0)
+            //};
+
+            //quadMesh.uv = new Vector2[]{
+            //    new Vector2(0, 0),
+            //    new Vector2(0, 1),
+            //    new Vector2(1, 1),
+            //    new Vector2(1, 0)
+            //};
+
+            ////Debug.Log("testMesh: " + testMesh.GetIndices(0).Length);
+            ////Debug.Log("testMesh: " + testMesh.GetTopology(0));
+            ////quadMesh.SetIndices(testMesh.GetIndices(0), testMesh.GetTopology(0), 0);
+            //quadMesh.SetIndices(new int[] { 0, 1, 2, 3 }, MeshTopology.Quads, 0);
+            ////quadMesh.vertices = testMesh.vertices;
+            ////quadMesh.uv = testMesh.uv;
+            ////quadMesh.UploadMeshData(false);
+
+            clientSizeMesh.vertices = quadVertices;
+            clientSizeMesh.uv = quadVerticesUV;
+
+            //quadMesh.uv = new Vector2[]{
+            //    quadMesh.vertices[0],
+            //    quadMesh.vertices[1],
+            //    quadMesh.vertices[2],
+            //    quadMesh.vertices[3]
+            //};
+
+            clientSizeMesh.SetIndices(quadIndicesClockwise, MeshTopology.Quads, 0);
+
+            //clientSizeMeshFlippedX = new Mesh();
+
+            ////clientSizeMeshFlippedX.vertices = new Vector3[]{
+            ////    new Vector3(0, 0, 0),
+            ////    new Vector3(0, 1, 0),
+            ////    new Vector3(1, 1, 0),
+            ////    new Vector3(1, 0, 0)
+            ////};
+
+            //clientSizeMeshFlippedX.vertices = quadVertices;
+
+            //clientSizeMeshFlippedX.uv = new Vector2[]{
+            //    new Vector2(1, 0),
+            //    new Vector2(1, 1),
+            //    new Vector2(0, 1),
+            //    new Vector2(0, 0)
+            //};
+
+            ////clientSizeMeshFlippedX.SetIndices(new int[] { 0, 1, 2, 3 }, MeshTopology.Quads, 0);
+            //clientSizeMeshFlippedX.SetIndices(quadIndicesClockwise, MeshTopology.Quads, 0);
+
+            clientSizeMeshFlippedY = new Mesh();
+
+            //clientSizeMeshFlippedY.vertices = new Vector3[]{
+            //    new Vector3(0, 0, 0),
+            //    new Vector3(0, 1, 0),
+            //    new Vector3(1, 1, 0),
+            //    new Vector3(1, 0, 0)
+            //};
+
+            clientSizeMeshFlippedY.vertices = quadVertices;
+
+            clientSizeMeshFlippedY.uv = new Vector2[]{
+                new Vector2(0, 1),
+                new Vector2(0, 0),
+                new Vector2(1, 0),
+                new Vector2(1, 1)
+            };
+
+            //clientSizeMeshFlippedY.SetIndices(new int[] { 0, 1, 2, 3 }, MeshTopology.Quads, 0);
+            clientSizeMeshFlippedY.SetIndices(quadIndicesClockwise, MeshTopology.Quads, 0);
+
+            screenBlitMesh = new Mesh();
+            screenBlitMeshFlipped = new Mesh();
+            //twinQuadMesh = new Mesh();
 
             ////Cursor.SetCursor(cursorTexture, new Vector2(0, 0), CursorMode.Auto);
             //Cursor.SetCursor(canvasCursorTexture, new Vector2(0, 0), CursorMode.Auto);
@@ -1044,9 +1347,7 @@ struct tagRECT
             ////Debug.Log($"CursorHandle: {cursorInfo.hCursor} ptScreenPos: {cursorInfo.ptScreenPos.x} {cursorInfo.ptScreenPos.y} flags: {cursorInfo.flags}");
             //Debug.Log($"fIcon: {iconInfo.fIcon} Hotspot: {iconInfo.xHotspot} {iconInfo.yHotspot} hbmColor: {iconInfo.hbmColor} hbmMask: {iconInfo.hbmMask}");
 
-#if UNITY_EDITOR
-            gameview = EditorWindow.GetWindow(typeof(EditorWindow).Assembly.GetType("UnityEditor.GameView"));
-#endif
+            GUI_Set_delay = Time.deltaTime * 2;
 
 #if UNITY_STANDALONE_WIN && !UNITY_EDITOR
             //GetWindowFromWin32Api();
@@ -1076,8 +1377,6 @@ struct tagRECT
             //Screen.SetResolution(Display.main.systemWidth, Display.main.systemHeight, Screen.fullScreenMode, rr);
             //Screen.SetResolution(Display.main.systemWidth, Display.main.systemHeight, Screen.fullScreenMode, new RefreshRate(){ numerator = 60, denominator = 1 });
             //Screen.SetResolution(Display.main.systemWidth, Display.main.systemHeight, FullScreenMode.ExclusiveFullScreen);
-
-            GUI_Set_delay = Time.deltaTime * 2;
 
             //for (int i = 0; i < 4; i++)
             //{
@@ -1149,8 +1448,10 @@ struct tagRECT
     float bottommostCameraDepth;
     Rect clientSizePixelRect;
     //Rect renderTextureRect;
-    bool openGL;
-    bool clockwise;
+    //bool openGL;
+    //bool clockwise;
+    //CommandBuffer cb_left;
+    //CommandBuffer cb_right;
 
     void OnEnable()
     {
@@ -1165,6 +1466,9 @@ struct tagRECT
             //List<Type> types = GetAllTypesInAssembly(new string[] { "Assembly-CSharp" });
             //if (debugLog) Debug.Log(types.Count);
 
+            //cb_left = new CommandBuffer();
+            //cb_right = new CommandBuffer();
+
 #if !UNITY_EDITOR && UNITY_STANDALONE_WIN
             //lastFullscreen = Screen.fullScreen;
             WindowBorders_Set();
@@ -1174,8 +1478,7 @@ struct tagRECT
 
             //if (!SystemInfo.IsFormatSupported(RTFormat, UnityEngine.Experimental.Rendering.FormatUsage.Render))
             //{
-            //    //if (debugLog)
-            //        Debug.Log($"`{RTFormat}` is not supported for Render usage on this platform. Fallback to `R8G8B8A8_UNorm`");
+            //    //if (debugLog) Debug.Log($"`{RTFormat}` is not supported for Render usage on this platform. Fallback to `R8G8B8A8_UNorm`");
 
             //    RTFormat = UnityEngine.Experimental.Rendering.GraphicsFormat.R8G8B8A8_UNorm;
             //}
@@ -1208,18 +1511,23 @@ struct tagRECT
             ////    if (GraphicsSettings.defaultRenderPipeline.name.Contains("URP"))
             ////        AddDefine("URP");
 
-#if !UNITY_2023_1_OR_NEWER
-            if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
-            {
-                S3DMaterial = new Material(Shader.Find("Stereo3D Screen Quad GLES2"));
-                textureBlitMaterial = new Material(Shader.Find("Unlit/textureBlit GLES2"));
-            }
-            else
-#endif
-            {
-                S3DMaterial = new Material(Shader.Find("Stereo3D Screen Quad"));
-                textureBlitMaterial = new Material(Shader.Find("Unlit/textureBlit"));
-            }
+            //defaultMaterial = new Material(Shader.Find("Unlit/Texture"));
+
+//#if !UNITY_2023_1_OR_NEWER
+//            if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
+//            {
+//                S3DMaterial = new Material(Shader.Find("Stereo3D Screen Quad GLES2"));
+//                //textureBlitMaterial = new Material(Shader.Find("Unlit/textureBlit GLES2"));
+//            }
+//            else
+//#endif
+//            {
+//                S3DMaterial = new Material(Shader.Find("Stereo3D Screen Quad"));
+//                //textureBlitMaterial = new Material(Shader.Find("Unlit/textureBlit"));
+//            }
+
+            S3DMaterial = new Material(Shader.Find("Stereo3D Screen Quad"));
+            S3DMaterialPropertyBlock = new MaterialPropertyBlock();
 
             //S3DMaterial.SetColor("_LeftCol", anaglyphLeftColor);
             //S3DMaterial.SetColor("_RightCol", anaglyphRightColor);
@@ -1230,15 +1538,19 @@ struct tagRECT
 
             if (SystemInfo.graphicsDeviceType.ToString().Contains("OpenGL"))
             {
-                openGL = true;
-                //textureBlitMaterial.SetInt("_Clockwise", 1);
-                clockwise = true;
+                //openGL = true;
+                ////textureBlitMaterial.SetInt("_Clockwise", 1);
+                //clockwise = true;
+
+                canvasBlitMesh = clientSizeMesh;
             }
             else
             {
-                openGL = false;
-                //textureBlitMaterial.SetInt("_Clockwise", 0);
-                clockwise = false;
+                //openGL = false;
+                ////textureBlitMaterial.SetInt("_Clockwise", 0);
+                //clockwise = false;
+
+                canvasBlitMesh = clientSizeMeshFlippedY;
             }
 
             //textureBlitMaterial = new Material(Shader.Find("Shader Graphs/textureBlitGraphHDRP"));
@@ -2217,20 +2529,20 @@ struct tagRECT
             PPI_inputField = panel.Find("InputField (Legacy)_PPI").GetComponent<InputField>();
             //PPI_inputField.text = Convert.ToString(PPI);
             PPI_inputField.onEndEdit.AddListener(PPI_InputField);
-            InputFieldAutofocus(PPI_inputField);
+            //InputFieldAutofocus(PPI_inputField);
             userIPD_slider = panel.Find("Slider_UserIPD").GetComponent<Slider>();
             userIPD_slider.onValueChanged.AddListener(UserIPD_Slider);
             userIPD_inputField = panel.Find("InputField (Legacy)_UserIPD").GetComponent<InputField>();
             //userIPD_inputField.text = Convert.ToString(userIPD);
             userIPD_inputField.onEndEdit.AddListener(UserIPD_InputField);
-            InputFieldAutofocus(userIPD_inputField);
+            //InputFieldAutofocus(userIPD_inputField);
             virtualIPD_slider = panel.Find("Slider_VirtualIPD").GetComponent<Slider>();
             virtualIPD_slider.maxValue = virtualIPDMax;
             virtualIPD_slider.onValueChanged.AddListener(VirtualIPD_Slider);
             virtualIPD_inputField = panel.Find("InputField (Legacy)_VirtualIPD").GetComponent<InputField>();
             //virtualIPD_inputField.text = Convert.ToString(virtualIPD);
             virtualIPD_inputField.onEndEdit.AddListener(VirtualIPD_InputField);
-            InputFieldAutofocus(virtualIPD_inputField);
+            //InputFieldAutofocus(virtualIPD_inputField);
             matchUserIPD_toggle = panel.Find("Toggle_User").GetComponent<Toggle>();
             matchUserIPD_toggle.onValueChanged.AddListener(MatchUserIPD_Toggle);
             FOV_slider = panel.Find("Slider_FieldOfView").GetComponent<Slider>();
@@ -2240,7 +2552,7 @@ struct tagRECT
             FOV_inputField = panel.Find("InputField (Legacy)_FieldOfView").GetComponent<InputField>();
             //FOV_inputField.text = Convert.ToString(virtualIPD);
             FOV_inputField.onEndEdit.AddListener(FOV_InputField);
-            InputFieldAutofocus(FOV_inputField);
+            //InputFieldAutofocus(FOV_inputField);
             panelDepth_slider = panel.Find("Slider_PanelDepth").GetComponent<Slider>();
             //panelDepth_slider.minValue = panelDepthMinMax.x;
             //panelDepth_slider.maxValue = panelDepthMinMax.y;
@@ -2258,17 +2570,40 @@ struct tagRECT
             //panelDepth_inputField.text = Convert.ToString(panelDepth);
             //panelDepth_inputField.text = panelDepth.ToString();
             panelDepth_inputField.onEndEdit.AddListener(PanelDepth_InputField);
-            InputFieldAutofocus(panelDepth_inputField);
+            //InputFieldAutofocus(panelDepth_inputField);
             screenDistance_inputField = panel.Find("InputField (Legacy)_ScreenDistance").GetComponent<InputField>();
             //screenDistance_inputField.enabled = false;
             screenDistance_inputField.onEndEdit.AddListener(ScreenDistance_InputField);
             slotName_inputField = panel.Find("InputField (Legacy)_SlotName").GetComponent<InputField>();
             slotName_inputField.onEndEdit.AddListener(SlotName_InputField);
-            InputFieldAutofocus(slotName_inputField);
+            //InputFieldAutofocus(slotName_inputField);
             slotName_dropdown = panel.Find("Dropdown (Legacy)_SlotName").GetComponent<Dropdown>();
             slotName_dropdown.onValueChanged.AddListener(SlotName_Dropdown);
             //slotName_dropdown.template.sizeDelta = new Vector2(362, 30);
             //DropdownClick(slotName_dropdown);
+
+            if (inputFieldAutofocus)
+            {
+                InputFieldAutofocus(PPI_inputField);
+                InputFieldAutofocus(userIPD_inputField);
+                InputFieldAutofocus(virtualIPD_inputField);
+                InputFieldAutofocus(FOV_inputField);
+                InputFieldAutofocus(panelDepth_inputField);
+                InputFieldAutofocus(slotName_inputField);
+
+                void InputFieldAutofocus(InputField field)
+                {
+                    trigger = field.gameObject.AddComponent<EventTrigger>();
+                    entry = new EventTrigger.Entry();
+                    entry.eventID = EventTriggerType.PointerEnter;
+                    entry.callback.AddListener((eventData) => { FieldPointerEnter(field); });
+                    trigger.triggers.Add(entry);
+                    entry = new EventTrigger.Entry();
+                    entry.eventID = EventTriggerType.PointerExit;
+                    entry.callback.AddListener((eventData) => { FieldPointerExit(field); });
+                    trigger.triggers.Add(entry);
+                }
+            }
 
             trigger = slotName_dropdown.gameObject.AddComponent<EventTrigger>();
             entry = new EventTrigger.Entry();
@@ -2561,7 +2896,9 @@ struct tagRECT
             lastSlotName = slotName;
             lastCamRect = cam.rect;
             lastBlitToScreenTime = blitTime;
+#if !(URP || HDRP)
             lastRenderTextureSetTargetBuffers = renderTextureSetTargetBuffers;
+#endif
             lastDisableCullingMask = disableCullingMask;
             lastNearClipHack = nearClipHack;
             lastMatrixKillHack = matrixKillHack;
@@ -3231,6 +3568,12 @@ struct tagRECT
     //IEnumerator Start()
     {
         if (debugLog) Debug.Log("Start");
+
+#if UNITY_2020_1_OR_NEWER && !UNITY_2023_1_OR_NEWER //preactivate required for Vulkan to work correct with Two_Displays & avoid crash in UNITY_2022
+        for (int i = 1; i < Display.displays.Length; i++)
+            Display.displays[i].Activate();
+#endif
+
         lastLoadSettingsFromFile = loadSettingsFromFile = false; //prevent reload settings by OnOffToggle
 
         //if (loadSettingsFromFile)
@@ -3260,14 +3603,23 @@ struct tagRECT
 
         coroutine = CallPluginAtEndOfFrames();
         StartCoroutine(coroutine);
-    }
 
-    delegate void EndOfFrame();
-    //event EndOfFrame endOfFrameDelegate;
-    EndOfFrame endOfFrameDelegate;
-    //delegate void CanvasBlitToScreen(int right);
-    delegate void CanvasBlitToScreen(int left);
-    CanvasBlitToScreen canvasBlitToScreenDelegate;
+#if UNITY_EDITOR
+            //gameViewWindow = EditorWindow.GetWindow(typeof(EditorWindow).Assembly.GetType("UnityEditor.GameView"));
+            //gameViewType = typeof(EditorWindow).Assembly.GetType("UnityEditor.GameView");
+            Type gameViewType = typeof(EditorWindow).Assembly.GetType("UnityEditor.GameView");
+            gameViewWindow = EditorWindow.GetWindow(gameViewType);
+            gameViewWindow.rootVisualElement.RegisterCallback<UnityEngine.UIElements.GeometryChangedEvent>(OnGameviewSizeChanged);
+            onGameviewSizeChangedRegistered = true;
+
+            zoomAreaField = gameViewType.GetField("m_ZoomArea", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            zoomAreaFieldValue = zoomAreaField.GetValue(gameViewWindow);
+            drawAreaField = zoomAreaFieldValue.GetType().GetField("m_DrawArea", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+            scaleField = zoomAreaFieldValue.GetType().GetField("m_Scale", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
+
+            Invoke("EditorFirstLineSet", GUI_Set_delay);
+#endif
+    }
 
 	private IEnumerator CallPluginAtEndOfFrames()
 	{
@@ -3302,7 +3654,7 @@ struct tagRECT
             ////Camera.SetupCurrent(cam);
             ////Camera.SetupCurrent(camera_right);
 
-            if (endOfFrameDelegate != null)
+            //if (endOfFrameDelegate != null)
                 endOfFrameDelegate();
             
             // Issue a plugin event with arbitrary integer identifier.
@@ -3326,7 +3678,7 @@ struct tagRECT
             //else
             //{
             //    if (S3DEnabled)
-            //        SingleDisplayS3D_BlitToScreen_OnEndOfFrame();
+            //        SingleDisplayBlitToScreen_OnEndOfFrame();
             //}
 //#endif
         }
@@ -3488,6 +3840,7 @@ struct tagRECT
 #endif
     //Rect canvasCameraRectClamped;
     Rect camRectClamped;
+    Rect camRectClampedFlipped;
 
     void Update()
     {
@@ -3496,6 +3849,7 @@ struct tagRECT
         //if (debugLog) Debug.Log("cam.nearClipPlane " + cam.nearClipPlane);
         //if (debugLog) Debug.Log("cam.projectionMatrix " + cam.projectionMatrix);
         //if (debugLog) Debug.Log(Cinemachine.CinemachineBrain.SoloCamera);
+        if (debugLog) Debug.Log("Camera.main: " + Camera.main.name);
 
 #if UNITY_EDITOR
         screenSize.x = Screen.currentResolution.width; //not ready OnEnable so set on Update
@@ -4073,27 +4427,32 @@ struct tagRECT
 //					S3DMaterial.SetInt("_FirstColumn", firstColumn);
 //			}
 //#endif
+#if !UNITY_EDITOR && UNITY_STANDALONE_WIN
         else
 		    if (method.ToString().Contains("Interlace"))
 			{
                 //Debug.Log("firstRow");
 				float lastFirstRow = firstRow;
 				float lastFirstColumn = firstColumn;
-                ////clientTopBorder = clientSize.y - (int)cam.pixelRect.y - (int)cam.pixelRect.height;
-                ////clientBottomBorder = (int)(cam.rect.y * (float)clientSize.y);
-                ////clientBottomBorder = (int)Mathf.Round(cam.rect.y * (float)clientSize.y);
-                //clientBottomBorder = (int)Mathf.Round(cam.pixelRect.yMin);
-                ////clientBottomBorder = (int)((clientSize.y - viewportSize.y) * Mathf.Round(cam.rect.y / (1 - cam.rect.height)));
-                //clientBottomBorder = (int)camRectClampedPixels.y;
+                ////clientTopBorderPixels = clientSize.y - (int)cam.pixelRect.y - (int)cam.pixelRect.height;
+                ////clientBottomBorderPixels = (int)(cam.rect.y * (float)clientSize.y);
+                ////clientBottomBorderPixels = (int)Mathf.Round(cam.rect.y * (float)clientSize.y);
+                //clientBottomBorderPixels = (int)Mathf.Round(cam.pixelRect.yMin);
+                ////clientBottomBorderPixels = (int)((clientSize.y - viewportSize.y) * Mathf.Round(cam.rect.y / (1 - cam.rect.height)));
+                //clientBottomBorderPixels = (int)camRectClampedPixels.y;
 
-#if UNITY_EDITOR
-                //firstRow = (int)(gameview.position.y + gameview.rootVisualElement.worldBound.y + gameview.position.height - clientSize.y) + ((int)clientSize.y & 1);
-                //firstRow = (int)Mathf.Round(gameview.position.y) + (int)Mathf.Round(gameview.rootVisualElement.worldBound.y) + clientBottomBorder + (clientSize.y & 1) - 1;
-                //firstRow = (int)Mathf.Round(gameview.position.y) + (int)Mathf.Round(gameview.rootVisualElement.worldBound.y) + clientBottomBorder + (clientSize.y & 1) - 1;
-                firstRow = screenSize.y - ((int)(gameview.rootVisualElement.worldBound.y + gameview.position.y + gameview.position.height) - clientBottomBorder);
-                //firstColumn = (int)(gameview.position.x + gameview.rootVisualElement.worldBound.x);
-                firstColumn = (int)(gameview.rootVisualElement.worldBound.x + gameview.position.x) + clientLeftBorder;
-#elif UNITY_STANDALONE_WIN
+//#if UNITY_EDITOR
+//                //firstRow = (int)(gameViewWindow.position.y + gameViewWindow.rootVisualElement.worldBound.y + gameViewWindow.position.height - clientSize.y) + ((int)clientSize.y & 1);
+//                //firstRow = (int)Mathf.Round(gameViewWindow.position.y) + (int)Mathf.Round(gameViewWindow.rootVisualElement.worldBound.y) + clientBottomBorderPixels + (clientSize.y & 1) - 1;
+//                //firstRow = (int)Mathf.Round(gameViewWindow.position.y) + (int)Mathf.Round(gameViewWindow.rootVisualElement.worldBound.y) + clientBottomBorderPixels + (clientSize.y & 1) - 1;
+//                //firstRow = screenSize.y - ((int)(gameViewWindow.rootVisualElement.worldBound.y + gameViewWindow.position.y + gameViewWindow.position.height) - clientBottomBorderPixels);
+//                firstRow = screenSize.y - ((int)(gameViewWindow.rootVisualElement.worldBound.y + gameViewWindow.position.y + gameViewWindow.position.height) - clientBottomBorderPixels - (int)(gameViewWindow.position.height - cam.pixelRect.height - 22) / 2);
+//                //firstColumn = (int)(gameViewWindow.position.x + gameViewWindow.rootVisualElement.worldBound.x);
+//                firstColumn = (int)(gameViewWindow.rootVisualElement.worldBound.x + gameViewWindow.position.x) + clientLeftBorderPixels;
+
+//                if (debugLog) Debug.Log($"firstRow: {firstRow} firstColumn: {firstColumn}");
+//#elif UNITY_STANDALONE_WIN
+//#if UNITY_STANDALONE_WIN
     //            //GetWindowFromWin32Api();
     //            //GetWindowRectFromWin32Api();
     //            GetWindowRect(windowHandler, out windowRect);
@@ -4118,11 +4477,11 @@ struct tagRECT
         //            firstColumn = firstRow = 0;
 
                 //firstRow = windowRect.top + windowTopBorder + ((int)clientSize.y & 1); //+ 0 or 1 to compensate inverted rows order in shader due odd rows number
-                //firstRow = windowRect.top + windowTopBorder + clientTopBorder + ((int)clientSize.y & 1); //+ 0 or 1 to compensate inverted rows order in shader due odd rows number
-                firstRow = (int)screenSize.y - windowRect.bottom + windowLeftBorder + clientBottomBorder;
+                //firstRow = windowRect.top + windowTopBorder + clientTopBorderPixels + ((int)clientSize.y & 1); //+ 0 or 1 to compensate inverted rows order in shader due odd rows number
+                firstRow = (int)screenSize.y - windowRect.bottom + windowLeftBorder + clientBottomBorderPixels;
 				//firstColumn = windowRect.left + windowLeftBorder;
-				firstColumn = windowRect.left + windowLeftBorder + clientLeftBorder;
-#endif
+				firstColumn = windowRect.left + windowLeftBorder + clientLeftBorderPixels;
+//#endif
 
 				if (lastFirstRow != firstRow)
 					S3DMaterial.SetInt("_FirstRow", firstRow);
@@ -4130,6 +4489,7 @@ struct tagRECT
 				if (lastFirstColumn != firstColumn)
 					S3DMaterial.SetInt("_FirstColumn", firstColumn);
 			}
+#endif
 
         //if (cam.nearClipPlane == -1 && vCam != null && UnityEditor.Selection.activeObject == vCam.VirtualCameraGameObject)
         //    //if (debugLog) Debug.Log("UnityEditor.Selection.activeObject == vCam.VirtualCameraGameObject");
@@ -4377,7 +4737,7 @@ struct tagRECT
 //#if Debug
 //        S3DSettingsText.text = counter + " " + renderTexturePtr_left;
 //        S3DSettingsText.text = $"ResizeCount: {counter} cam.pixelWidth: {cam.pixelWidth} canvasSize.x: {canvasSize.x}";
-//        S3DSettingsText.text = $"RQCLC_MC: {SingleDisplayS3D_BlitToScreen_CameraListCountMC} RQCLC: {SingleDisplayS3D_BlitToScreen_CameraListCount} BTRTCLC_MC: {renderTextureBlitToRenderTextureCameraListCountMC} BTRTCLC: {renderTextureBlitToRenderTextureCameraListCount}";
+//        S3DSettingsText.text = $"RQCLC_MC: {SingleDisplayBlitToScreen_CameraListCountMC} RQCLC: {SingleDisplayBlitToScreen_CameraListCount} BTRTCLC_MC: {renderTextureBlitToRenderTextureCameraListCountMC} BTRTCLC: {renderTextureBlitToRenderTextureCameraListCount}";
 //        S3DSettingsText.text = $"cursorHandle: {cursorHandle} hbmMask: {iconInfo.hbmMask} hbmColor: {iconInfo.hbmColor}";
 //        S3DSettingsText.text = $"cursorHandle: {cursorInfo.hCursor} ptScreenPos: {cursorInfo.ptScreenPos.x} {cursorInfo.ptScreenPos.y} flags: {cursorInfo.flags}";
 //        S3DSettingsText.text = $"fIcon: {iconInfo.fIcon} Hotspot: {iconInfo.xHotspot} {iconInfo.yHotspot} hbmColor: {iconInfo.hbmColor} hbmMask: {iconInfo.hbmMask}";
@@ -4992,12 +5352,14 @@ struct tagRECT
 
             if (canvasCamera)
             {
+                canvasSize = canvas.GetComponent<RectTransform>().sizeDelta;
+
                 //if (openGL)
                 //if (canvasCamera.rect == Rect.MinMaxRect(0, 0, 1, 1))
                 //{
-                    float canvasScaleFactor = canvas.GetComponent<CanvasScaler>().scaleFactor;
-                    cursorLocalPos.x = (pointerPosition.x / canvasCamera.pixelRect.width - .5f) * canvasSize.x / canvasScaleFactor;
-                    cursorLocalPos.y = (pointerPosition.y / canvasCamera.pixelRect.height - 1) * canvasSize.y / canvasScaleFactor;
+                    //float canvasScaleFactor = canvas.GetComponent<CanvasScaler>().scaleFactor;
+                    cursorLocalPos.x = (pointerPosition.x / canvasCamera.pixelRect.width - .5f) * canvasSize.x;
+                    cursorLocalPos.y = (pointerPosition.y / canvasCamera.pixelRect.height - 1) * canvasSize.y;
                 //}
                 //else
                 //{
@@ -5008,11 +5370,15 @@ struct tagRECT
             else
             {
                 //Debug.Log("canvasSize " + canvasSize + " clientSize " + viewportSize);
+                //canvasSize = canvas.GetComponent<RectTransform>().sizeDelta = new Vector2(cam.pixelWidth, cam.pixelWidth / aspect);
+                //canvasSize = canvas.GetComponent<RectTransform>().sizeDelta = new Vector2(cam.pixelHeight * aspect, cam.pixelHeight);
 
-                //cursorLocalPos.x = pointerPosition.x - canvasSize.x * .5f - cam.pixelRect.x;
-                //cursorLocalPos.y = pointerPosition.y - canvasSize.y - cam.pixelRect.y;
-                cursorLocalPos.x = pointerPosition.x - canvasSize.x * .5f - camRectClampedPixels.x;
-                cursorLocalPos.y = pointerPosition.y - canvasSize.y - camRectClampedPixels.y;
+                ////cursorLocalPos.x = pointerPosition.x - canvasSize.x * .5f - cam.pixelRect.x;
+                ////cursorLocalPos.y = pointerPosition.y - canvasSize.y - cam.pixelRect.y;
+                //cursorLocalPos.x = pointerPosition.x - canvasSize.x * .5f - camRectClampedPixels.x;
+                //cursorLocalPos.y = pointerPosition.y - canvasSize.y - camRectClampedPixels.y;
+                cursorLocalPos.x = ((pointerPosition.x - cam.pixelRect.x) / cam.pixelRect.width - .5f) * canvasSize.x;
+                cursorLocalPos.y = ((pointerPosition.y - cam.pixelRect.y) / cam.pixelRect.height - 1) * canvasSize.y;
             }
 
             cursorRectTransform.anchoredPosition = cursorLocalPos;
@@ -5165,8 +5531,10 @@ struct tagRECT
         if (lastEyePriority != eyePriority)
         {
             lastEyePriority = eyePriority;
-            CamSet();
+            //CamSet();
+            //Render_Set();
             //Canvas_Set();
+            onOffToggle = true;
         }
 
         if (lastSwapLR != swapLR)
@@ -5416,13 +5784,13 @@ struct tagRECT
             lastBlitToScreenTime = blitTime;
             onOffToggle = true;
         }
-
+#if !(URP || HDRP)
         if (lastRenderTextureSetTargetBuffers != renderTextureSetTargetBuffers)
         {
             lastRenderTextureSetTargetBuffers = renderTextureSetTargetBuffers;
             onOffToggle = true;
         }
-
+#endif
         if (lastDisableCullingMask != disableCullingMask)
         {
             lastDisableCullingMask = disableCullingMask;
@@ -5851,7 +6219,7 @@ struct tagRECT
 #if POST_PROCESSING_STACK_V2
         if (PPLayer && PPLayer.enabled != PPLayerLastStatus)
         {
-            Debug.Log("PPLayer.enabled != PPLayerLastStatus");
+            if (debugLog) Debug.Log("PPLayer.enabled != PPLayerLastStatus");
             PPLayerDefaultStatus = PPLayer.enabled;
             onOffToggle = true;
         }
@@ -5867,7 +6235,7 @@ struct tagRECT
         for (int i = 0; i < additionalS3DCamerasStruct.Length; i++)
             if (additionalS3DCamerasStruct[i].camera && additionalS3DCamerasStruct[i].PPLayer && additionalS3DCamerasStruct[i].PPLayer.enabled != additionalS3DCamerasStruct[i].PPLayerLastStatus)
             {
-                Debug.Log("c.PPLayer.enabled != c.PPLayerLastStatus");
+                if (debugLog) Debug.Log("c.PPLayer.enabled != c.PPLayerLastStatus");
                 //additionalS3DCamerasStruct[i].PPLayerDefaultStatus = additionalS3DCamerasStruct[i].PPLayer.enabled;
                 onOffToggle = true;
             }
@@ -6201,13 +6569,13 @@ struct tagRECT
         if (windowSize - clientSize == Vector2Int.zero)
         //if (windowSize.x - clientSize.x == 0 && windowSize.y - clientSize.y == 0)
         {
-            fullScreen = true;
+            //fullScreen = true;
 
             if (!Screen.fullScreen) //bug not updated when multiscreen active and auto switch to fullscreen so set it manually
                 Screen.fullScreen = true;
         }
-        else
-            fullScreen = false;
+        //else
+        //    fullScreen = false;
     }
 #endif
 
@@ -6247,18 +6615,17 @@ struct tagRECT
             $"\nDisplay.main.systemWidth: {Display.main.systemWidth} Height: {Display.main.systemHeight}" +
             $"\nDisplay.main.renderingWidth: {Display.main.renderingWidth} Height: {Display.main.renderingHeight}" +
             "\nimageWidth: " + imageWidth +
-            $"\nrtWidth: {rtWidth} Height: {rtHeight}" +
+            $"\nrtWidth: {rtWidth} rtHeight: {rtHeight}" +
 #if !UNITY_2022_1_OR_NEWER
             $"\nlastWindowedClientSize.x: {lastWindowedClientSize.x} y: {lastWindowedClientSize.y}" +
 #endif
             "\naspect: " + aspect +
             "\nclientSize: " + clientSize +
-            "\nclientBottomBorder: " + clientBottomBorder +
-            "\nfirstRow: " + firstRow +
-            "\nfirstColumn: " + firstColumn +
+            "\nclientBottomBorder: " + clientBottomBorderPixels +
+            $"\nfirstRow: {firstRow} rows: {S3DMaterial.GetInt("_Rows")} firstColumn: {firstColumn} columns: {S3DMaterial.GetInt("_Columns")}" +
 #if UNITY_EDITOR
-            "\ngameview.position: " + gameview.position +
-            "\ngameview.rootVisualElement.worldBound: " + gameview.rootVisualElement.worldBound +
+            "\ngameview.position: " + gameViewWindow.position +
+            "\ngameview.rootVisualElement.worldBound: " + gameViewWindow.rootVisualElement.worldBound +
 #elif UNITY_STANDALONE_WIN
             "\nwindowHandler: " + windowHandler +
             //"\nwindowRectTest: " + getWindowRectFromWin32ApiResult +
@@ -6276,7 +6643,7 @@ struct tagRECT
             //"\neditorViewportRect: " + editorViewportRect +
             "\nwindowLeftBorder: " + windowLeftBorder +
             "\nwindowTopBorder: " + windowTopBorder +
-            "\nfullScreen: " + fullScreen +
+            //"\nfullScreen: " + fullScreen +
 #endif
             "\nScreen.fullScreen: " + Screen.fullScreen +
             "\nScreen.fullScreenMode: " + Screen.fullScreenMode +
@@ -6389,8 +6756,7 @@ struct tagRECT
     void PanelDepthSet()
     {
         panelDepth = Mathf.Clamp(panelDepth, panelDepthMinMax.x, panelDepthMinMax.y);
-        //if (debugLog)
-            Debug.Log("PanelDepthSet " + panelDepth);
+        if (debugLog) Debug.Log("PanelDepthSet " + panelDepth);
         panelDepth_slider.value = panelDepth;
         //panelDepth_inputField.text = Convert.ToString(panelDepth);
         panelDepth_inputField.text = panelDepth.ToString();
@@ -6400,16 +6766,35 @@ struct tagRECT
 
         if (canvasCamera)
         {
-            float shift = userIPD / (rtWidth * 25.4f / PPI);
+            //float shift = userIPD / (rtWidth * 25.4f / PPI);
+            //float shift = userIPD / (rtWidth * 25.4f / PPI) * .5f;
+            //float shift = userIPD / (viewportSize.x * 25.4f / PPI) * .5f;
+            float shift = userIPD / (viewportSize.x * 25.4f / PPI);
 
             if (method == Method.SideBySide_HMD)
-                renderTextureOffset = swapLR ? .5f - shift * panelDepth : -.5f + shift * panelDepth;
+                if (borders)
+                    //renderTextureOffset = swapLR ? .25f + leftRightGap * .25f / camRectClamped.width - shift * panelDepth : -.25f - leftRightGap * .25f / camRectClamped.width + shift * panelDepth;
+                    renderTextureOffset = swapLR ? .5f + leftRightGap * .5f / camRectClamped.width - shift * panelDepth : -.5f - leftRightGap * .5f / camRectClamped.width + shift * panelDepth;
+                else
+                    renderTextureOffset = swapLR ? .5f - shift * panelDepth : -.5f + shift * panelDepth;
+                    //renderTextureOffset = swapLR ? .25f - shift * panelDepth : -.25f + shift * panelDepth;
             else
-                renderTextureOffset = shift * (swapLR ? -.5f : .5f) * panelDepth;
+                //if (method == Method.SideBySide_Full)
+                //    renderTextureOffset = shift * (swapLR ? -1 : 1) * panelDepth;
+                //if (method == Method.SideBySide)
+                    renderTextureOffset = shift * (swapLR ? -.5f : .5f) * panelDepth;
+                //else
+                //    renderTextureOffset = shift * (swapLR ? -1 : 1) * panelDepth;
 
+            if (S3DEnabled)
+                //textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset);
+                S3DMaterial.SetFloat("_ShiftX", renderTextureOffset);
         }
         else
         {
+            //canvasSize = new Vector2(cam.pixelWidth, cam.pixelWidth / aspect);
+            //canvasSize = canvas.GetComponent<RectTransform>().sizeDelta = new Vector2(cam.pixelHeight * aspect, cam.pixelHeight);
+
             float panelDepthAsScreenDistance = 1 / (1 - panelDepth);
             panelDepthAsScreenDistance = Mathf.Min(panelDepthAsScreenDistance, 100);
             canvasLocalPosZ = screenDistance * panelDepthAsScreenDistance * virtualIPD / userIPD * 0.001f;
@@ -6794,18 +7179,18 @@ struct tagRECT
     //    CanvasOffset_Set();
     //}
 
-    void InputFieldAutofocus(InputField field)
-    {
-        trigger = field.gameObject.AddComponent<EventTrigger>();
-        entry = new EventTrigger.Entry();
-        entry.eventID = EventTriggerType.PointerEnter;
-        entry.callback.AddListener((eventData) => { FieldPointerEnter(field); });
-        trigger.triggers.Add(entry);
-        entry = new EventTrigger.Entry();
-        entry.eventID = EventTriggerType.PointerExit;
-        entry.callback.AddListener((eventData) => { FieldPointerExit(field); });
-        trigger.triggers.Add(entry);
-    }
+    //void InputFieldAutofocus(InputField field)
+    //{
+    //    trigger = field.gameObject.AddComponent<EventTrigger>();
+    //    entry = new EventTrigger.Entry();
+    //    entry.eventID = EventTriggerType.PointerEnter;
+    //    entry.callback.AddListener((eventData) => { FieldPointerEnter(field); });
+    //    trigger.triggers.Add(entry);
+    //    entry = new EventTrigger.Entry();
+    //    entry.eventID = EventTriggerType.PointerExit;
+    //    entry.callback.AddListener((eventData) => { FieldPointerExit(field); });
+    //    trigger.triggers.Add(entry);
+    //}
 
     //void DropdownClick(Dropdown dropdown)
     //{
@@ -6859,12 +7244,14 @@ struct tagRECT
 
     void Canvas_Set()
     {
-        Debug.Log("Canvas_Set");
+        if (debugLog) Debug.Log("Canvas_Set");
         //canvasLocalPosZ = screenDistance * panelDepth * virtualIPD / userIPD * 0.001f;
         //float panelDepthAsScreenDistance = 1 / (1 - panelDepth);
         //canvasLocalPosZ = screenDistance * panelDepthAsScreenDistance * virtualIPD / userIPD * 0.001f;
 
         //PanelDepthSet();
+
+        //S3DMaterial.SetInt("_GUI", 0);
 
         //if (GUIAsOverlay && canvasCamera)
         if (canvasCamera)
@@ -6933,12 +7320,24 @@ struct tagRECT
 
             if (S3DEnabled
                 || nativeRenderingPlugin
+#if HDRP
+                || blitTime == BlitToScreenTime.OnEndOfFrame && !S3DEnabled && additionalS3DTopmostCameraIndex != -1
+#endif
                 )
             {
                 if (!S3DCanvasesExist && !GUIVisible)
                     canvasCamera.enabled = false;
                 else
+                {
                     canvasCamera.enabled = true;
+                    //S3DMaterial.SetInt("_GUI", 1);
+
+                    //canvasCamera_left.rect = canvasCamera_right.rect = cam.rect;
+                    //canvasCamera.rect = cam.rect;
+                    //canvasCamera_left.targetDisplay = 0;
+                    //canvasCamera_right.targetDisplay = 0;
+                    canvasCamera.targetDisplay = cam.targetDisplay;
+                }
 
                 canvas.renderMode = RenderMode.ScreenSpaceCamera;
             }
@@ -7214,14 +7613,263 @@ struct tagRECT
         //RenderTexture currentRT = cam.targetTexture;
         //cam.targetTexture = null;
 
+        if (cam.rect != Rect.MinMaxRect(0, 0, 1, 1))
+            borders = true;
+        else
+            borders = false;
+
         Vector2 viewportLeftBottomPos = new Vector2(Mathf.Clamp01(cam.rect.x), Mathf.Clamp01(cam.rect.y)); //viewport LeftBottom & RightTop corner coordinates inside render window
         Vector2 viewportRightTopPos = new Vector2(Mathf.Clamp01(cam.rect.xMax), Mathf.Clamp01(cam.rect.yMax));
         camRectClamped = new Rect(viewportLeftBottomPos.x, viewportLeftBottomPos.y, viewportRightTopPos.x - viewportLeftBottomPos.x, viewportRightTopPos.y - viewportLeftBottomPos.y);
+        //S3DMaterial.SetVector("_Rect", new Vector4(camRectClamped.x, camRectClamped.y, camRectClamped.width, camRectClamped.height));
 
         camRectClampedPixels = new Rect(Mathf.Round(camRectClamped.x * clientSize.x), Mathf.Round(camRectClamped.y * clientSize.y), Mathf.Round(camRectClamped.width * clientSize.x), Mathf.Round(camRectClamped.height * clientSize.y));
         //Debug.Log($"camRectClampedPixels x {camRectClampedPixels.x} y {camRectClampedPixels.y} width {camRectClampedPixels.width} height {camRectClampedPixels.height}");
-        clientBottomBorder = (int)camRectClampedPixels.y;
-        clientLeftBorder = (int)camRectClampedPixels.x;
+        clientBottomBorderPixels = (int)camRectClampedPixels.y;
+        clientLeftBorderPixels = (int)camRectClampedPixels.x;
+
+        Rect camRectClampedPixelsNormilized = new Rect(camRectClampedPixels.x / clientSize.x, camRectClampedPixels.y / clientSize.y, camRectClampedPixels.width / clientSize.x, camRectClampedPixels.height / clientSize.y);
+
+        float rectRightSide = camRectClampedPixelsNormilized.x + camRectClampedPixelsNormilized.width;
+        float rectTopSide = camRectClampedPixelsNormilized.y + camRectClampedPixelsNormilized.height;
+
+        Vector3[] screenBlitMeshVertices = quadVertices;
+        Vector2[] screenBlitMeshUV = quadVerticesUV;
+        int[] screenBlitMeshIndices = quadIndicesClockwise;
+        Vector3[] screenBlitMeshFlippedVertices = quadVertices;
+        Vector2[] screenBlitMeshFlippedUV = quadVerticesUV;
+
+        if (borders)
+        {
+            clientRightBorder = 1 - camRectClampedPixelsNormilized.x - camRectClampedPixelsNormilized.width;
+            clientTopBorder = 1 - camRectClampedPixelsNormilized.y - camRectClampedPixelsNormilized.height;
+            leftRightGap = clientRightBorder + camRectClampedPixelsNormilized.x;
+            //Debug.Log("leftRightGap: " + leftRightGap);
+
+            if (S3DEnabled && method.ToString().Contains("SideBySide"))
+            {
+                screenBlitMeshVertices = new Vector3[]{
+                    new Vector2(camRectClampedPixelsNormilized.x * .5f, camRectClampedPixelsNormilized.y),
+                    new Vector2(camRectClampedPixelsNormilized.x * .5f, rectTopSide),
+                    new Vector2(rectRightSide * .5f, rectTopSide),
+                    new Vector2(rectRightSide * .5f, camRectClampedPixelsNormilized.y),
+                    new Vector2(camRectClampedPixelsNormilized.x * .5f + .5f, camRectClampedPixelsNormilized.y),
+                    new Vector2(camRectClampedPixelsNormilized.x * .5f + .5f, rectTopSide),
+                    new Vector2(rectRightSide * .5f + .5f, rectTopSide),
+                    new Vector2(rectRightSide * .5f + .5f, camRectClampedPixelsNormilized.y)
+                };
+
+                screenBlitMeshUV = new Vector2[]{
+                    new Vector2(0, 0),
+                    new Vector2(0, 1),
+                    new Vector2(.5f, 1),
+                    new Vector2(.5f, 0),
+                    new Vector2(.5f, 0),
+                    new Vector2(.5f, 1),
+                    new Vector2(1, 1),
+                    new Vector2(1, 0)
+                };
+
+                screenBlitMeshIndices = twinQuadIndicesClockwise;
+            }
+            else
+                if (S3DEnabled && method.ToString().Contains("OverUnder"))
+                {
+                    screenBlitMeshVertices = new Vector3[]{
+                        new Vector2(camRectClampedPixelsNormilized.x, camRectClampedPixelsNormilized.y * .5f),
+                        new Vector2(camRectClampedPixelsNormilized.x, rectTopSide * .5f),
+                        new Vector2(rectRightSide, rectTopSide * .5f),
+                        new Vector2(rectRightSide, camRectClampedPixelsNormilized.y * .5f),
+                        new Vector2(camRectClampedPixelsNormilized.x, camRectClampedPixelsNormilized.y * .5f + .5f),
+                        new Vector2(camRectClampedPixelsNormilized.x, rectTopSide * .5f + .5f),
+                        new Vector2(rectRightSide, rectTopSide * .5f + .5f),
+                        new Vector2(rectRightSide, camRectClampedPixelsNormilized.y * .5f + .5f)
+                    };
+
+                    screenBlitMeshUV = new Vector2[]{
+                        new Vector2(0, 0),
+                        new Vector2(0, .5f),
+                        new Vector2(1, .5f),
+                        new Vector2(1, 0),
+                        new Vector2(0, .5f),
+                        new Vector2(0, 1),
+                        new Vector2(1, 1),
+                        new Vector2(1, .5f)
+                    };
+
+                    screenBlitMeshIndices = twinQuadIndicesClockwise;
+                }
+                else
+                {
+#if !(URP || HDRP)
+                //if (blitTime != BlitToScreenTime.OnPostRender || renderTextureSetTargetBuffers || !method.ToString().Contains("Two_Displays")) //keep native Rect required for BlitToActiveTexture OnPostRender
+                if (!(blitTime == BlitToScreenTime.OnPostRender && !renderTextureSetTargetBuffers && method.ToString().Contains("Two_Displays")))
+#endif
+                    {
+                        screenBlitMeshVertices = new Vector3[]{
+                            new Vector2(camRectClampedPixelsNormilized.x, camRectClampedPixelsNormilized.y),
+                            new Vector2(camRectClampedPixelsNormilized.x, rectTopSide),
+                            new Vector2(rectRightSide, rectTopSide),
+                            new Vector2(rectRightSide, camRectClampedPixelsNormilized.y),
+                        };
+
+                        if (method == Method.Two_Displays_MirrorX)
+                            screenBlitMeshFlippedVertices = new Vector3[]{
+                                new Vector2(clientRightBorder, camRectClampedPixelsNormilized.y),
+                                new Vector2(clientRightBorder, rectTopSide),
+                                new Vector2(clientRightBorder + camRectClampedPixelsNormilized.width, rectTopSide),
+                                new Vector2(clientRightBorder + camRectClampedPixelsNormilized.width, camRectClampedPixelsNormilized.y),
+                            };
+                        else
+                            if (method == Method.Two_Displays_MirrorY)
+                                screenBlitMeshFlippedVertices = new Vector3[]{
+                                    new Vector2(camRectClampedPixelsNormilized.x, clientTopBorder),
+                                    new Vector2(camRectClampedPixelsNormilized.x, clientTopBorder + camRectClampedPixelsNormilized.height),
+                                    new Vector2(rectRightSide, clientTopBorder + camRectClampedPixelsNormilized.height),
+                                    new Vector2(rectRightSide, clientTopBorder),
+                                };
+                                else
+                                    screenBlitMeshFlippedVertices = screenBlitMeshVertices;
+                    }
+                }
+        }
+        else
+            clientRightBorder = clientTopBorder = 0;
+
+        screenBlitMesh.Clear();
+
+        screenBlitMesh.vertices = screenBlitMeshVertices;
+        screenBlitMesh.uv = screenBlitMeshUV;
+
+        screenBlitMesh.SetIndices(screenBlitMeshIndices, MeshTopology.Quads, 0);
+
+        if (method.ToString().Contains("Two_Displays"))
+        {
+            if (method == Method.Two_Displays_MirrorX)
+                screenBlitMeshFlippedUV = new Vector2[]{
+                    new Vector2(1, 0),
+                    new Vector2(1, 1),
+                    new Vector2(0, 1),
+                    new Vector2(0, 0)
+                };
+            else
+                if (method == Method.Two_Displays_MirrorY)
+                    screenBlitMeshFlippedUV = clientSizeMeshFlippedY.uv;
+
+            screenBlitMeshFlipped.Clear();
+
+            screenBlitMeshFlipped.vertices = screenBlitMeshFlippedVertices;
+            screenBlitMeshFlipped.uv = screenBlitMeshFlippedUV;
+
+            screenBlitMeshFlipped.SetIndices(quadIndicesClockwise, MeshTopology.Quads, 0);
+        }
+
+        ////quadMesh = new Mesh();
+        ////quadMesh.Clear();
+        //twinQuadMesh.Clear();
+
+        //if (borders && method.ToString().Contains("SideBySide"))
+        //{
+        //    twinQuadMesh.vertices = new Vector3[]{
+        //        new Vector2(camRectClamped.x * .5f, camRectClamped.y),
+        //        new Vector2(camRectClamped.x * .5f, rectTopSide),
+        //        new Vector2(rectRightSide * .5f, rectTopSide),
+        //        new Vector2(rectRightSide * .5f, camRectClamped.y),
+        //        new Vector2(camRectClamped.x * .5f + .5f, camRectClamped.y),
+        //        new Vector2(camRectClamped.x * .5f + .5f, rectTopSide),
+        //        new Vector2(rectRightSide * .5f + .5f, rectTopSide),
+        //        new Vector2(rectRightSide * .5f + .5f, camRectClamped.y)
+        //    };
+
+        //    twinQuadMesh.uv = new Vector2[]{
+        //        new Vector2(0, 0),
+        //        new Vector2(0, 1),
+        //        new Vector2(.5f, 1),
+        //        new Vector2(.5f, 0),
+        //        new Vector2(.5f, 0),
+        //        new Vector2(.5f, 1),
+        //        new Vector2(1, 1),
+        //        new Vector2(1, 0)
+        //    };
+
+        //    twinQuadMesh.SetIndices(new int[] { 0, 1, 2, 3, 4, 5, 6, 7 }, MeshTopology.Quads, 0);
+        //    //blitRectPixels = clientSizePixelRect;
+        //    SingleDisplayBlitMesh = twinQuadMesh;
+        //}
+        //else
+        //    if (borders && method.ToString().Contains("OverUnder"))
+        //    {
+        //        twinQuadMesh.vertices = new Vector3[]{
+        //            new Vector2(camRectClamped.x, camRectClamped.y * .5f),
+        //            new Vector2(camRectClamped.x, rectTopSide * .5f),
+        //            new Vector2(rectRightSide, rectTopSide * .5f),
+        //            new Vector2(rectRightSide, camRectClamped.y * .5f),
+        //            new Vector2(camRectClamped.x, camRectClamped.y * .5f + .5f),
+        //            new Vector2(camRectClamped.x, rectTopSide * .5f + .5f),
+        //            new Vector2(rectRightSide, rectTopSide * .5f + .5f),
+        //            new Vector2(rectRightSide, camRectClamped.y * .5f + .5f)
+        //        };
+
+        //        twinQuadMesh.uv = new Vector2[]{
+        //            new Vector2(0, 0),
+        //            new Vector2(0, .5f),
+        //            new Vector2(1, .5f),
+        //            new Vector2(1, 0),
+        //            new Vector2(0, .5f),
+        //            new Vector2(0, 1),
+        //            new Vector2(1, 1),
+        //            new Vector2(1, .5f)
+        //        };
+
+        //        twinQuadMesh.SetIndices(new int[] { 0, 1, 2, 3, 4, 5, 6, 7 }, MeshTopology.Quads, 0);
+        //        //blitRectPixels = clientSizePixelRect;
+        //        SingleDisplayBlitMesh = twinQuadMesh;
+        //    }
+        //    else
+        //    {
+        //        ////quadMesh.vertices = new Vector3[]{
+        //        ////    new Vector2(camRectClamped.x, camRectClamped.y),
+        //        ////    new Vector2(camRectClamped.x, rectTopSide),
+        //        ////    new Vector2(rectRightSide, rectTopSide),
+        //        ////    new Vector2(rectRightSide, camRectClamped.y)
+        //        ////};
+
+        //        ////quadMesh.vertices = new Vector3[]{
+        //        ////    new Vector3(0, 0, 0),
+        //        ////    new Vector3(0, 1, 0),
+        //        ////    new Vector3(1, 1, 0),
+        //        ////    new Vector3(1, 0, 0)
+        //        ////};
+
+        //        ////quadMesh.vertices = new Vector3[]{
+        //        ////    new Vector2(0, 0),
+        //        ////    new Vector2(0, 1),
+        //        ////    new Vector2(1, 1),
+        //        ////    new Vector2(1, 0)
+        //        ////};
+
+        //        ////quadMesh.uv = new Vector2[]{
+        //        ////    new Vector2(0, 0),
+        //        ////    new Vector2(0, 1),
+        //        ////    new Vector2(1, 1),
+        //        ////    new Vector2(1, 0)
+        //        ////};
+
+        //        //quadMesh.vertices = quadVertices;
+        //        //quadMesh.uv = quadVerticesUV;
+
+        //        ////quadMesh.uv = new Vector2[]{
+        //        ////    quadMesh.vertices[0],
+        //        ////    quadMesh.vertices[1],
+        //        ////    quadMesh.vertices[2],
+        //        ////    quadMesh.vertices[3]
+        //        ////};
+
+        //        ////quadMesh.SetIndices(new int[] { 0, 1, 2, 3 }, MeshTopology.Quads, 0);
+        //        //quadMesh.SetIndices(quadIndicesClockwise, MeshTopology.Quads, 0);
+        //        //blitRectPixels = camRectClampedPixels;
+        //        SingleDisplayBlitMesh = quadMesh;
+        //    }
 
         ////if (cam.targetTexture) //cam.pixelWidth not updating if camera rendering to texture so get it from camera without renderTexture
         ////    viewportSize = new Int2(camera_left.pixelWidth, camera_left.pixelHeight);
@@ -7304,29 +7952,31 @@ struct tagRECT
 
             //Debug.Log("canvasCameraRectClamped.size " + canvasCamera.rect);
 
-            //if (GUISizeKeep)
-                //canvasSize = new Vector2(cam.pixelWidth, cam.pixelWidth / aspect);
-                //canvasSize = new Vector2(viewportSize.x, viewportSize.x / aspect);
-                //canvasSize = new Vector2(clientSize.x * canvasCameraRectClamped.size.x, clientSize.y * canvasCameraRectClamped.size.y);
+            ////if (GUISizeKeep)
+            //    //canvasSize = new Vector2(cam.pixelWidth, cam.pixelWidth / aspect);
+            //    //canvasSize = new Vector2(viewportSize.x, viewportSize.x / aspect);
+            //    //canvasSize = new Vector2(clientSize.x * canvasCameraRectClamped.size.x, clientSize.y * canvasCameraRectClamped.size.y);
 
-                if (S3DEnabled || nativeRenderingPlugin)
-                    //canvasSize = new Vector2(canvasCamera.pixelWidth, canvasCamera.pixelWidth / aspect);
-                    canvasSize = new Vector2(cam.pixelWidth, cam.pixelWidth / aspect);
-                else
-                    canvasSize = new Vector2(clientSize.x, clientSize.y);
-            //else
-            //    canvasSize = new Vector2(canvasDefaultSize.x, canvasDefaultSize.x / aspect);
+            //    if (S3DEnabled || nativeRenderingPlugin)
+            //        //canvasSize = new Vector2(canvasCamera.pixelWidth, canvasCamera.pixelWidth / aspect);
+            //        canvasSize = new Vector2(cam.pixelWidth, cam.pixelWidth / aspect);
+            //    else
+            //        canvasSize = new Vector2(clientSize.x, clientSize.y);
+            ////else
+            ////    canvasSize = new Vector2(canvasDefaultSize.x, canvasDefaultSize.x / aspect);
         }
         else
         {
-            //viewportLeftBottomPos = new Vector2(Mathf.Clamp01(cam.rect.x), Mathf.Clamp01(cam.rect.y)); //viewport LeftBottom & RightTop corner coordinates inside render window
-            //viewportRightTopPos = new Vector2(Mathf.Clamp01(cam.rect.xMax), Mathf.Clamp01(cam.rect.yMax));
+            ////viewportLeftBottomPos = new Vector2(Mathf.Clamp01(cam.rect.x), Mathf.Clamp01(cam.rect.y)); //viewport LeftBottom & RightTop corner coordinates inside render window
+            ////viewportRightTopPos = new Vector2(Mathf.Clamp01(cam.rect.xMax), Mathf.Clamp01(cam.rect.yMax));
 
-            //if (GUISizeKeep)
-                canvasSize = new Vector2(cam.pixelWidth, cam.pixelWidth / aspect);
-            //else
-            //    //canvasSize = new Vector2(canvasSize.y * aspect, canvasSize.y);
-            //    canvasSize = new Vector2(canvasDefaultSize.y * aspect, canvasDefaultSize.y);
+            ////if (GUISizeKeep)
+            //    canvasSize = new Vector2(cam.pixelWidth, cam.pixelWidth / aspect);
+            ////else
+            ////    //canvasSize = new Vector2(canvasSize.y * aspect, canvasSize.y);
+            ////    canvasSize = new Vector2(canvasDefaultSize.y * aspect, canvasDefaultSize.y);
+
+            canvasSize = canvas.GetComponent<RectTransform>().sizeDelta = new Vector2(cam.pixelHeight * aspect, cam.pixelHeight);
         }
 
             ////Rect canvasCameraRectClamped = new Rect(viewportLeftBottomPos.x, viewportLeftBottomPos.y, viewportRightTopPos.x - viewportLeftBottomPos.x, viewportRightTopPos.y - viewportLeftBottomPos.y);
@@ -7344,8 +7994,7 @@ struct tagRECT
 //#endif
 
         //if (debugLog) Debug.Log("Aspect_Set Resize cam.rect " + cam.rect);
-        //if (debugLog)
-            Debug.Log("Aspect_Set aspect " + aspect);
+        if (debugLog) Debug.Log("Aspect_Set aspect " + aspect);
         //if (debugLog) Debug.Log("Aspect_Set cam.pixelWidth " + cam.pixelWidth + " cam.pixelHeight " + cam.pixelHeight);
 
         //if (method == Method.Two_Displays_MirrorX)
@@ -7354,15 +8003,11 @@ struct tagRECT
         //    pixelRect = new Rect(cam.rect.x * clientSize.x, (1 - cam.rect.y) * clientSize.y - cam.pixelHeight, cam.pixelWidth, cam.pixelHeight);
 
         //if (cam.pixelRect != Rect.MinMaxRect(0, 0, clientSize.x, clientSize.y))
-        if (cam.rect != Rect.MinMaxRect(0, 0, 1, 1))
-            borders = true;
-        else
-            borders = false;
 
-        //clientTopBorder = clientSize.y - (int)cam.pixelRect.y - cam.pixelHeight;
-        //Debug.Log($"cam.pixelRect x {cam.pixelRect.x} y {cam.pixelRect.y} width {cam.pixelRect.width} camWidth {cam.pixelWidth} height {cam.pixelRect.height} camHeight {cam.pixelHeight} clientTopBorder {clientTopBorder}");
-        //Debug.Log($"cam.pixelRect x {cam.pixelRect.x} y {cam.pixelRect.y} width {cam.pixelRect.width} height {cam.pixelRect.height} camWidth {cam.pixelWidth} camHeight {cam.pixelHeight} clientTopBorder {clientBottomBorder}");
-        //Debug.Log("clientTopBorder " + clientTopBorder);
+        //clientTopBorderPixels = clientSize.y - (int)cam.pixelRect.y - cam.pixelHeight;
+        //Debug.Log($"cam.pixelRect x {cam.pixelRect.x} y {cam.pixelRect.y} width {cam.pixelRect.width} camWidth {cam.pixelWidth} height {cam.pixelRect.height} camHeight {cam.pixelHeight} clientTopBorderPixels {clientTopBorderPixels}");
+        //Debug.Log($"cam.pixelRect x {cam.pixelRect.x} y {cam.pixelRect.y} width {cam.pixelRect.width} height {cam.pixelRect.height} camWidth {cam.pixelWidth} camHeight {cam.pixelHeight} clientTopBorderPixels {clientBottomBorderPixels}");
+        //Debug.Log("clientTopBorderPixels " + clientTopBorderPixels);
 
         //camPixelRectInt.x = (int)Mathf.Round(cam.pixelRect.x);
         //camPixelRectInt.y = (int)Mathf.Round(cam.pixelRect.y);
@@ -7373,42 +8018,8 @@ struct tagRECT
         ////camRectClampedPixels = new Rect(Mathf.Round(cam.pixelRect.x), Mathf.Round(cam.pixelRect.y), Mathf.Round(cam.pixelRect.width), Mathf.Round(cam.pixelRect.height));
         //camRectClampedPixels = new Rect(Mathf.Round(camRectClamped.x * clientSize.x), Mathf.Round(camRectClamped.y * clientSize.y), Mathf.Round(camRectClamped.width * clientSize.x), Mathf.Round(camRectClamped.height * clientSize.y));
         ////Debug.Log($"camRectClampedPixels x {camRectClampedPixels.x} y {camRectClampedPixels.y} width {camRectClampedPixels.width} height {camRectClampedPixels.height}");
-        //clientBottomBorder = (int)camRectClampedPixels.y;
-        //clientLeftBorder = (int)camRectClampedPixels.x;
-
-        if (
-            //borders && 
-            //!S3DEnabled && !nativeRenderingPlugin
-            !nativeRenderingPlugin
-            //&& cam.pixelRect != Rect.MinMaxRect(0, 0, clientSize.x, clientSize.y)
-            //&& cam.rect != Rect.MinMaxRect(0, 0, 1, 1)
-            && borders
-#if !UNITY_EDITOR
-        && (SystemInfo.graphicsDeviceType == GraphicsDeviceType.Direct3D11 || SystemInfo.graphicsDeviceType == GraphicsDeviceType.Vulkan
-        || !Screen.fullScreen //OpenGL clear borders required
-        )
-        //&& !openGL
-#endif
-        //cam.rect != Rect.MinMaxRect(0, 0, 1, 1))
-        )
-        {
-            if (S3DEnabled)
-            {
-                OnPreRenderClearScreen(false);
-                blitToScreenClearRequired = true;
-            }
-            else
-            {
-                OnPreRenderClearScreen(true);
-                blitToScreenClearRequired = false;
-            }
-
-        }
-        else
-        {
-            OnPreRenderClearScreen(false);
-            blitToScreenClearRequired = false;
-        }
+        //clientBottomBorderPixels = (int)camRectClampedPixels.y;
+        //clientLeftBorderPixels = (int)camRectClampedPixels.x;
 
         //ViewSet();
         FOV_Set();
@@ -7435,8 +8046,7 @@ struct tagRECT
 
     void S3DKeyUp(float modifier1, float modifier2, float modifier3)
     {
-        if (debugLog)
-            Debug.Log($"S3DKeyUp modifier1: {modifier1} modifier2: {modifier2} modifier3: {modifier3}");
+        if (debugLog) Debug.Log($"S3DKeyUp modifier1: {modifier1} modifier2: {modifier2} modifier3: {modifier3}");
 
         if (S3DKeyTimer < 1)
             //if (modifier1 != 0 && modifier2 != 0 && method == Method.Two_Displays)
@@ -7554,7 +8164,8 @@ struct tagRECT
                 //GUIVisible = true;
 
                 //if (S3DEnabled)
-                if (S3DEnabled || nativeRenderingPlugin && borders)
+                //if (S3DEnabled || nativeRenderingPlugin && borders)
+                if (canvas.renderMode != RenderMode.ScreenSpaceOverlay)
                 {
                     cursorRectTransform.gameObject.SetActive(true);
                     //S3DCursorVisibility_Set(true);
@@ -7573,8 +8184,7 @@ struct tagRECT
                 canvas.GetComponent<CanvasGroup>().blocksRaycasts = true;
             }
             else
-                //if (S3DEnabled && externalCanvasS3DCursorRequired || nativeRenderingPlugin)
-                if (S3DEnabled && externalCanvasS3DCursorRequired || nativeRenderingPlugin && borders)
+                if (S3DEnabled && externalCanvasS3DCursorRequired)
                 {
                     cursorRectTransform.gameObject.SetActive(true);
                     //S3DCursorVisibility_Set(true);
@@ -7764,10 +8374,17 @@ struct tagRECT
 //#endif
         {
 #if URP || HDRP
+#if UNITY_2021_1_OR_NEWER
+            RenderPipelineManager.beginContextRendering -= PreRenderClearScreen;
+
+            if (add)
+                RenderPipelineManager.beginContextRendering += PreRenderClearScreen;
+#else
             RenderPipelineManager.beginFrameRendering -= PreRenderClearScreen;
 
             if (add)
                 RenderPipelineManager.beginFrameRendering += PreRenderClearScreen;
+#endif
 #else
             Camera.onPreRender -= PreRenderClearScreen;
 
@@ -7828,8 +8445,7 @@ struct tagRECT
 
     void CursorLockRestore()
     {
-        if (debugLog)
-            Debug.Log("CursorLockRestore");
+        if (debugLog) Debug.Log("CursorLockRestore");
 
 //if (inputSystem)
 #if STARTER_ASSETS_PACKAGES_CHECKED
@@ -8511,6 +9127,8 @@ struct tagRECT
 
     void ViewSet()
     {
+        if (debugLog) Debug.Log("ViewSet");
+
         //if (cam.tag == "MainCamera" && (method == Method.Two_Displays || method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY))
         //    if (eyePriority == EyePriority.Left)
         //    {
@@ -8527,29 +9145,47 @@ struct tagRECT
         //imageWidth = cam.pixelWidth * 25.4f / PPI; //real size of rendered image on screen
         imageWidth = viewportSize.x * 25.4f / PPI; //real size of rendered image on screen
 
-        if (method == Method.SideBySide_HMD)
+        if (method == Method.SideBySide_Full || method == Method.SideBySide_HMD)
             imageWidth *= .5f;
 
         //shift = imageOffset = userIPD / imageWidth; //shift optic axis relative to the screen size (UserIPD/screenSize)
         float shift = imageOffset = userIPD / imageWidth; //shift optic axis relative to the screen size (UserIPD/screenSize)
 
         if (method == Method.SideBySide_HMD)
-            shift = -1 + shift;
+            if (borders)
+                shift = -1 - leftRightGap / camRectClamped.width + shift;
+            else
+                shift = -1 + shift;
 
         //float oneRowShift = 0;
         //oneRowShift = 0;
 
-        if (!optimize && method == Method.Interlace_Horizontal)
+        //if (!optimize && method == Method.Interlace_Horizontal)
+        if (method == Method.Interlace_Horizontal)
         {
-            //oneRowShift = 2f / cam.pixelHeight;
-            oneRowShift = 2f / viewportSize.y;
-            //renderTextureOneRowShift = 1f / clientSize.y;
-            renderTextureOneRowShift = 1f / viewportSize.y;
+            if (!optimize)
+            {
+                //oneRowShift = 2f / cam.pixelHeight;
+                oneRowShift = 2f / viewportSize.y;
+                //renderTextureOneRowShift = 1f / viewportSize.y;
+            }
+            else
+            {
+                oneRowShift = 0;
+                //renderTextureOneRowShift = oneRowShift = 0;
+            }
+
+            ////renderTextureOneRowShift = 1f / clientSize.y;
+            //renderTextureOneRowShift = 1f / viewportSize.y;
         }
         else
-            renderTextureOneRowShift = oneRowShift = 0;
+            oneRowShift = 0;
+            //renderTextureOneRowShift = oneRowShift = 0;
 
-        //if (debugLog) Debug.Log(oneRowShift);
+        renderTextureOneRowShift = oneRowShift * .5f;
+        S3DMaterial.SetFloat("_ShiftY", renderTextureOneRowShift);
+
+        if (debugLog) Debug.Log("oneRowShift " + oneRowShift + " renderTextureOneRowShift " + renderTextureOneRowShift);
 
         screenDistance = scaleX * imageWidth * .5f; //calculated distance to screen from user eyes where real FOV will match to virtual for realistic view
         screenDistance_inputField.text = screenDistance.ToString();
@@ -8936,16 +9572,18 @@ struct tagRECT
     public RenderTexture renderTexture_right;
     public RenderTexture canvasRenderTexture;
     //public RenderTexture canvasActiveRenderTexture;
+#if Debug
     public RenderTexture activeRenderTexture;
-//#if HDRP || URP
+#endif
+    //#if HDRP || URP
     //RenderTexture canvasRenderTexture;
     //RenderTexture canvasRenderTexture_left;
     //RenderTexture canvasRenderTexture_right;
-//#endif
+    //#endif
     //RenderTexture leftCamAdditionalRT;
     //RenderTexture rightCamAdditionalRT;
     int pass;
-    //ComputeBuffer verticesPosBuffer;
+    ComputeBuffer verticesPosBuffer;
     //ComputeBuffer verticesUVBuffer;
     //bool GUIAsOverlayState;
     string displays;
@@ -8962,14 +9600,20 @@ struct tagRECT
     Camera topmostCamera;
     Camera topmostCamera_left;
     Camera topmostCamera_right;
-    OnRenderImageDelegate onRenderImageDelegate_cameraMain;
-    OnRenderImageDelegate onRenderImageDelegate_cameraLeft;
-    OnRenderImageDelegate onRenderImageDelegate_cameraRight;
+    bool blitToDisplayBuffer;
+    IntPtr renderTexturePtr;
+
+    //struct Bool2
+    //{
+    //    public bool x;
+    //    public bool y;
+    //}
+
+    //Bool2 flip;
 
     void Render_Set()
     {
-        //if (debugLog)
-            Debug.Log("Render_Set");
+        if (debugLog) Debug.Log("Render_Set");
 
         Render_Release(); //remove RT before adding new to avoid duplication
         //cam.enabled = true;
@@ -8983,8 +9627,8 @@ struct tagRECT
 
   ////      //int rtWidth = cam.pixelWidth;
 		//////int rtHeight = cam.pixelHeight;
-  //      rtWidth = cam.pixelWidth;
-  //      rtHeight = cam.pixelHeight;
+        //rtWidth = cam.pixelWidth;
+        //rtHeight = cam.pixelHeight;
   ////      //rtWidth = Screen.width;
   ////      //rtHeight = Screen.height;
   ////      rtWidth = clientSize.x;
@@ -9010,37 +9654,41 @@ struct tagRECT
         //    if (c.camera)
         //        c.camera.rect = c.camera_left.rect = c.camera_right.rect = cam.rect;
 
-        if (canvasCamera)
+        //void SetCanvasTexture()
         {
-            //canvasCamera_left.rect = canvasCamera_right.rect = cam.rect;
-            //canvasCamera.rect = cam.rect;
-            //canvasCamera_left.targetDisplay = 0;
-            //canvasCamera_right.targetDisplay = 0;
-            canvasCamera.targetDisplay = cam.targetDisplay;
-
-            canvasRenderTexture = RT_Make(RenderTextureFormat.Default);
-
-//#if URP
-            if (!renderTextureSetTargetBuffers)
+            if (canvasCamera)
             {
-                canvasCamera.targetTexture = canvasRenderTexture;
+                //canvasRenderTexture = RT_Make(RenderTextureFormat.Default);
+                canvasRenderTexture = RT_Make(canvasRenderTexture, RenderTextureFormat.Default);
+                S3DMaterial.SetTexture("_CanvasTex", canvasRenderTexture);
+
+    //#if URP
+    #if !(URP || HDRP)
+                if (renderTextureSetTargetBuffers)
+                    canvasCamera.SetTargetBuffers(canvasRenderTexture.colorBuffer, canvasRenderTexture.depthBuffer);
+    //#else
+                else
+    #endif
+                    canvasCamera.targetTexture = canvasRenderTexture;
+    //#endif
             }
-//#else
-            else
-                canvasCamera.SetTargetBuffers(canvasRenderTexture.colorBuffer, canvasRenderTexture.depthBuffer);
-//#endif
         }
 
-        textureBlitMaterial.SetInt("_FlipX", 0);
-        textureBlitMaterial.SetInt("_FlipY", 0);
-        textureBlitMaterial.SetInt("_Clockwise", clockwise ? 1 : 0);
+        //textureBlitMaterial.SetInt("_FlipX", 0);
+        //textureBlitMaterial.SetInt("_FlipY", 0);
+        //textureBlitMaterial.SetInt("_Clockwise", clockwise ? 1 : 0);
 
-        camRectClampedPixelsMod = camRectClampedPixels;
-        //camRectClampedPixelsMod = new Rect(camRectClampedPixels);
+        //camRectClampedPixelsFlipped = camRectClampedPixels;
+        ////camRectClampedPixelsFlipped = new Rect(camRectClampedPixels);
 
         if (S3DEnabled)
         {
+            //SetCanvasTexture();
+            S3DMaterial.SetFloat("_ShiftX", renderTextureOffset);
+
+//#if !(URP || HDRP)
             renderTexturePtr = IntPtr.Zero;
+//#endif
 
 #if POST_PROCESSING_STACK_V2
             if (PPLayer)
@@ -9299,25 +9947,50 @@ struct tagRECT
                     //cam.enabled = false;
                     S3DMaterial.SetInt("_FlipX", 0);
                     S3DMaterial.SetInt("_FlipY", 0);
+                    //flip.x = false;
+                    //flip.y = false;
                     pass = 7;
+                    //screenBlitMeshFlipped = quadMesh;
                 break;
 
                 case Method.Two_Displays_MirrorX:
                     S3DMaterial.SetInt("_FlipX", 1);
                     S3DMaterial.SetInt("_FlipY", 0);
+                    //flip.x = true;
+                    //flip.y = false;
+
                     pass = 7;
-                    camRectClampedPixelsMod = new Rect(clientSize.x - camRectClampedPixels.x - camRectClampedPixels.width, camRectClampedPixels.y, camRectClampedPixels.width, camRectClampedPixels.height);
+                    //camRectClampedPixelsFlipped = new Rect(clientSize.x - camRectClampedPixels.x - camRectClampedPixels.width, camRectClampedPixels.y, camRectClampedPixels.width, camRectClampedPixels.height);
+                    //camRectClampedFlipped = new Rect(1 - camRectClamped.x - camRectClamped.width, camRectClamped.y, camRectClamped.width, camRectClamped.height);
+                    camRectClampedFlipped = new Rect(clientRightBorder, camRectClamped.y, camRectClamped.width, camRectClamped.height);
+                    //screenBlitMeshFlipped = clientSizeMeshFlippedX;
                 break;
 
                 case Method.Two_Displays_MirrorY:
                     S3DMaterial.SetInt("_FlipX", 0);
                     S3DMaterial.SetInt("_FlipY", 1);
+                    //flip.x = false;
+                    //flip.y = true;
+
                     pass = 7;
-                    camRectClampedPixelsMod = new Rect(camRectClampedPixels.x, clientSize.y - camRectClampedPixels.y - camRectClampedPixels.height, camRectClampedPixels.width, camRectClampedPixels.height);
+                    //camRectClampedPixelsFlipped = new Rect(camRectClampedPixels.x, clientSize.y - camRectClampedPixels.y - camRectClampedPixels.height, camRectClampedPixels.width, camRectClampedPixels.height);
+                    //camRectClampedFlipped = new Rect(camRectClamped.x, 1 - camRectClamped.y - camRectClamped.height, camRectClamped.width, camRectClamped.height);
+                    camRectClampedFlipped = new Rect(camRectClamped.x, clientTopBorder, camRectClamped.width, camRectClamped.height);
+                    //screenBlitMeshFlipped = clientSizeMeshFlippedY;
                 break;
             }
 
-            Debug.Log("camRectClampedPixelsMod " + camRectClampedPixelsMod);
+            //if (blitTime == BlitToScreenTime.OnPostRender)
+            //    flip.y = !flip.y;
+
+            //Debug.Log("flip.y " + flip.y);
+
+            //S3DMaterial.SetInt("_FlipX", Convert.ToInt32(flip.x));
+            //S3DMaterial.SetInt("_FlipY", Convert.ToInt32(flip.y));
+
+            //Debug.Log("flip.y " + S3DMaterial.GetInt("_FlipY"));
+
+            //if (debugLog) Debug.Log("camRectClampedPixelsFlipped " + camRectClampedPixelsFlipped);
             //if (debugLog) Debug.Log("Render_Set Width: " + rtWidth + " Height: " + rtHeight);
             //if (debugLog) Debug.Log("Render_Set columns: " + columns + " rows: " + rows);
 
@@ -9341,8 +10014,9 @@ struct tagRECT
                 //if (method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
                 //    cam.usePhysicalProperties = false;
 
-                cam.enabled = false;
+                //cam.enabled = false;
                 //camera_right.tag = "MainCamera"; //prevent TerrainsVisibilityUpdater(in "Test Track" sample) throw errors while the main camera disabled and no other camera with "MainCamera" tag in the scene
+                DisableMainCam();
                 ////canvasCamera.targetTexture = null;
 //#if HDRP
 //                //if (GUIAsOverlay)
@@ -9508,7 +10182,8 @@ struct tagRECT
                     inputSystem_KeyListener.Dispose();
 #endif
                 if (nativeRenderingPlugin)
-                    cam.enabled = false;
+                    //cam.enabled = false;
+                    DisableMainCam();
                 else
                     cam.enabled = true;
 
@@ -9548,7 +10223,6 @@ struct tagRECT
 //                || GUIAsOverlay
 //#elif HDRP
 #if HDRP
-                method != Method.Two_Displays
                 ////|| method == Method.Two_Displays && (GUIAsOverlay && GUIVisible || additionalS3DCamerasStruct.Length != 0)
                 ////|| GUIAsOverlay && GUIVisible || additionalS3DCamerasStruct != null //not working as not null even with additionalS3DCamerasStruct.Length == 0
                 ////|| GUIAsOverlay && GUIVisible || additionalS3DCamerasStruct.Length != 0
@@ -9562,10 +10236,16 @@ struct tagRECT
                 )
             {
                 //renderTexture = RT_Make();
-                renderTexture_left = RT_Make();
-                renderTexture_right = RT_Make();
+                //renderTexture_left = RT_Make();
+                //renderTexture_right = RT_Make();
+                renderTexture_left = RT_Make(renderTexture_left);
+                renderTexture_right = RT_Make(renderTexture_right);
                 renderTexture_left.Create();
                 renderTexture_right.Create();
+
+                S3DMaterial.SetTexture("_LeftTex", renderTexture_left);
+                S3DMaterial.SetTexture("_RightTex", renderTexture_right);
+
 //#if !UNITY_EDITOR
 //                //if (method == Method.Direct3D11)
 //                if (nativeRenderingPlugin)
@@ -9578,6 +10258,17 @@ struct tagRECT
 //#endif
                 if (nativeRenderingPlugin)
                     SetTexturesForPlugin(renderTexture_left, renderTexture_right);
+
+#if HDRP
+        for (int i = 0; i < additionalS3DCamerasStruct.Length; i++)
+            if (additionalS3DCamerasStruct[i].camera)
+            {
+                //additionalS3DCamerasStruct[i].renderTexture_left = RT_Make();
+                //additionalS3DCamerasStruct[i].renderTexture_right = RT_Make();
+                additionalS3DCamerasStruct[i].renderTexture_left = RT_Make(additionalS3DCamerasStruct[i].renderTexture_left);
+                additionalS3DCamerasStruct[i].renderTexture_right = RT_Make(additionalS3DCamerasStruct[i].renderTexture_right);
+            }
+#endif
 
                 //canvasRenderTexture_left = RT_Make();
                 //canvasRenderTexture_right = RT_Make();
@@ -9704,12 +10395,13 @@ struct tagRECT
                 //if (method != Method.Two_Displays_MirrorX && method != Method.Two_Displays_MirrorY)
                 if (!method.ToString().Contains("Two_Displays") && !nativeRenderingPlugin)
                 {
-                    S3DMaterial.SetTexture("_LeftTex", renderTexture_left);
-                    S3DMaterial.SetTexture("_RightTex", renderTexture_right);
+                    //S3DMaterial.SetTexture("_LeftTex", renderTexture_left);
+                    //S3DMaterial.SetTexture("_RightTex", renderTexture_right);
 
                     //if (debugLog) Debug.Log("Render_Set renderTexture_left.height: " + renderTexture_left.height + " renderTexture_left.width: " + renderTexture_left.width);
 
                     //verticesPosBuffer = new ComputeBuffer(4, Marshal.SizeOf(typeof(Vector2)));
+                    //Vertices();
                     //verticesPosBuffer.SetData(verticesPos);
                     //S3DMaterial.SetBuffer("verticesPosBuffer", verticesPosBuffer);
 
@@ -9722,12 +10414,12 @@ struct tagRECT
 
 #if !(URP || HDRP)
                     //if (blitTime == BlitToScreenTime.OnRenderImage || blitTime == BlitToScreenTime.OnPostRender)
-                        onRenderImageDelegate_cameraMain = cam.gameObject.AddComponent<OnRenderImageDelegate>();
+                    onRenderImageDelegate_cameraMain = cam.gameObject.AddComponent<OnRenderImageDelegate>();
 
                     //onRenderImageDelegate_cameraMain.RenderImageEvent += Canvas_BlitToLeftRightRenderTexture_OnRenderImageDelegate;
                     //if (!nativeRenderingPlugin)
-                        //cam.gameObject.AddComponent<OnRenderImageDelegate>().RenderImageEvent += SingleDisplayS3D_BlitToScreen_OnRenderImageDelegate;
-                        //onRenderImageDelegate_cameraMain.RenderImageEvent += SingleDisplayS3D_BlitToScreen_OnRenderImageDelegate;
+                        //cam.gameObject.AddComponent<OnRenderImageDelegate>().RenderImageEvent += SingleDisplayBlitToScreen_OnRenderImageDelegate;
+                        //onRenderImageDelegate_cameraMain.RenderImageEvent += SingleDisplayBlitToScreen_OnRenderImageDelegate;
 #endif
                 }
 ////#if URP || HDRP
@@ -9861,12 +10553,24 @@ struct tagRECT
             //CameraDataStruct_Change();
 
             if (blitTime == BlitToScreenTime.OnEndOfFrame && disableMainCam)
+                //cam.enabled = false;
+                DisableMainCam();
+
+            void DisableMainCam()
+            {
                 cam.enabled = false;
+
+                if (eyePriority == EyePriority.Left) //prevent TerrainsVisibilityUpdater(in "Test Track" sample) throw errors while the main camera disabled and no other camera with "MainCamera" tag in the scene
+                    camera_left.tag = "MainCamera";
+                else
+                    camera_right.tag = "MainCamera";
+            }
         }
         else
         {
             cameraRestore();
             StaticTooltip_Destroy();
+            S3DMaterial.SetFloat("_ShiftX", 0);
 
 //#if !HDRP
             //if (method == Method.Direct3D11)
@@ -9918,17 +10622,25 @@ struct tagRECT
 //                SetDataFromUnity(renderTexturePtr_left, IntPtr.Zero, S3DEnabled, method);
 //#endif
 //#if URP || HDRP
-                TopMostCamera_Set();
 
-#if !(URP || HDRP)
-                if (blitTime == BlitToScreenTime.OnRenderImage)
+#if URP || HDRP
+                //rtWidth = clientSize.x;
+                //rtHeight = clientSize.y;
+                //SetCanvasTexture();
+                AssignRenderTextures_S3DOff();
+                SetTexturesForPlugin(renderTexture, null);
+#else
+                //if (blitTime == BlitToScreenTime.OnRenderImage)
                     //onRenderImageDelegate_cameraMain = cam.gameObject.AddComponent<OnRenderImageDelegate>();
                     onRenderImageDelegate_cameraMain = topmostCamera.gameObject.AddComponent<OnRenderImageDelegate>();
 #endif
 
+                TopMostCamera_Set();
                 RenderTextureContextSet();
                 //SetTexturesForPlugin(renderTexture, null);
 //#endif
+                if (borders)
+                    GUI_Set();
             }
 #if HDRP
             else
@@ -9939,74 +10651,82 @@ struct tagRECT
 
 //#if HDRP
 //#if HDRP || URP
-            //if (additionalS3DCameras.Count != 0 || GUIAsOverlay)
-            if (
-//#if HDRP
-                //additionalS3DCameras.Count != 0 || 
-                additionalS3DTopmostCameraIndex != -1
-//#endif
-                //canvasCamera && canvasCamera.isActiveAndEnabled
-                //|| GUIAsOverlay
-                || canvasCamera
-                //|| nativeRenderingPlugin
-                )
-            {
-                //if (debugLog) Debug.Log("Canvas1");
-                renderTexture = RT_Make();
-                renderTexture.Create();
+                //if (additionalS3DCameras.Count != 0 || GUIAsOverlay)
+                if (
+    //#if HDRP
+                    //additionalS3DCameras.Count != 0 || 
+                    additionalS3DTopmostCameraIndex != -1
+    //#endif
+                    //canvasCamera && canvasCamera.isActiveAndEnabled
+                    //|| GUIAsOverlay
+                    //|| canvasCamera
+                    //|| nativeRenderingPlugin
+                    )
+                {
+                    //rtWidth = clientSize.x;
+                    //rtHeight = clientSize.y;
 
-                //if (nativeRenderingPlugin)
-                //    SetTexturesForPlugin(renderTexture, null);
+                    //if (blitTime == BlitToScreenTime.OnEndOfFrame)
+                    //    SetCanvasTexture();
 
-                if (additionalS3DTopmostCameraIndex != -1
-                //|| nativeRenderingPlugin
-                )
-                    cam.targetTexture = renderTexture;
+    //                renderTexture = RT_Make();
+    //                //renderTexture.Create();
 
-                //if (additionalS3DCameras.Count != 0 || canvasCamera && canvasCamera.isActiveAndEnabled)
-                //    cam.targetTexture = renderTexture;
+    //                //if (nativeRenderingPlugin)
+    //                //    SetTexturesForPlugin(renderTexture, null);
 
-                for (int i = 0; i < additionalS3DCamerasStruct.Length; i++)
-                    if (additionalS3DCamerasStruct[i].camera)
-                    {
-//#if HDRP
-                        additionalS3DCamerasStruct[i].renderTexture = RT_Make();
-                        additionalS3DCamerasStruct[i].camera.targetTexture = additionalS3DCamerasStruct[i].renderTexture;
-//#else
-//                        additionalS3DCamerasStruct[i].camera.targetTexture = renderTexture; //in URP this only prevent warning sign in the cameraStack
-//#endif
-                    }
+    //                //if (additionalS3DTopmostCameraIndex != -1
+    //                ////|| nativeRenderingPlugin
+    //                //)
+    //                    cam.targetTexture = renderTexture;
 
-//#if URP
-//                foreach (Camera c in cameraStack)
-//                    c.targetTexture = renderTexture;
-//#endif
+    //                //if (additionalS3DCameras.Count != 0 || canvasCamera && canvasCamera.isActiveAndEnabled)
+    //                //    cam.targetTexture = renderTexture;
 
-//#if HDRP
-//#if HDRP || URP
+    //                for (int i = 0; i < additionalS3DCamerasStruct.Length; i++)
+    //                    if (additionalS3DCamerasStruct[i].camera)
+    //                    {
+    ////#if HDRP
+    //                        additionalS3DCamerasStruct[i].renderTexture = RT_Make();
+    //                        //additionalS3DCamerasStruct[i].renderTexture.Create();
+    //                        additionalS3DCamerasStruct[i].camera.targetTexture = additionalS3DCamerasStruct[i].renderTexture;
+    ////#else
+    ////                        additionalS3DCamerasStruct[i].camera.targetTexture = renderTexture; //in URP this only prevent warning sign in the cameraStack
+    ////#endif
+    //                    }
 
-//                //if (canvasCamera && canvasCamera.isActiveAndEnabled)
-//                if (GUIAsOverlay)
-////#endif
-//                {
-//                    //if (debugLog) Debug.Log("Canvas2");
-//                    //canvasCamera.rect = Rect.MinMaxRect(0, 0, 1, 1);
-////#if HDRP
-////#if HDRP || URP
-//                    canvasRenderTexture = RT_Make();
-//                    //canvasCamera.targetTexture = canvasRenderTexture;
-////#else
-////                    canvasCamera.targetTexture = renderTexture;
-////#endif
-//                    //CanvasCameraRenderTexture_Set();
-//                    canvasCamera.targetTexture = canvasRenderTexture;
-//                }
+                    AssignRenderTextures_S3DOff();
 
-                ////RenderPipelineManager.beginContextRendering += RenderTexture_Reset_BeginContextRendering; //add render context
-                //RenderPipelineManager.beginCameraRendering += RenderTexture_Reset_BeginCameraRendering; //add render context
-                TopMostCamera_Set();
-                RenderTextureContextSet();
-            }
+    //#if URP
+    //                foreach (Camera c in cameraStack)
+    //                    c.targetTexture = renderTexture;
+    //#endif
+
+    //#if HDRP
+    //#if HDRP || URP
+
+    //                //if (canvasCamera && canvasCamera.isActiveAndEnabled)
+    //                if (GUIAsOverlay)
+    ////#endif
+    //                {
+    //                    //if (debugLog) Debug.Log("Canvas2");
+    //                    //canvasCamera.rect = Rect.MinMaxRect(0, 0, 1, 1);
+    ////#if HDRP
+    ////#if HDRP || URP
+    //                    canvasRenderTexture = RT_Make();
+    //                    //canvasCamera.targetTexture = canvasRenderTexture;
+    ////#else
+    ////                    canvasCamera.targetTexture = renderTexture;
+    ////#endif
+    //                    //CanvasCameraRenderTexture_Set();
+    //                    canvasCamera.targetTexture = canvasRenderTexture;
+    //                }
+
+                    ////RenderPipelineManager.beginContextRendering += RenderTexture_Reset_BeginContextRendering; //add render context
+                    //RenderPipelineManager.beginCameraRendering += RenderTexture_Reset_BeginCameraRendering; //add render context
+                    TopMostCamera_Set();
+                    RenderTextureContextSet();
+                }
 //#if HDRP
 //            for (int i = 0; i < additionalS3DCamerasStruct.Length; i++)
 //                if (additionalS3DCamerasStruct[i].camera)
@@ -10079,50 +10799,80 @@ struct tagRECT
 
     void AssignRenderTextures_S3DOff()
     {
+        //renderTexture = RT_Make();
+        renderTexture = RT_Make(renderTexture);
+
+#if !(URP || HDRP)
         if (renderTextureSetTargetBuffers)
             cam.SetTargetBuffers(renderTexture.colorBuffer, renderTexture.depthBuffer);
-        //else
-        //    cam.targetTexture = renderTexture;
+        else
+#endif
+            cam.targetTexture = renderTexture;
 
         for (int i = 0; i < additionalS3DCamerasStruct.Length; i++)
             if (additionalS3DCamerasStruct[i].camera)
             {
-#if HDRP
-                additionalS3DCamerasStruct[i].renderTexture = RT_Make();
-                additionalS3DCamerasStruct[i].camera.targetTexture = additionalS3DCamerasStruct[i].renderTexture;
-#else
-
+#if !(URP || HDRP)
                 if (renderTextureSetTargetBuffers)
                     additionalS3DCamerasStruct[i].camera.SetTargetBuffers(renderTexture.colorBuffer, renderTexture.depthBuffer);
-//                else
-//                {
-//#if URP
-//                    if (method != Method.Two_Displays_MirrorX && method != Method.Two_Displays_MirrorY) //fix overlay cameras unmatched output properties in Unity 2021 as not set targetTexture if using blit to screen
-//#endif
-
-//                    additionalS3DCamerasStruct[i].camera.rect = Rect.MinMaxRect(0, 0, 1, 1);
-//                    additionalS3DCamerasStruct[i].camera.targetTexture = renderTexture;
-//                }
+                else
 #endif
+                {
+#if HDRP
+                    //additionalS3DCamerasStruct[i].renderTexture = RT_Make();
+                    additionalS3DCamerasStruct[i].renderTexture = RT_Make(additionalS3DCamerasStruct[i].renderTexture);
+                    additionalS3DCamerasStruct[i].camera.targetTexture = additionalS3DCamerasStruct[i].renderTexture;
+#else
+
+#if URP
+                    if (method != Method.Two_Displays_MirrorX && method != Method.Two_Displays_MirrorY) //fix overlay cameras unmatched output properties in Unity 2021 as not set targetTexture if using blit to screen
+#endif
+
+                        additionalS3DCamerasStruct[i].camera.targetTexture = renderTexture;
+#endif
+                }
             }
     }
 
-    void AssignRenderTextures_S3DOn()
+    void AssignRenderTextures_S3DOn(
+        //[Optional]int leftRight
+        [Optional]StereoTargetEyeMask leftRight
+        )
     {
 //#if URP
-        if (!renderTextureSetTargetBuffers)
-        {
-            camera_left.targetTexture = renderTexture_left;
-            camera_right.targetTexture = renderTexture_right;
-        }
-//#else
-        else
+#if !(URP || HDRP)
+        if (renderTextureSetTargetBuffers)
         {
             //if (blitTime != BlitToScreenTime.OnRenderImage || blitTime == BlitToScreenTime.OnRenderImage && !method.ToString().Contains("Two_Displays"))
             {
-                camera_left.SetTargetBuffers(renderTexture_left.colorBuffer, renderTexture_left.depthBuffer);
-                camera_right.SetTargetBuffers(renderTexture_right.colorBuffer, renderTexture_right.depthBuffer);
+                if (leftRight == StereoTargetEyeMask.Left)
+                    camera_left.SetTargetBuffers(renderTexture_left.colorBuffer, renderTexture_left.depthBuffer);
+                else
+                    if (leftRight == StereoTargetEyeMask.Right)
+                        camera_right.SetTargetBuffers(renderTexture_right.colorBuffer, renderTexture_right.depthBuffer);
+                    else
+                    {
+                        camera_left.SetTargetBuffers(renderTexture_left.colorBuffer, renderTexture_left.depthBuffer);
+                        camera_right.SetTargetBuffers(renderTexture_right.colorBuffer, renderTexture_right.depthBuffer);
+                    }
             }
+        }
+//#else
+        else
+#endif
+        {
+            //if (leftRight == 1)
+            if (leftRight == StereoTargetEyeMask.Left)
+                camera_left.targetTexture = renderTexture_left;
+            else
+                //if (leftRight == 2)
+                if (leftRight == StereoTargetEyeMask.Right)
+                    camera_right.targetTexture = renderTexture_right;
+                else
+                {
+                    camera_left.targetTexture = renderTexture_left;
+                    camera_right.targetTexture = renderTexture_right;
+                }
         }
 //#endif
 
@@ -10132,32 +10882,72 @@ struct tagRECT
                 //additionalS3DCamerasStruct[i].camera_left.targetDisplay = additionalS3DCamerasStruct[i].camera_right.targetDisplay = 0;
                 //additionalS3DCamerasStruct[i].camera_left.rect = additionalS3DCamerasStruct[i].camera_right.rect = Rect.MinMaxRect(0, 0, 1, 1);
 #if HDRP
-                //additionalS3DCamerasStruct[i].renderTexture_left = new RenderTexture(renderTexture_left);
-                //additionalS3DCamerasStruct[i].renderTexture_right = new RenderTexture(renderTexture_right);
-                additionalS3DCamerasStruct[i].renderTexture_left = RT_Make();
-                additionalS3DCamerasStruct[i].renderTexture_right = RT_Make();
-                additionalS3DCamerasStruct[i].camera_left.targetTexture = additionalS3DCamerasStruct[i].renderTexture_left;
-                additionalS3DCamerasStruct[i].camera_right.targetTexture = additionalS3DCamerasStruct[i].renderTexture_right;
+                if (leftRight == StereoTargetEyeMask.Left)
+                {
+                    //additionalS3DCamerasStruct[i].camera_left.targetTexture = renderTexture_left;
+                    //additionalS3DCamerasStruct[i].renderTexture_left = RT_Make();
+                    //additionalS3DCamerasStruct[i].renderTexture_left = RT_Make(additionalS3DCamerasStruct[i].renderTexture_left);
+                    additionalS3DCamerasStruct[i].camera_left.targetTexture = additionalS3DCamerasStruct[i].renderTexture_left;
+                }
+                else
+                    if (leftRight == StereoTargetEyeMask.Right)
+                    {
+                        //additionalS3DCamerasStruct[i].camera_right.targetTexture = renderTexture_right;
+                        //additionalS3DCamerasStruct[i].renderTexture_right = RT_Make();
+                        //additionalS3DCamerasStruct[i].renderTexture_right = RT_Make(additionalS3DCamerasStruct[i].renderTexture_right);
+                        additionalS3DCamerasStruct[i].camera_right.targetTexture = additionalS3DCamerasStruct[i].renderTexture_right;
+                    }
+                    else
+                    {
+                        //additionalS3DCamerasStruct[i].camera_left.targetTexture = renderTexture_left;
+                        //additionalS3DCamerasStruct[i].camera_right.targetTexture = renderTexture_right;
+                        //additionalS3DCamerasStruct[i].renderTexture_left = new RenderTexture(renderTexture_left);
+                        //additionalS3DCamerasStruct[i].renderTexture_right = new RenderTexture(renderTexture_right);
+                        //additionalS3DCamerasStruct[i].renderTexture_left = RT_Make();
+                        //additionalS3DCamerasStruct[i].renderTexture_right = RT_Make();
+                        //additionalS3DCamerasStruct[i].renderTexture_left = RT_Make(additionalS3DCamerasStruct[i].renderTexture_left);
+                        //additionalS3DCamerasStruct[i].renderTexture_right = RT_Make(additionalS3DCamerasStruct[i].renderTexture_right);
+                        additionalS3DCamerasStruct[i].camera_left.targetTexture = additionalS3DCamerasStruct[i].renderTexture_left;
+                        additionalS3DCamerasStruct[i].camera_right.targetTexture = additionalS3DCamerasStruct[i].renderTexture_right;
+                    }
 #else
 //#elif !URP
 //#if URP
-                if (!renderTextureSetTargetBuffers)
+#if !URP
+                if (renderTextureSetTargetBuffers)
+                {
+                    //if (blitTime != BlitToScreenTime.OnRenderImage || blitTime == BlitToScreenTime.OnRenderImage && !method.ToString().Contains("Two_Displays"))
+                    {
+                        if (leftRight == StereoTargetEyeMask.Left)
+                            additionalS3DCamerasStruct[i].camera_left.SetTargetBuffers(renderTexture_left.colorBuffer, renderTexture_left.depthBuffer);
+                        else
+                            if (leftRight == StereoTargetEyeMask.Right)
+                                additionalS3DCamerasStruct[i].camera_right.SetTargetBuffers(renderTexture_right.colorBuffer, renderTexture_right.depthBuffer);
+                            else
+                            {
+                                additionalS3DCamerasStruct[i].camera_left.SetTargetBuffers(renderTexture_left.colorBuffer, renderTexture_left.depthBuffer);
+                                additionalS3DCamerasStruct[i].camera_right.SetTargetBuffers(renderTexture_right.colorBuffer, renderTexture_right.depthBuffer);
+                            }
+                    }
+                }
+//#else
+                else
+#endif
                 {
 #if URP
                     if (method != Method.Two_Displays_MirrorX && method != Method.Two_Displays_MirrorY) //fix overlay cameras unmatched output properties in Unity 2021 as not set targetTexture if using blit to screen
 #endif
                     {
-                        additionalS3DCamerasStruct[i].camera_left.targetTexture = renderTexture_left;
-                        additionalS3DCamerasStruct[i].camera_right.targetTexture = renderTexture_right;
-                    }
-                }
-//#else
-                else
-                {
-                    //if (blitTime != BlitToScreenTime.OnRenderImage || blitTime == BlitToScreenTime.OnRenderImage && !method.ToString().Contains("Two_Displays"))
-                    {
-                        additionalS3DCamerasStruct[i].camera_left.SetTargetBuffers(renderTexture_left.colorBuffer, renderTexture_left.depthBuffer);
-                        additionalS3DCamerasStruct[i].camera_right.SetTargetBuffers(renderTexture_right.colorBuffer, renderTexture_right.depthBuffer);
+                        if (leftRight == StereoTargetEyeMask.Left)
+                            additionalS3DCamerasStruct[i].camera_left.targetTexture = renderTexture_left;
+                        else
+                            if (leftRight == StereoTargetEyeMask.Right)
+                                additionalS3DCamerasStruct[i].camera_right.targetTexture = renderTexture_right;
+                            else
+                            {
+                                additionalS3DCamerasStruct[i].camera_left.targetTexture = renderTexture_left;
+                                additionalS3DCamerasStruct[i].camera_right.targetTexture = renderTexture_right;
+                            }
                     }
                 }
 //#endif
@@ -10218,7 +11008,7 @@ struct tagRECT
 
     void SetTexturesForPlugin(RenderTexture RT_left, RenderTexture RT_right)
     {
-        Debug.Log("SetTexturesForPlugin");
+        if (debugLog) Debug.Log("SetTexturesForPlugin");
 
 //#if !UNITY_EDITOR
 //#if !Debug
@@ -10252,18 +11042,22 @@ struct tagRECT
 
         //SetDataFromUnity(renderTexturePtr_left, renderTexturePtr_right, S3DEnabled, method);
         //SetDataFromUnity(renderTexturePtr_left, renderTexturePtr_right, S3DEnabled, method, RTFormat);
-        //Debug.Log(RT_left.graphicsFormat);
-        //Debug.Log(graphicsFormat);
-        Debug.Log(DataForPlugin.graphicsFormat);
-        Debug.Log("sRGB: " + RT_left.sRGB);
         //SetDataFromUnity(renderTexturePtr_left, renderTexturePtr_right, S3DEnabled, method, RT_left.graphicsFormat);
         //SetDataFromUnity(renderTexturePtr_left, renderTexturePtr_right, S3DEnabled, method, RT_left.graphicsFormat, QualitySettings.activeColorSpace == ColorSpace.Linear ? true : false);
-        Debug.Log("cam.rect: " + cam.rect);
-        Debug.Log("cam.pixelRect: " + cam.pixelRect);
-        //Debug.Log("renderTexturePtr_right: " + renderTexturePtr_right);
-        Debug.Log("renderTexturePtr_right: " + DataForPlugin.textureHandleRight);
         //SetDataFromUnity(renderTexturePtr_left, renderTexturePtr_right, S3DEnabled, method, RT_left.graphicsFormat, QualitySettings.activeColorSpace == ColorSpace.Linear ? true : false, cam.pixelRect);
         //SetDataFromUnity(renderTexturePtr_left, renderTexturePtr_right, S3DEnabled, method, RT_left.graphicsFormat, QualitySettings.activeColorSpace == ColorSpace.Linear ? true : false, camRectClampedPixels);
+
+        if (debugLog)
+        {
+            //Debug.Log(RT_left.graphicsFormat);
+            //Debug.Log(graphicsFormat);
+            Debug.Log(DataForPlugin.graphicsFormat);
+            Debug.Log("sRGB: " + RT_left.sRGB);
+            Debug.Log("cam.rect: " + cam.rect);
+            Debug.Log("cam.pixelRect: " + cam.pixelRect);
+            //Debug.Log("renderTexturePtr_right: " + renderTexturePtr_right);
+            Debug.Log("renderTexturePtr_right: " + DataForPlugin.textureHandleRight);
+        }
 //#endif
 
         SendDataToPlugin();
@@ -10364,14 +11158,13 @@ struct tagRECT
 //#endif
 
         //if (debugLog) Debug.Log("TopMostCamera_Set left: " + topmostCamera_left + " right: " + topmostCamera_right);
-        //if (debugLog)
-            Debug.Log("TopMostCamera_Set: " + topmostCamera + " left: " + topmostCamera_left + " right: " + topmostCamera_right);
+        if (debugLog) Debug.Log("TopMostCamera_Set: " + topmostCamera + " left: " + topmostCamera_left + " right: " + topmostCamera_right);
     }
 
     //void Remove()
     //{
     //    if (onRenderImageDelegate_cameraMain)
-    //        onRenderImageDelegate_cameraMain.RenderImageEvent -= SingleDisplayS3D_BlitToScreen_OnRenderImageDelegate;
+    //        onRenderImageDelegate_cameraMain.RenderImageEvent -= SingleDisplayBlitToScreen_OnRenderImageDelegate;
 
     //    if (topmostCamera_left)
     //    {
@@ -10399,47 +11192,77 @@ struct tagRECT
 
     void RenderTextureContextSet()
     {
-        //if (debugLog)
-            Debug.Log("RenderTextureContextSet");
+        if (debugLog) Debug.Log("RenderTextureContextSet");
 
 #if URP || HDRP
-        //RenderPipelineManager.endCameraRendering -= SingleDisplayS3D_BlitToScreen_EndCameraRendering;
+        //RenderPipelineManager.endCameraRendering -= SingleDisplayBlitToScreen_EndCameraRendering;
         //RenderPipelineManager.beginCameraRendering -= RenderTexture_Reset_BeginCameraRendering; //remove render context if exist before add to avoid duplication
         //RenderPipelineManager.endCameraRendering -= RenderTexture_BlitToScreen_EndCameraRendering;
         //RenderPipelineManager.endCameraRendering -= RenderTexture_BlitToRenderTexture_EndCameraRendering;
 #if UNITY_2021_1_OR_NEWER
-        RenderPipelineManager.endContextRendering -= SingleDisplayS3D_BlitToScreen_EndContextRendering;
+        RenderPipelineManager.endContextRendering -= SingleDisplayBlitToScreen_EndContextRendering;
         RenderPipelineManager.beginContextRendering -= RenderTexture_Reset_BeginContextRendering; //remove render context if exist before add to avoid duplication
         RenderPipelineManager.endContextRendering -= RenderTexture_BlitToScreen_EndContextRendering;
+        RenderPipelineManager.beginContextRendering -= CameraRectSet_BeginContextRendering;
+        RenderPipelineManager.endContextRendering -= CameraRectReset_EndContextRendering;
         //RenderPipelineManager.endContextRendering -= RenderTexture_BlitToRenderTexture_EndContextRendering;
+#if URP && !UNITY_6000_0_OR_NEWER
         RenderPipelineManager.endContextRendering -= Canvas_BlitToRenderTexture_EndContextRendering;
-#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
-        RenderPipelineManager.endContextRendering -= SingleDisplayS3D_BlitToScreenGLES2_EndContextRendering;
-        RenderPipelineManager.endContextRendering -= Canvas_BlitToRenderTextureGLES2_EndContextRendering;
 #endif
+//#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
+//        RenderPipelineManager.endContextRendering -= SingleDisplayBlitToScreenGLES2_EndContextRendering;
+//        //RenderPipelineManager.endContextRendering -= Canvas_BlitToRenderTextureGLES2_EndContextRendering;
+//#endif
+        //RenderPipelineManager.endContextRendering -= SetTexture_EndContextRendering;
 #else
-        RenderPipelineManager.endFrameRendering -= SingleDisplayS3D_BlitToScreen_EndFrameRendering;
+        RenderPipelineManager.endFrameRendering -= SingleDisplayBlitToScreen_EndFrameRendering;
         RenderPipelineManager.beginFrameRendering -= RenderTexture_Reset_BeginFrameRendering; //remove render context if exist before add to avoid duplication
         RenderPipelineManager.endFrameRendering -= RenderTexture_BlitToScreen_EndFrameRendering;
+        RenderPipelineManager.beginFrameRendering -= CameraRectSet_BeginFrameRendering;
+        RenderPipelineManager.endFrameRendering -= CameraRectReset_EndFrameRendering;
         //RenderPipelineManager.endFrameRendering -= RenderTexture_BlitToRenderTexture_EndFrameRendering;
+#if URP && !UNITY_6000_0_OR_NEWER
         RenderPipelineManager.endFrameRendering -= Canvas_BlitToRenderTexture_EndFrameRendering;
-#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
-        RenderPipelineManager.endFrameRendering -= SingleDisplayS3D_BlitToScreenGLES2_EndFrameRendering;
-        RenderPipelineManager.endFrameRendering -= Canvas_BlitToRenderTextureGLES2_EndFrameRendering;
 #endif
+//#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
+//        RenderPipelineManager.endFrameRendering -= SingleDisplayBlitToScreenGLES2_EndFrameRendering;
+//        //RenderPipelineManager.endFrameRendering -= Canvas_BlitToRenderTextureGLES2_EndFrameRendering;
+//#endif
+        //RenderPipelineManager.endFrameRendering -= SetTexture_EndFrameRendering;
+#endif
+
+//            if ((nativeRenderingPlugin
+//#if HDRP
+//            || additionalS3DTopmostCameraIndex != -1
+//#endif
+//            )
+//             && !S3DEnabled
+//            )
+//            {
+//#if UNITY_2021_1_OR_NEWER
+//                RenderPipelineManager.endContextRendering += SetTexture_EndContextRendering;
+//#else
+//                RenderPipelineManager.endFrameRendering += SetTexture_EndFrameRendering;
+//#endif
+//            }
+
+#if HDRP
+        renderTextureBlitDelegate = delegate{};
 #endif
 #else
 
         if (onRenderImageDelegate_cameraMain)
         {
-            onRenderImageDelegate_cameraMain.RenderImageEvent -= SingleDisplayS3D_BlitToScreen_OnRenderImageDelegate;
-            onRenderImageDelegate_cameraMain.RenderImageEvent -= SingleDisplayS3D_BlitToScreenGLES2_OnRenderImageDelegate;
+            onRenderImageDelegate_cameraMain.RenderImageEvent -= SingleDisplayBlitToScreen_OnRenderImageDelegate;
             onRenderImageDelegate_cameraMain.RenderImageEvent -= SetTexture_OnRenderImageDelegate;
-            onRenderImageDelegate_cameraMain.RenderImageEvent -= BlitSourceToDestination_OnRenderImageDelegate;
-            onRenderImageDelegate_cameraMain.RenderImageEvent -= Canvas_BlitToRenderTexture_OnRenderImageDelegate;
-            onRenderImageDelegate_cameraMain.RenderImageEvent -= Canvas_BlitToRenderTextureGLES2_OnRenderImageDelegate;
-            onRenderImageDelegate_cameraMain.RenderImageEvent -= Canvas_BlitToLeftRightRenderTexture_OnRenderImageDelegate;
-            onRenderImageDelegate_cameraMain.RenderImageEvent -= Canvas_BlitToLeftRightRenderTextureGLES2_OnRenderImageDelegate;
+            //onRenderImageDelegate_cameraMain.RenderImageEvent -= BlitSourceToDestination_OnRenderImageDelegate;
+            //onRenderImageDelegate_cameraMain.RenderImageEvent -= Canvas_BlitToRenderTexture_OnRenderImageDelegate;
+            //onRenderImageDelegate_cameraMain.RenderImageEvent -= Canvas_BlitToLeftRightRenderTexture_OnRenderImageDelegate;
+//#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
+//            onRenderImageDelegate_cameraMain.RenderImageEvent -= SingleDisplayBlitToScreenGLES2_OnRenderImageDelegate;
+//            //onRenderImageDelegate_cameraMain.RenderImageEvent -= Canvas_BlitToRenderTextureGLES2_OnRenderImageDelegate;
+//            //onRenderImageDelegate_cameraMain.RenderImageEvent -= Canvas_BlitToLeftRightRenderTextureGLES2_OnRenderImageDelegate;
+//#endif
 
             if (nativeRenderingPlugin && !S3DEnabled)
             {
@@ -10456,15 +11279,19 @@ struct tagRECT
             //onRenderImageDelegate_cameraRight.RenderImageEvent -= SetTextureRight_OnRenderImageDelegate;
             //onRenderImageDelegate_cameraLeft.RenderImageEvent -= RenderTexture_BlitToScreen_OnRenderImageDelegate;
             //onRenderImageDelegate_cameraRight.RenderImageEvent -= RenderTexture_BlitToScreen_OnRenderImageDelegate;
-            onRenderImageDelegate_cameraLeft.RenderImageEvent -= BlitSourceToDestination_OnRenderImageDelegate;
-            onRenderImageDelegate_cameraRight.RenderImageEvent -= BlitSourceToDestination_OnRenderImageDelegate;
+            //onRenderImageDelegate_cameraLeft.RenderImageEvent -= BlitSourceToDestination_OnRenderImageDelegate;
+            //onRenderImageDelegate_cameraRight.RenderImageEvent -= BlitSourceToDestination_OnRenderImageDelegate;
+            onRenderImageDelegate_cameraLeft.RenderImageEvent -= BlitSourceToRenderTextureLeft_OnRenderImageDelegate;
+            onRenderImageDelegate_cameraRight.RenderImageEvent -= BlitSourceToRenderTextureRight_OnRenderImageDelegate;
             onRenderImageDelegate_cameraLeft.RenderImageEvent -= RenderTexture_BlitToScreenLeft_OnRenderImageDelegate;
             onRenderImageDelegate_cameraRight.RenderImageEvent -= RenderTexture_BlitToScreenRight_OnRenderImageDelegate;
-            onRenderImageDelegate_cameraLeft.RenderImageEvent -= RenderTexture_BlitToScreenLeftGLES2_OnRenderImageDelegate;
-            onRenderImageDelegate_cameraRight.RenderImageEvent -= RenderTexture_BlitToScreenRightGLES2_OnRenderImageDelegate;
+//#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
+//            onRenderImageDelegate_cameraLeft.RenderImageEvent -= RenderTexture_BlitToScreenLeftGLES2_OnRenderImageDelegate;
+//            onRenderImageDelegate_cameraRight.RenderImageEvent -= RenderTexture_BlitToScreenRightGLES2_OnRenderImageDelegate;
+//#endif
 
-            onRenderImageDelegate_cameraLeft.RenderImageEvent -= Canvas_BlitToLeftRenderTexture_OnRenderImageDelegate;
-            onRenderImageDelegate_cameraRight.RenderImageEvent -= Canvas_BlitToRightRenderTexture_OnRenderImageDelegate;
+            //onRenderImageDelegate_cameraLeft.RenderImageEvent -= Canvas_BlitToLeftRenderTexture_OnRenderImageDelegate;
+            //onRenderImageDelegate_cameraRight.RenderImageEvent -= Canvas_BlitToRightRenderTexture_OnRenderImageDelegate;
 
             Destroy(onRenderImageDelegate_cameraLeft);
             Destroy(onRenderImageDelegate_cameraRight);
@@ -10476,34 +11303,62 @@ struct tagRECT
         Camera.onPreRender -= RenderTexture_Reset_OnPreRender;
         Camera.onPreRender -= RenderTexture_ResetTargetBuffers_OnPreRender;
         Camera.onPostRender -= RenderTexture_BlitToScreen_OnPostRender;
-        Camera.onPostRender -= Canvas_BlitToRenderTexture_OnPostRender;
-        Camera.onPostRender -= Canvas_BlitToRenderTextureLeftRight_OnPostRender;
-        Camera.onPostRender -= Canvas_BlitToRenderTextureLeftRightGLES2_OnPostRender;
-        endOfFrameDelegate -= Canvas_BlitToLeftRightRenderTexture_OnEndOfFrame;
-#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
-        Camera.onPostRender -= RenderTexture_BlitToScreenGLES2_OnPostRender;
-        Camera.onPostRender -= Canvas_BlitToRenderTextureGLES2_OnPostRender;
-        endOfFrameDelegate -= Canvas_BlitToLeftRightRenderTextureGLES2_OnEndOfFrame;
+        //Camera.onPostRender -= Canvas_BlitToRenderTexture_OnPostRender;
+        //Camera.onPostRender -= Canvas_BlitToRenderTextureLeftRight_OnPostRender;
+        //endOfFrameDelegate -= Canvas_BlitToLeftRightRenderTexture_OnEndOfFrame;
+//#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
+//        //Camera.onPostRender -= Canvas_BlitToRenderTextureLeftRightGLES2_OnPostRender;
+//        //Camera.onPostRender -= RenderTexture_BlitToScreenGLES2_OnPostRender;
+//        //Camera.onPostRender -= Canvas_BlitToRenderTextureGLES2_OnPostRender;
+//        //endOfFrameDelegate -= Canvas_BlitToLeftRightRenderTextureGLES2_OnEndOfFrame;
+//        Camera.onPostRender -= SingleDisplayBlitToScreenGLES2_OnPostRender;
+//        //endOfFrameDelegate -= RenderTexture_BlitToScreenLeftGLES2_OnEndOfFrame;
+//        //canvasBlitDelegate -= Canvas_BlitToScreenGLES2;
+//#endif
+        Camera.onPostRender -= SingleDisplayBlitToScreen_OnPostRender;
+        //endOfFrameDelegate -= SingleDisplayBlitToScreen_OnEndOfFrame;
+        ////endOfFrameDelegate -= RenderTexture_BlitToScreenLeftRight_OnEndOfFrame;
+        //endOfFrameDelegate -= RenderTexture_BlitToDisplayLeft_OnEndOfFrame;
+        //endOfFrameDelegate -= RenderTexture_BlitToDisplayRight_OnEndOfFrame;
+        ////Camera.onPostRender -= GetCanvasCameraActiveRenderTexture;
+
+        //camerasTargetRemoveDelegateLeft -= CamerasTargetRemoveLeft;
+        //camerasTargetRemoveDelegateRight -= CamerasTargetRemoveRight;
+        camerasTargetRemoveDelegateLeft = delegate{};
+        camerasTargetRemoveDelegateRight = delegate{};
+        blitToScreenDelegate = delegate{};
+
+        blitCamera_left = topmostCamera_left;
+        blitCamera_right = topmostCamera_right;
 #endif
-        Camera.onPostRender -= SingleDisplayS3D_BlitToScreen_OnPostRender;
-        Camera.onPostRender -= SingleDisplayS3D_BlitToScreenGLES2_OnPostRender;
-        endOfFrameDelegate -= SingleDisplayS3D_BlitToScreen_OnEndOfFrame;
-        //endOfFrameDelegate -= RenderTexture_BlitToScreenLeftRight_OnEndOfFrame;
-        endOfFrameDelegate -= RenderTexture_BlitToScreenLeft_OnEndOfFrame;
-        endOfFrameDelegate -= RenderTexture_BlitToScreenRight_OnEndOfFrame;
-        endOfFrameDelegate -= RenderTexture_BlitToScreenLeftGLES2_OnEndOfFrame;
-        //Camera.onPostRender -= GetCanvasCameraActiveRenderTexture;
-#endif
-        //canvasBlitToScreenDelegate -= Canvas_BlitToScreenEmpty;
-        //canvasBlitToScreenDelegate += Canvas_BlitToScreenEmpty;
-        canvasBlitToScreenDelegate -= Canvas_BlitToScreen;
-        canvasBlitToScreenDelegate -= Canvas_BlitToScreenGLES2;
+        endOfFrameDelegate = delegate{};
+        ////canvasBlitDelegate -= Canvas_BlitToScreenEmpty;
+        ////canvasBlitDelegate = Canvas_BlitToScreenEmpty;
+        //canvasBlitDelegate -= Canvas_BlitToScreen;
+        canvasBlitDelegate = delegate{};
 
         camera_left.targetTexture = null;
         camera_right.targetTexture = null;
 
         camera_left.rect = camera_right.rect = cam.rect;
 
+#if !(URP || HDRP)
+        CameraEvent ce = CameraEvent.AfterEverything;
+        //CommandBuffer cb_main = new CommandBuffer();
+        //cam.RemoveAllCommandBuffers();
+        cam.RemoveCommandBuffer(ce, cb_main);
+        cb_main.Clear();
+        //CommandBuffer cb_left = new CommandBuffer();
+        //camera_left.RemoveAllCommandBuffers();
+        camera_left.RemoveCommandBuffer(ce, cb_left);
+        cb_left.Clear();
+        //topmostCamera_left.RemoveAllCommandBuffers();
+        //CommandBuffer cb_right = new CommandBuffer();
+        //camera_right.RemoveAllCommandBuffers();
+        camera_right.RemoveCommandBuffer(ce, cb_right);
+        cb_right.Clear();
+        //topmostCamera_right.RemoveAllCommandBuffers();
+#endif
         foreach (var c in additionalS3DCamerasStruct)
             if (c.camera)
             {
@@ -10511,7 +11366,17 @@ struct tagRECT
                 //c.camera_left.targetTexture = c.camera_right.targetTexture = c.camera.targetTexture = null;
 
                 c.camera_left.rect = c.camera_right.rect = cam.rect;
+
+#if !(URP || HDRP)
+                c.camera_left.RemoveCommandBuffer(ce, cb_left);
+                c.camera_right.RemoveCommandBuffer(ce, cb_right);
+#endif
             }
+
+        //S3DMaterial.SetInt("_Clockwise", 1);
+        S3DMaterial.SetInt("_Flipped", 0);
+        ////S3DMaterial.SetInt("_GUI", 0);
+        ////S3DMaterial.SetTexture("_CanvasTex", new RenderTexture(2, 2, 0));
 
         //if (canvasCamera)
         //    canvasCamera.rect = cam.rect;
@@ -10539,9 +11404,9 @@ struct tagRECT
         //            if (method != Method.Two_Displays)
         //            {
         //                if (S3DEnabled && !nativeRenderingPlugin)
-        //                    //RenderPipelineManager.endCameraRendering += SingleDisplayS3D_BlitToScreen_EndCameraRendering; //draw fullscreen quad at main camera with S3D combined output by S3D shader
-        //                    RenderPipelineManager.endFrameRendering += SingleDisplayS3D_BlitToScreen_EndFrameRendering; //draw fullscreen quad at main camera with S3D combined output by S3D shader
-        //                    //RenderPipelineManager.endContextRendering += SingleDisplayS3D_BlitToScreen_EndContextRendering; //draw fullscreen quad at main camera with S3D combined output by S3D shader
+        //                    //RenderPipelineManager.endCameraRendering += SingleDisplayBlitToScreen_EndCameraRendering; //draw fullscreen quad at main camera with S3D combined output by S3D shader
+        //                    RenderPipelineManager.endFrameRendering += SingleDisplayBlitToScreen_EndFrameRendering; //draw fullscreen quad at main camera with S3D combined output by S3D shader
+        //                    //RenderPipelineManager.endContextRendering += SingleDisplayBlitToScreen_EndContextRendering; //draw fullscreen quad at main camera with S3D combined output by S3D shader
         //#if HDRP
         //                //if (topmostCamera_left != camera_left)
         //                if (additionalS3DTopmostCameraIndex != -1 || GUIAsOverlay && GUIVisible && (S3DEnabled || nativeRenderingPlugin))
@@ -10570,124 +11435,198 @@ struct tagRECT
         //    onRenderImageDelegate_cameraMain.RenderImageEvent += BlitSourceToDestination_OnRenderImageDelegate;
         //}
 
-        //#if URP || HDRP
+//        //#if URP || HDRP
+//        if (
+//        canvasCamera && canvasCamera.isActiveAndEnabled)
+//#if URP || HDRP
+//#if UNITY_2021_1_OR_NEWER
+//#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
+//            if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
+//                RenderPipelineManager.endContextRendering += Canvas_BlitToRenderTextureGLES2_EndContextRendering; //blit Render Texture to main Render Texture(required for HDRP overlay cameras) after render is finished
+//            else
+//#endif
+//                RenderPipelineManager.endContextRendering += Canvas_BlitToRenderTexture_EndContextRendering; //blit Render Texture to main Render Texture(required for HDRP overlay cameras) after render is finished
+//#else
+//#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
+//            if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
+//                RenderPipelineManager.endFrameRendering += Canvas_BlitToRenderTextureGLES2_EndFrameRendering; //blit Render Texture to main Render Texture(required for HDRP overlay cameras) after render is finished
+//            else
+//#endif
+//                RenderPipelineManager.endFrameRendering += Canvas_BlitToRenderTexture_EndFrameRendering; //blit Render Texture to main Render Texture(required for HDRP overlay cameras) after render is finished
+//#endif
+//#else
+//        {
+//            switch (blitTime)
+//            {
+//                case BlitToScreenTime.OnPostRender:
+//#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
+//                    if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
+//                        if (method.ToString().Contains("Two_Displays"))
+//                            Camera.onPostRender += Canvas_BlitToRenderTextureGLES2_OnPostRender;
+//                        else
+//                            Camera.onPostRender += Canvas_BlitToRenderTextureLeftRightGLES2_OnPostRender;
+//                    else
+//#endif
+//                        if (method.ToString().Contains("Two_Displays"))
+//                            Camera.onPostRender += Canvas_BlitToRenderTexture_OnPostRender;
+//                        else
+//                            Camera.onPostRender += Canvas_BlitToRenderTextureLeftRight_OnPostRender;
+//                break;
+
+//                case BlitToScreenTime.OnRenderImage:
+
+//                    if (onRenderImageDelegate_cameraMain)
+//                        if (S3DEnabled)
+//                        //if (cam.isActiveAndEnabled)
+//#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
+//                            if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
+//                                onRenderImageDelegate_cameraMain.RenderImageEvent += Canvas_BlitToLeftRightRenderTextureGLES2_OnRenderImageDelegate;
+//                            else
+//#endif
+//                                onRenderImageDelegate_cameraMain.RenderImageEvent += Canvas_BlitToLeftRightRenderTexture_OnRenderImageDelegate;
+//                    //cam.gameObject.AddComponent<OnRenderImageDelegate>().RenderImageEvent += Canvas_BlitToLeftRightRenderTexture_OnRenderImageDelegate;
+//                        else
+//                        {
+//                            if (nativeRenderingPlugin)
+//                            {
+//#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
+//                                if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
+//                                    onRenderImageDelegate_cameraMain.RenderImageEvent += Canvas_BlitToRenderTextureGLES2_OnRenderImageDelegate;
+//                                else
+//#endif
+//                                    onRenderImageDelegate_cameraMain.RenderImageEvent += Canvas_BlitToRenderTexture_OnRenderImageDelegate;
+
+//                                //onRenderImageDelegate_cameraMain.RenderImageEvent += BlitSourceToDestination_OnRenderImageDelegate;
+//                            }
+//                        }
+//                    else
+//                    //if (!cam.isActiveAndEnabled)
+//                    //if (method.ToString().Contains("Two_Displays"))
+//                    {
+//                        onRenderImageDelegate_cameraLeft = topmostCamera_left.gameObject.AddComponent<OnRenderImageDelegate>();
+//                        onRenderImageDelegate_cameraRight = topmostCamera_right.gameObject.AddComponent<OnRenderImageDelegate>();
+//                        //onRenderImageDelegate_cameraLeft.RenderImageEvent += BlitSourceToDestination_OnRenderImageDelegate;
+//                        //onRenderImageDelegate_cameraRight.RenderImageEvent += BlitSourceToDestination_OnRenderImageDelegate;
+//                        onRenderImageDelegate_cameraLeft.RenderImageEvent += BlitSourceToRenderTextureLeft_OnRenderImageDelegate;
+//                        onRenderImageDelegate_cameraRight.RenderImageEvent += BlitSourceToRenderTextureRight_OnRenderImageDelegate;
+
+//#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
+//                        if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
+//                        {
+//                            onRenderImageDelegate_cameraLeft.RenderImageEvent += Canvas_BlitToLeftRenderTextureGLES2_OnRenderImageDelegate;
+//                            onRenderImageDelegate_cameraRight.RenderImageEvent += Canvas_BlitToRightRenderTextureGLES2_OnRenderImageDelegate;
+//                        }
+//                        else
+//#endif
+//                        {
+//                            onRenderImageDelegate_cameraLeft.RenderImageEvent += Canvas_BlitToLeftRenderTexture_OnRenderImageDelegate;
+//                            onRenderImageDelegate_cameraRight.RenderImageEvent += Canvas_BlitToRightRenderTexture_OnRenderImageDelegate;
+//                        }
+
+//                        //topmostCamera_left.gameObject.AddComponent<OnRenderImageDelegate>().RenderImageEvent += BlitCanvasToLeftCamera;
+//                        //topmostCamera_right.gameObject.AddComponent<OnRenderImageDelegate>().RenderImageEvent += BlitCanvasToRightCamera;
+//                    }
+//                break;
+
+//                case BlitToScreenTime.OnEndOfFrame:
+//                    if (S3DEnabled)
+//#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
+//                    if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
+//                        if (method.ToString().Contains("Two_Displays") && !nativeRenderingPlugin)
+//                            canvasBlitDelegate = Canvas_BlitToScreenGLES2;
+//                        else
+//                            endOfFrameDelegate += Canvas_BlitToLeftRightRenderTextureGLES2_OnEndOfFrame;
+//                    else
+//#endif
+//                        if (method.ToString().Contains("Two_Displays") && !nativeRenderingPlugin)
+//                            canvasBlitDelegate = Canvas_BlitToScreen;
+//                        else
+//                            endOfFrameDelegate += Canvas_BlitToLeftRightRenderTexture_OnEndOfFrame;
+//                    else
+//                        if (nativeRenderingPlugin)
+//#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
+//                            if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
+//                                onRenderImageDelegate_cameraMain.RenderImageEvent += Canvas_BlitToRenderTextureGLES2_OnRenderImageDelegate;
+//                            else
+//#endif
+//                                onRenderImageDelegate_cameraMain.RenderImageEvent += Canvas_BlitToRenderTexture_OnRenderImageDelegate;
+
+//                break;
+//            }
+//        }
+//        //else
+//        //    canvasBlitDelegate = Canvas_BlitToScreenEmpty;
+//#endif
+
+        OnPreRenderClearScreen(false);
+        blitToScreenClearRequired = false;
+
         if (
-#if HDRP
-        additionalS3DTopmostCameraIndex != -1 ||
+            //borders && 
+            //!S3DEnabled && !nativeRenderingPlugin
+            //&& cam.pixelRect != Rect.MinMaxRect(0, 0, clientSize.x, clientSize.y)
+            //&& cam.rect != Rect.MinMaxRect(0, 0, 1, 1)
+            borders && !nativeRenderingPlugin
+#if !UNITY_EDITOR
+            && (SystemInfo.graphicsDeviceType == GraphicsDeviceType.Direct3D11 || SystemInfo.graphicsDeviceType == GraphicsDeviceType.Vulkan
+#if URP
+            || S3DEnabled && 
+            (method.ToString().Contains("SideBySide") || method.ToString().Contains("OverUnder") || blitTime == BlitToScreenTime.OnEndOfFrame && SystemInfo.graphicsDeviceType.ToString().Contains("OpenGLES") && method.ToString().Contains("Two_Displays"))
 #endif
-        canvasCamera && canvasCamera.isActiveAndEnabled)
-#if URP || HDRP
-#if UNITY_2021_1_OR_NEWER
-#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
-            if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
-                RenderPipelineManager.endContextRendering += Canvas_BlitToRenderTextureGLES2_EndContextRendering; //blit Render Texture to main Render Texture(required for HDRP overlay cameras) after render is finished
-            else
+            || !Screen.fullScreen //OpenGL clear borders required
+            //|| openGL && renderTextureSetTargetBuffers && method.ToString().Contains("Two_Displays")
+#if !(URP || HDRP)
+            || SystemInfo.graphicsDeviceType.ToString().Contains("OpenGL") && renderTextureSetTargetBuffers && method.ToString().Contains("Two_Displays")
 #endif
-                RenderPipelineManager.endContextRendering += Canvas_BlitToRenderTexture_EndContextRendering; //blit Render Texture to main Render Texture(required for HDRP overlay cameras) after render is finished
-#else
-#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
-            if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
-                RenderPipelineManager.endFrameRendering += Canvas_BlitToRenderTextureGLES2_EndFrameRendering; //blit Render Texture to main Render Texture(required for HDRP overlay cameras) after render is finished
-            else
+            )
+            //&& !openGL
 #endif
-                RenderPipelineManager.endFrameRendering += Canvas_BlitToRenderTexture_EndFrameRendering; //blit Render Texture to main Render Texture(required for HDRP overlay cameras) after render is finished
-#endif
-#else
+            //cam.rect != Rect.MinMaxRect(0, 0, 1, 1))
+            )
         {
-            switch (blitTime)
+            if (S3DEnabled)
             {
-                case BlitToScreenTime.OnPostRender:
-#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
-                    if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
-                        if (method.ToString().Contains("Two_Displays"))
-                            Camera.onPostRender += Canvas_BlitToRenderTextureGLES2_OnPostRender;
-                        else
-                            Camera.onPostRender += Canvas_BlitToRenderTextureLeftRightGLES2_OnPostRender;
-                    else
+                //if (!nativeRenderingPlugin)
+                if (
+#if HDRP
+                    additionalS3DTopmostCameraIndex == -1 &&
 #endif
-                        if (method.ToString().Contains("Two_Displays"))
-                            Camera.onPostRender += Canvas_BlitToRenderTexture_OnPostRender;
-                        else
-                            Camera.onPostRender += Canvas_BlitToRenderTextureLeftRight_OnPostRender;
-                break;
-
-                case BlitToScreenTime.OnRenderImage:
-
-                    if (onRenderImageDelegate_cameraMain)
-                        if (S3DEnabled)
-                        //if (cam.isActiveAndEnabled)
-#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
-                            if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
-                                onRenderImageDelegate_cameraMain.RenderImageEvent += Canvas_BlitToLeftRightRenderTextureGLES2_OnRenderImageDelegate;
-                            else
-#endif
-                                onRenderImageDelegate_cameraMain.RenderImageEvent += Canvas_BlitToLeftRightRenderTexture_OnRenderImageDelegate;
-                    //cam.gameObject.AddComponent<OnRenderImageDelegate>().RenderImageEvent += Canvas_BlitToLeftRightRenderTexture_OnRenderImageDelegate;
-                        else
-                        {
-                            if (nativeRenderingPlugin)
-                            {
-#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
-                                if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
-                                    onRenderImageDelegate_cameraMain.RenderImageEvent += Canvas_BlitToRenderTextureGLES2_OnRenderImageDelegate;
-                                else
-#endif
-                                    onRenderImageDelegate_cameraMain.RenderImageEvent += Canvas_BlitToRenderTexture_OnRenderImageDelegate;
-
-                                //onRenderImageDelegate_cameraMain.RenderImageEvent += BlitSourceToDestination_OnRenderImageDelegate;
-                            }
-                        }
-                    else
-                    //if (!cam.isActiveAndEnabled)
-                    //if (method.ToString().Contains("Two_Displays"))
-                    {
-                        onRenderImageDelegate_cameraLeft = topmostCamera_left.gameObject.AddComponent<OnRenderImageDelegate>();
-                        onRenderImageDelegate_cameraRight = topmostCamera_right.gameObject.AddComponent<OnRenderImageDelegate>();
-                        onRenderImageDelegate_cameraLeft.RenderImageEvent += BlitSourceToDestination_OnRenderImageDelegate;
-                        onRenderImageDelegate_cameraRight.RenderImageEvent += BlitSourceToDestination_OnRenderImageDelegate;
-
-#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
-                        if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
-                        {
-                            onRenderImageDelegate_cameraLeft.RenderImageEvent += Canvas_BlitToLeftRenderTextureGLES2_OnRenderImageDelegate;
-                            onRenderImageDelegate_cameraRight.RenderImageEvent += Canvas_BlitToRightRenderTextureGLES2_OnRenderImageDelegate;
-                        }
-                        else
-#endif
-                        {
-                            onRenderImageDelegate_cameraLeft.RenderImageEvent += Canvas_BlitToLeftRenderTexture_OnRenderImageDelegate;
-                            onRenderImageDelegate_cameraRight.RenderImageEvent += Canvas_BlitToRightRenderTexture_OnRenderImageDelegate;
-                        }
-
-                        //topmostCamera_left.gameObject.AddComponent<OnRenderImageDelegate>().RenderImageEvent += BlitCanvasToLeftCamera;
-                        //topmostCamera_right.gameObject.AddComponent<OnRenderImageDelegate>().RenderImageEvent += BlitCanvasToRightCamera;
-                    }
-                break;
-
-                case BlitToScreenTime.OnEndOfFrame:
-#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
-                    if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
-                        if (method.ToString().Contains("Two_Displays"))
-                            canvasBlitToScreenDelegate += Canvas_BlitToScreenGLES2;
-                        else
-                            endOfFrameDelegate += Canvas_BlitToLeftRightRenderTextureGLES2_OnEndOfFrame;
-                    else
-#endif
-                        if (method.ToString().Contains("Two_Displays"))
-                            canvasBlitToScreenDelegate += Canvas_BlitToScreen;
-                        else
-                            endOfFrameDelegate += Canvas_BlitToLeftRightRenderTexture_OnEndOfFrame;
-                break;
+                    method == Method.Two_Displays && (canvasCamera && !canvasCamera.isActiveAndEnabled || !canvasCamera)
+                    //&& !renderTextureSetTargetBuffers
+                    )
+                    OnPreRenderClearScreen(true);
+                else
+                    blitToScreenClearRequired = true;
             }
-        }
-        //else
-        //    canvasBlitToScreenDelegate += Canvas_BlitToScreenEmpty;
+            else
+#if HDRP
+                blitToScreenClearRequired = true;
+#else
+                OnPreRenderClearScreen(true);
 #endif
+
+        }
+
+        if (canvasCamera && canvasCamera.isActiveAndEnabled)
+            canvasBlitDelegate = Canvas_BlitToLeftRightRenderTexture;
 
         if (nativeRenderingPlugin)
         {
             //TargetDisplays_Set(cam.targetDisplay, cam.targetDisplay);
             SetClientSizeRect();
+
+#if URP && !UNITY_6000_0_OR_NEWER
+#if UNITY_2021_1_OR_NEWER
+        RenderPipelineManager.endContextRendering += Canvas_BlitToRenderTexture_EndContextRendering;
+#else
+        RenderPipelineManager.endFrameRendering += Canvas_BlitToRenderTexture_EndFrameRendering;
+#endif
+#endif
+
+#if HDRP
+            if (additionalS3DTopmostCameraIndex != -1)
+                renderTextureBlitDelegate = RenderTexture_BlitToRenderTexture;
+#endif
 
             if (S3DEnabled)
             {
@@ -10707,13 +11646,37 @@ struct tagRECT
                 //    onRenderImageDelegate_cameraLeft.RenderImageEvent += SetTextureLeft_OnRenderImageDelegate;
                 //    onRenderImageDelegate_cameraRight.RenderImageEvent += SetTextureRight_OnRenderImageDelegate;
                 //}
-            }
-            //else
-            //{
-            //    //onRenderImageDelegate_cameraMain.RenderImageEvent += BlitSourceToDestination_OnRenderImageDelegate;
 
-            //    AssignRenderTextures_S3DOff();
-            //}
+#if !(URP && !UNITY_6000_0_OR_NEWER)
+                endOfFrameDelegate = NativeRenderingPlugin_EndOfFrame_Delegate_S3DOn;
+#endif
+            }
+            else
+            {
+                //onRenderImageDelegate_cameraMain.RenderImageEvent += BlitSourceToDestination_OnRenderImageDelegate;
+
+                //AssignRenderTextures_S3DOff();
+
+                if (canvasCamera && canvasCamera.isActiveAndEnabled)
+                    canvasBlitDelegate = Canvas_BlitToRenderTexture;
+
+#if !(URP && !UNITY_6000_0_OR_NEWER)
+                endOfFrameDelegate = NativeRenderingPlugin_EndOfFrame_Delegate_S3DOff;
+#endif
+
+                if (borders)
+                {
+#if URP || HDRP
+#if UNITY_2021_1_OR_NEWER
+                    RenderPipelineManager.beginContextRendering += CameraRectSet_BeginContextRendering;
+                    RenderPipelineManager.endContextRendering += CameraRectReset_EndContextRendering;
+#else
+                    RenderPipelineManager.beginFrameRendering += CameraRectSet_BeginFrameRendering;
+                    RenderPipelineManager.endFrameRendering += CameraRectReset_EndFrameRendering;
+#endif
+#endif
+                }
+            }
         }
         else
         //if (!nativeRenderingPlugin)
@@ -10730,21 +11693,22 @@ struct tagRECT
             )
             {
                 //AssignRenderTextures_S3DOn();
+                //quadMesh.vertices = clientSizeMeshFlippedX.vertices = clientSizeMeshFlippedY.vertices = quadVertices;
 
                 //if (!renderTextureSetTargetBuffers)
                 //    Camera.onPreRender += RenderTexture_Reset_OnPreRender;
 
                 //RenderPipelineManager.endCameraRendering += RenderTexture_BlitToScreen_EndCameraRendering; //blit Render Texture to scren after render is finished
                 //RenderPipelineManager.beginCameraRendering += RenderTexture_Reset_BeginCameraRendering; //required reset Render Texture after set it to null for blit to screen
-#if URP || HDRP
-#if UNITY_2021_1_OR_NEWER
-                RenderPipelineManager.endContextRendering += RenderTexture_BlitToScreen_EndContextRendering; //blit Render Texture to scren after render is finished
-                RenderPipelineManager.beginContextRendering += RenderTexture_Reset_BeginContextRendering; //required reset Render Texture after set it to null for blit to screen
-#else
-                RenderPipelineManager.endFrameRendering += RenderTexture_BlitToScreen_EndFrameRendering; //blit Render Texture to scren after render is finished
-                RenderPipelineManager.beginFrameRendering += RenderTexture_Reset_BeginFrameRendering; //required reset Render Texture after set it to null for blit to screen
-#endif
-#else
+//#if URP || HDRP
+//#if UNITY_2021_1_OR_NEWER
+//                RenderPipelineManager.endContextRendering += RenderTexture_BlitToScreen_EndContextRendering; //blit Render Texture to scren after render is finished
+//                RenderPipelineManager.beginContextRendering += RenderTexture_Reset_BeginContextRendering; //required reset Render Texture after set it to null for blit to screen
+//#else
+//                RenderPipelineManager.endFrameRendering += RenderTexture_BlitToScreen_EndFrameRendering; //blit Render Texture to scren after render is finished
+//                RenderPipelineManager.beginFrameRendering += RenderTexture_Reset_BeginFrameRendering; //required reset Render Texture after set it to null for blit to screen
+//#endif
+//#else
                 //if (cam.rect != Rect.MinMaxRect(0, 0, 1, 1) && !renderTextureSetTargetBuffers && (SystemInfo.graphicsDeviceType == GraphicsDeviceType.Direct3D11 || SystemInfo.graphicsDeviceType == GraphicsDeviceType.Vulkan))
                 //    Camera.onPostRender += GetCanvasCameraActiveRenderTexture;
                 
@@ -10774,170 +11738,646 @@ struct tagRECT
                 //        }
 
                 //if (renderTextureSetTargetBuffers)
-                    SetClientSizeRect();
+                    //SetClientSizeRect();
+
+                //if (canvasCamera && canvasCamera.isActiveAndEnabled)
+                //    canvasBlitDelegate = Canvas_BlitToLeftRightRenderTexture;
 
                 switch (blitTime)
                 {
-                    case BlitToScreenTime.OnPostRender:
+#if URP || HDRP
+                    case BlitToScreenTime.endContextRendering:
 
-#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
-                        if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
+#if HDRP
+                        if (S3DEnabled)
                         {
-                            if (renderTextureSetTargetBuffers)
-                                //Camera.onPreRender += RenderTexture_ResetTargetBuffers_OnPreRender;
-                                AssignRenderTextures_S3DOn();
-                            else
-                                Camera.onPreRender += RenderTexture_Reset_OnPreRender;
-
-                            Camera.onPostRender += RenderTexture_BlitToScreenGLES2_OnPostRender;
+                            SetClientSizeRect();
+                            AssignRenderTextures_S3DOn();
                         }
                         else
-#endif
-                        {
-                            if (renderTextureSetTargetBuffers)
-                                //Camera.onPreRender += RenderTexture_ResetTargetBuffers_OnPreRender;
-                                AssignRenderTextures_S3DOn();
-                            else
-                            //if (!renderTextureSetTargetBuffers)
+                            if (borders)
                             {
-                                //works in Player but freeze in Editor
-
-                                camera_right.rect = cam.rect;
-
-                                foreach (var c in additionalS3DCamerasStruct)
-                                    if (c.camera)
-                                        c.camera_right.rect = cam.rect;
-
-                                Camera.onPreRender += RenderTexture_Reset_OnPreRender;
+#if UNITY_2021_1_OR_NEWER
+                                RenderPipelineManager.beginContextRendering += CameraRectSet_BeginContextRendering;
+                                RenderPipelineManager.endContextRendering += CameraRectReset_EndContextRendering;
+#else
+                                RenderPipelineManager.beginFrameRendering += CameraRectSet_BeginFrameRendering;
+                                RenderPipelineManager.endFrameRendering += CameraRectReset_EndFrameRendering;
+#endif
                             }
+
+                        if (additionalS3DTopmostCameraIndex != -1)
+                            renderTextureBlitDelegate = RenderTexture_BlitToRenderTexture;
+#else
+                        SetClientSizeRect();
+                        AssignRenderTextures_S3DOn();
+#endif
+
+#if UNITY_2021_1_OR_NEWER
+                        RenderPipelineManager.beginContextRendering += RenderTexture_Reset_BeginContextRendering; //required reset Render Texture after set it to null for blit to screen
+                        //RenderPipelineManager.endContextRendering += RenderTexture_BlitToRenderTexture_EndContextRendering;
+                        RenderPipelineManager.endContextRendering += RenderTexture_BlitToScreen_EndContextRendering; //blit Render Texture to scren after render is finished
+#else
+                        RenderPipelineManager.beginFrameRendering += RenderTexture_Reset_BeginFrameRendering; //required reset Render Texture after set it to null for blit to screen
+                        //RenderPipelineManager.endFrameRendering += RenderTexture_BlitToRenderTexture_EndFrameRendering;
+                        RenderPipelineManager.endFrameRendering += RenderTexture_BlitToScreen_EndFrameRendering; //blit Render Texture to scren after render is finished
+#endif
+                    break;
+#else
+                    case BlitToScreenTime.OnPostRender:
+
+                        //bool blitToDisplayBuffer;
+
+#if UNITY_EDITOR
+                        blitToDisplayBuffer = false;
+#else
+                        //if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.Vulkan || borders)
+                        //    blitToDisplayBuffer = false;
+                        //else
+                        //    blitToDisplayBuffer = true;
+
+                        if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.Direct3D11 && !borders && !renderTextureSetTargetBuffers)
+                            blitToDisplayBuffer = true;
+                        else
+                            blitToDisplayBuffer = false;
+#endif
+
+////#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
+//#if !UNITY_2023_1_OR_NEWER && !UNITY_EDITOR//UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
+//                        if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
+//                        {
+//                            SetClientSizeRect();
+
+//                            //if (renderTextureSetTargetBuffers)
+//                            //    //Camera.onPreRender += RenderTexture_ResetTargetBuffers_OnPreRender;
+//                            //    AssignRenderTextures_S3DOn();
+//                            //else
+//                            if (!renderTextureSetTargetBuffers)
+//                                Camera.onPreRender += RenderTexture_Reset_OnPreRender;
+
+//                            //Camera.onPostRender += RenderTexture_BlitToScreenGLES2_OnPostRender;
+//                            blitToScreenDelegate += BlitToScreenGLES2;
+//                            Camera.onPostRender += RenderTexture_BlitToScreen_OnPostRender;
+//                        }
+//                        else
+//#endif
+                        {
+                            if (blitToDisplayBuffer)
+                            {
+                                AssignRenderTextures_S3DOn();
+                                blitCamera_left = camera_left;
+                                blitCamera_right = camera_right;
+
+                                blitToScreenDelegate += BlitToDisplayBuffer;
+
+                                //if (renderTextureSetTargetBuffers)
+                                //    //Camera.onPreRender += RenderTexture_ResetTargetBuffers_OnPreRender;
+                                //    AssignRenderTextures_S3DOn();
+                                //else
+                                //if (!renderTextureSetTargetBuffers)
+                                //{
+                                //    //works in Player but freeze in Editor
+
+                                //    //camera_right.rect = cam.rect;
+
+                                //    //foreach (var c in additionalS3DCamerasStruct)
+                                //    //    if (c.camera)
+                                //    //        c.camera_right.rect = cam.rect;
+
+                                //    Camera.onPreRender += RenderTexture_Reset_OnPreRender;
+                                //}
+                            }
+                            else
+                            {
+                                if (renderTextureSetTargetBuffers)
+                                {
+                                    SetClientSizeRect();
+                                    AssignRenderTextures_S3DOn();
+
+//#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
+//                                    if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
+//                                        blitToScreenDelegate += BlitToScreenGLES2;
+//                                    else
+//#endif
+                                        blitToScreenDelegate += BlitToScreen;
+                                }
+                                else
+                                {
+//#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
+//                                    if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
+//                                    {
+//#if UNITY_EDITOR
+//                                        blitToScreenDelegate += BlitToActiveTextureGLES2;
+//#else
+//                                        SetClientSizeRect();
+//                                        Camera.onPreRender += RenderTexture_Reset_OnPreRender;
+//                                        blitToScreenDelegate += BlitToScreenGLES2;
+//#endif
+//                                    }
+//                                    else
+//#endif
+                                    {
+                                        //S3DMaterial.SetInt("_Clockwise", openGL ? 1 : 0);
+
+                                        if (!SystemInfo.graphicsDeviceType.ToString().Contains("OpenGL"))
+                                            //quadMesh.vertices = screenBlitMeshFlipped.vertices = quadVerticesFlippedY;
+                                            S3DMaterial.SetInt("_Flipped", 1);
+
+                                        //if (method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
+                                        if (borders && (method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY))
+                                        {
+                                            //camera_left.pixelRect = camRectClampedPixelsFlipped;
+                                            camera_left.rect = camRectClampedFlipped;
+
+                                            foreach (var c in additionalS3DCamerasStruct)
+                                                if (c.camera)
+                                                    //c.camera_left.pixelRect = camRectClampedPixelsFlipped;
+                                                    c.camera_left.rect = camRectClampedFlipped;
+                                        }
+
+                                        blitToScreenDelegate += BlitToActiveTexture;
+                                    }
+                                }
+                            }
+
                             Camera.onPostRender += RenderTexture_BlitToScreen_OnPostRender;
                         }
 
                     break;
 
                     case BlitToScreenTime.OnRenderImage:
+
+                        SetClientSizeRect();
+                        AssignRenderTextures_S3DOn();
                         //topmostCamera_left.gameObject.AddComponent<OnRenderImageDelegate>().RenderImageEvent += RenderTexture_BlitToScreen_OnRenderImageDelegate;
                         //topmostCamera_right.gameObject.AddComponent<OnRenderImageDelegate>().RenderImageEvent += RenderTexture_BlitToScreen_OnRenderImageDelegate;
 
-                        //if (renderTextureSetTargetBuffers)
-                        //    Camera.onPreRender += RenderTexture_ResetTargetBuffers_OnPreRender;
-
-                        if (renderTextureSetTargetBuffers)
-                            Camera.onPreRender += RenderTexture_ResetTargetBuffers_OnPreRender;
-                        else
-                            Camera.onPreRender += RenderTexture_Reset_OnPreRender;
-
-                        if (!onRenderImageDelegate_cameraLeft)
+                        //if (!onRenderImageDelegate_cameraLeft)
                         {
                             onRenderImageDelegate_cameraLeft = topmostCamera_left.gameObject.AddComponent<OnRenderImageDelegate>();
                             onRenderImageDelegate_cameraRight = topmostCamera_right.gameObject.AddComponent<OnRenderImageDelegate>();
-                            onRenderImageDelegate_cameraLeft.RenderImageEvent += BlitSourceToDestination_OnRenderImageDelegate;
-                            onRenderImageDelegate_cameraRight.RenderImageEvent += BlitSourceToDestination_OnRenderImageDelegate;
+                            ////onRenderImageDelegate_cameraLeft.RenderImageEvent += BlitSourceToDestination_OnRenderImageDelegate;
+                            ////onRenderImageDelegate_cameraRight.RenderImageEvent += BlitSourceToDestination_OnRenderImageDelegate;
+                            //onRenderImageDelegate_cameraLeft.RenderImageEvent += BlitSourceToRenderTextureLeft_OnRenderImageDelegate;
+                            //onRenderImageDelegate_cameraRight.RenderImageEvent += BlitSourceToRenderTextureRight_OnRenderImageDelegate;
+                        }
+
+                        void BlitSourceToRenderTexture()
+                        {
+                            onRenderImageDelegate_cameraLeft.RenderImageEvent += BlitSourceToRenderTextureLeft_OnRenderImageDelegate;
+                            onRenderImageDelegate_cameraRight.RenderImageEvent += BlitSourceToRenderTextureRight_OnRenderImageDelegate;
+                        }
+
+                        if (renderTextureSetTargetBuffers)
+                        {
+                            Camera.onPreRender += RenderTexture_ResetTargetBuffers_OnPreRender;
+
+#if !UNITY_2022_1_OR_NEWER
+                            if (additionalS3DTopmostCameraIndex != -1)
+                            {
+                                camerasTargetRemoveDelegateLeft += CamerasTargetRemoveLeft;
+                                camerasTargetRemoveDelegateRight += CamerasTargetRemoveRight;
+                            }
+
+                            BlitSourceToRenderTexture();
+#endif
+                        }
+                        else
+                        {
+                            Camera.onPreRender += RenderTexture_Reset_OnPreRender;
+                            BlitSourceToRenderTexture();
                         }
 
                         //onRenderImageDelegate_cameraLeft.RenderImageEvent += RenderTexture_BlitToScreen_OnRenderImageDelegate;
                         //onRenderImageDelegate_cameraRight.RenderImageEvent += RenderTexture_BlitToScreen_OnRenderImageDelegate;
 
-#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
-                        if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
-                        {
-                            onRenderImageDelegate_cameraLeft.RenderImageEvent += RenderTexture_BlitToScreenLeftGLES2_OnRenderImageDelegate;
-                            onRenderImageDelegate_cameraRight.RenderImageEvent += RenderTexture_BlitToScreenRightGLES2_OnRenderImageDelegate;
-                        }
-                        else
-#endif
+//#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
+//                        if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
+//                        {
+//                            onRenderImageDelegate_cameraLeft.RenderImageEvent += RenderTexture_BlitToScreenLeftGLES2_OnRenderImageDelegate;
+//                            onRenderImageDelegate_cameraRight.RenderImageEvent += RenderTexture_BlitToScreenRightGLES2_OnRenderImageDelegate;
+//                        }
+//                        else
+//#endif
                         {
                             onRenderImageDelegate_cameraLeft.RenderImageEvent += RenderTexture_BlitToScreenLeft_OnRenderImageDelegate;
                             onRenderImageDelegate_cameraRight.RenderImageEvent += RenderTexture_BlitToScreenRight_OnRenderImageDelegate;
                         }
                     break;
 
+                    case BlitToScreenTime.CommandBuffer:
+
+                        camera_left.targetTexture = null;
+                        camera_right.targetTexture = null;
+
+                        //if (canvasCamera && canvasCamera.isActiveAndEnabled)
+                        //    //cb_left.Blit(canvasRenderTexture, BuiltinRenderTextureType.CurrentActive, textureBlitMaterial, 1);
+                        //    cb_left.Blit(canvasRenderTexture, BuiltinRenderTextureType.CurrentActive, S3DMaterial, 9);
+
+                        void BlitActiveToRenderTexture_Left()
+                        {
+                            if (canvasCamera && canvasCamera.isActiveAndEnabled)
+                                cb_left.Blit(canvasRenderTexture, BuiltinRenderTextureType.CurrentActive, S3DMaterial, 9);
+
+                            S3DMaterialPropertyBlock.SetInt("_Flipped", 1);
+                            //S3DMaterialPropertyBlock.SetInt("_Procedural", 1);
+                            //CameraEvent ce = CameraEvent.AfterEverything;
+
+                            //CommandBuffer cb_left = new CommandBuffer();
+                            ////camera_left.RemoveAllCommandBuffers();
+                            //topmostCamera_left.RemoveAllCommandBuffers();
+                            //camera_left.RemoveCommandBuffer(ce, cb_left);
+                            //cb_left.Clear();
+                            //RenderTargetIdentifier rti_left = new RenderTargetIdentifier(Display.displays[0].colorBuffer);
+                            //RenderTargetIdentifier rti_left = new RenderTargetIdentifier(renderTexture_left);
+                            //cb_left.SetRenderTarget(BuiltinRenderTextureType.CameraTarget);
+                            //cb_left.SetRenderTarget(rti_left);
+
+                            cb_left.Blit(BuiltinRenderTextureType.CurrentActive, renderTexture_left);
+                            //cb_left.Blit(BuiltinRenderTextureType.CurrentActive, renderTexture_left, defaultMaterial);
+                            //cb_left.DrawMesh(quadMesh, Matrix4x4.identity, defaultMaterial);
+                        }
+#if UNITY_EDITOR
+                        BlitActiveToRenderTexture_Left();
+#else
+                        //if (twoDisplaysIndex_left == 0)
+                        if (camera_left.targetDisplay == 0 || renderTextureSetTargetBuffers)
+                        {
+                            if (canvasCamera && canvasCamera.isActiveAndEnabled)
+                            {
+                                S3DMaterial.SetTexture("_MainTex", canvasRenderTexture);
+                                cb_left.SetRenderTarget(BuiltinRenderTextureType.CurrentActive);
+                                cb_left.DrawMesh(canvasBlitMesh, Matrix4x4.identity, S3DMaterial, 0, 9);
+                            }
+
+                            SetClientSizeRect(StereoTargetEyeMask.Left);
+                            AssignRenderTextures_S3DOn(StereoTargetEyeMask.Left);
+                            S3DMaterialPropertyBlock.SetInt("_Flipped", 0);
+                            cb_left.SetRenderTarget(BuiltinRenderTextureType.None);
+                            //cb_left.SetRenderTarget(display_left.colorBuffer);
+                        }
+                        else
+                            BlitActiveToRenderTexture_Left();
+#endif
+
+                        cb_left.SetViewport(clientSizePixelRect);
+
+                        if (blitToScreenClearRequired)
+                            cb_left.ClearRenderTarget(true, true, clearScreenColor);
+
+                        //cb_left.SetViewport(new Rect(0, 0, 512, 256));
+                        //cb_left.SetViewport(camRectClampedPixelsFlipped);
+
+                        //cb_left.Blit(renderTexture_left, BuiltinRenderTextureType.CameraTarget, S3DMaterial, pass);
+                        ////cb_left.Blit(renderTexture_left, null as RenderTexture, S3DMaterial, pass);
+
+                        //S3DMaterial.SetTexture("_MainTex", renderTexture_left);
+                        S3DMaterialPropertyBlock.SetTexture("_MainTex", renderTexture_left);
+                        //cb_left.SetRenderTarget(BuiltinRenderTextureType.CameraTarget);
+                        //S3DMaterial.SetVector("_Rect", new Vector4(cam.rect.x, cam.rect.y, cam.rect.width, cam.rect.height));
+                        //using (GraphicsBuffer gb = new GraphicsBuffer(GraphicsBuffer.Target.Index, 4, 2))
+                        //{
+                        //verticesPosBuffer = new ComputeBuffer(4, Marshal.SizeOf(typeof(Vector2)));
+                        //verticesPos[0] = new Vector2(-1, -1);
+                        //verticesPos[1] = new Vector2(-1, 1);
+                        //verticesPos[2] = new Vector2(0, 1);
+                        //verticesPos[3] = new Vector2(0, -1);
+                        //verticesPosBuffer.SetData(verticesPos);
+                        //S3DMaterial.SetBuffer("verticesPosBuffer", verticesPosBuffer);
+
+                        ////GraphicsBuffer gb = new GraphicsBuffer(GraphicsBuffer.Target.Index, 4, 4);
+                        //////Array vertices = new Array();
+                        //////List<float> l = new List<float>(){ 1, 0 };
+                        ////int[] index = new int[4];
+                        ////index[0] = 4;
+                        ////index[1] = 3;
+                        ////index[2] = 2;
+                        ////index[3] = 1;
+                        ////gb.SetData(index);
+                        ////Matrix4x4 matrix = Matrix4x4.Ortho(-1, 1, -1, 1, -1, 1);
+                        ////Matrix4x4 matrix = Matrix4x4.zero;
+                        //    Matrix4x4 matrix = cam.transform.worldToLocalMatrix;
+                        //cb_left.DrawProcedural(Matrix4x4.identity, S3DMaterial, pass, MeshTopology.Quads, 4);
+
+                        //Mesh mesh = new Mesh();
+                        //quadMeshVerticesPos[0] = new Vector2(-1, -1);
+                        //quadMeshVerticesPos[1] = new Vector2(1, -1);
+                        //quadMeshVerticesPos[2] = new Vector2(-1, 1);
+                        //quadMeshVerticesPos[3] = new Vector2(1, 1);
+                        //quadMeshVerticesPos[0] = new Vector3(0, 0, 0);
+                        //quadMeshVerticesPos[1] = new Vector3(1, 0, 0);
+                        //quadMeshVerticesPos[2] = new Vector3(0, 1, 0);
+                        //quadMeshVerticesPos[3] = new Vector3(1, 1, 0);
+                        //quadMeshVerticesPos[0] = new Vector2(0, 0);
+                        //quadMeshVerticesPos[1] = new Vector2(1, 0);
+                        //quadMeshVerticesPos[2] = new Vector2(0, 1);
+                        //quadMeshVerticesPos[3] = new Vector2(1, 1);
+
+                        //verticesUV[0] = new Vector2(0, 0);
+                        //verticesUV[1] = new Vector2(1, 1);
+                        //verticesUV[2] = new Vector2(0, 1);
+                        //verticesUV[3] = new Vector2(1, 1);
+
+                        //mesh.vertices = quadMeshVerticesPos;
+                        //mesh.uv = verticesUV;
+                        //testMesh.vertices = quadMeshVerticesPos;
+                        //testMesh.uv = verticesUV;
+                        //cb_left.DrawMesh(mesh, Matrix4x4.identity, S3DMaterial, 0, pass);
+                        //cb_left.DrawMesh(quadMesh, Matrix4x4.identity, S3DMaterial, 0, pass);
+                        //cb_left.DrawMesh(quadMesh, Matrix4x4.identity, S3DMaterial, 0, pass, S3DMaterialPropertyBlock);
+                        cb_left.DrawMesh(screenBlitMeshFlipped, Matrix4x4.identity, S3DMaterial, 0, pass, S3DMaterialPropertyBlock);
+
+                        //    //        cb_left.DrawProceduralIndirect(matrix, S3DMaterial, pass, MeshTopology.Quads, verticesPosBuffer);
+                        //    verticesPosBuffer.Release();
+                        //        gb.Release();
+                        //}
+                        //cb_left.Blit(null, Display.displays[0].colorBuffer, S3DMaterial, pass);
+                        //camera_left.AddCommandBuffer(ce, cb_left);
+                        topmostCamera_left.AddCommandBuffer(ce, cb_left);
+                        //cb_left.Release();
+
+                        //CommandBuffer cb_right = new CommandBuffer();
+                        ////camera_right.RemoveAllCommandBuffers();
+                        //topmostCamera_right.RemoveAllCommandBuffers();
+                        //camera_right.RemoveCommandBuffer(ce, cb_right);
+                        //cb_right.Clear();
+                        //RenderTargetIdentifier rti_right = new RenderTargetIdentifier(Display.displays[1].colorBuffer);
+                        //RenderTargetIdentifier rti_right = new RenderTargetIdentifier(renderTexture_right);
+                        //cb_right.SetRenderTarget(BuiltinRenderTextureType.CameraTarget);
+                        //cb_right.SetRenderTarget(rti_right);
+                        //cb_right.ClearRenderTarget(true, true, Color.blue);
+
+                        //if (canvasCamera && canvasCamera.isActiveAndEnabled)
+                        //    //cb_right.Blit(canvasRenderTexture, BuiltinRenderTextureType.CurrentActive, textureBlitMaterial, 2);
+                        //    cb_right.Blit(canvasRenderTexture, BuiltinRenderTextureType.CurrentActive, S3DMaterial, 10);
+
+                        void BlitActiveToRenderTexture_Right()
+                        {
+                            if (canvasCamera && canvasCamera.isActiveAndEnabled)
+                                cb_right.Blit(canvasRenderTexture, BuiltinRenderTextureType.CurrentActive, S3DMaterial, 10);
+
+                            S3DMaterialPropertyBlock.SetInt("_Flipped", 1);
+                            cb_right.Blit(BuiltinRenderTextureType.CurrentActive, renderTexture_right);
+                        }
+
+#if UNITY_EDITOR
+                        BlitActiveToRenderTexture_Right();
+#else
+                        //if (twoDisplaysIndex_right == 0)
+                        if (camera_right.targetDisplay == 0 || renderTextureSetTargetBuffers)
+                        {
+                            if (canvasCamera && canvasCamera.isActiveAndEnabled)
+                            {
+                                S3DMaterial.SetTexture("_MainTex", canvasRenderTexture);
+                                cb_right.SetRenderTarget(BuiltinRenderTextureType.CurrentActive);
+                                cb_right.DrawMesh(canvasBlitMesh, Matrix4x4.identity, S3DMaterial, 0, 10);
+                            }
+
+                            SetClientSizeRect(StereoTargetEyeMask.Right);
+                            AssignRenderTextures_S3DOn(StereoTargetEyeMask.Right);
+                            S3DMaterialPropertyBlock.SetInt("_Flipped", 0);
+                            cb_right.SetRenderTarget(BuiltinRenderTextureType.None);
+                            //cb_right.SetRenderTarget(display_right.colorBuffer);
+                        }
+                        else
+                            BlitActiveToRenderTexture_Right();
+#endif
+
+                        cb_right.SetViewport(clientSizePixelRect);
+
+                        if (blitToScreenClearRequired)
+                            cb_right.ClearRenderTarget(true, true, clearScreenColor);
+
+                        //cb_right.SetViewport(camRectClampedPixels);
+
+                        ////cb_right.Blit(renderTexture_right, BuiltinRenderTextureType.CameraTarget, S3DMaterial, pass);
+                        //cb_right.Blit(renderTexture_right, BuiltinRenderTextureType.CameraTarget, S3DMaterial, pass + 1);
+                        ////cb_right.Blit(null, null as RenderTexture, S3DMaterial, pass + 1);
+                        ////cb_right.Blit(null, Display.displays[1].colorBuffer, S3DMaterial, pass + 1);
+
+                        S3DMaterialPropertyBlock.SetTexture("_MainTex", renderTexture_right);
+                        //cb_right.DrawMesh(quadMesh, Matrix4x4.identity, S3DMaterial, 0, pass + 1, S3DMaterialPropertyBlock);
+                        cb_right.DrawMesh(screenBlitMesh, Matrix4x4.identity, S3DMaterial, 0, pass + 1, S3DMaterialPropertyBlock);
+
+                        //camera_right.AddCommandBuffer(ce, cb_right);
+                        topmostCamera_right.AddCommandBuffer(ce, cb_right);
+                        //cb_right.Release();
+                    break;
+#endif
                     case BlitToScreenTime.OnEndOfFrame:
 
-                        AssignRenderTextures_S3DOn();
-                        //endOfFrameDelegate += RenderTexture_BlitToScreenLeftRight_OnEndOfFrame;
+#if HDRP
+                        if (additionalS3DTopmostCameraIndex != -1)
+                            renderTextureBlitDelegate = RenderTexture_BlitToRenderTexture;
 
-                        if (display_left != null)
-#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
-                            if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
-                                endOfFrameDelegate += RenderTexture_BlitToScreenLeftGLES2_OnEndOfFrame;
+                        if (!S3DEnabled)
+                        {
+                            if (canvasCamera && canvasCamera.isActiveAndEnabled)
+                                canvasBlitDelegate = Canvas_BlitToRenderTexture;
+
+                            if (SystemInfo.graphicsDeviceType.ToString().Contains("Direct3D"))
+                                endOfFrameDelegate += RenderTexture_BlitToDisplay_OnEndOfFrame;
                             else
-#endif
-                                endOfFrameDelegate += RenderTexture_BlitToScreenLeft_OnEndOfFrame;
+                                endOfFrameDelegate += RenderTexture_BlitToScreen_OnEndOfFrame;
 
-                        if (!openGL && display_right != null && display_right.active)
-                            endOfFrameDelegate += RenderTexture_BlitToScreenRight_OnEndOfFrame;
+                            if (borders)
+                            {
+#if UNITY_2021_1_OR_NEWER
+                                RenderPipelineManager.beginContextRendering += CameraRectSet_BeginContextRendering;
+                                RenderPipelineManager.endContextRendering += CameraRectReset_EndContextRendering;
+#else
+                                RenderPipelineManager.beginFrameRendering += CameraRectSet_BeginFrameRendering;
+                                RenderPipelineManager.endFrameRendering += CameraRectReset_EndFrameRendering;
+#endif
+                            }
+                        }
+                        else
+#endif
+                        {
+                            SetClientSizeRect();
+                            AssignRenderTextures_S3DOn();
+                            //endOfFrameDelegate += RenderTexture_BlitToScreenLeftRight_OnEndOfFrame;
+
+                            if (SystemInfo.graphicsDeviceType.ToString().Contains("Direct3D"))
+                            {
+                                if (display_left != null && display_left.active)
+        //#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
+        //                            if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
+        //                                endOfFrameDelegate += RenderTexture_BlitToScreenLeftGLES2_OnEndOfFrame;
+        //                            else
+        //#endif
+                                        endOfFrameDelegate += RenderTexture_BlitToDisplayLeft_OnEndOfFrame;
+
+                                //if (!openGL && display_right != null && display_right.active) //Vulkan is not working as Blit for second display occurs on main display
+                                if (display_right != null && display_right.active
+                                    //&& SystemInfo.graphicsDeviceType.ToString().Contains("Direct3D")
+                                    //&& SystemInfo.graphicsDeviceType != GraphicsDeviceType.Vulkan //second display overwrite first display
+                                    )
+                                    endOfFrameDelegate += RenderTexture_BlitToDisplayRight_OnEndOfFrame;
+                            }
+                            else
+                            {
+                                if (display_left != null && display_left.active)
+                                    endOfFrameDelegate += RenderTexture_BlitToScreenLeft_OnEndOfFrame;
+
+                                if (display_right != null && display_right.active
+                                    //&& SystemInfo.graphicsDeviceType != GraphicsDeviceType.Vulkan //second display overwrite first display
+                                    )
+                                    endOfFrameDelegate += RenderTexture_BlitToScreenRight_OnEndOfFrame;
+                            }
+                        }
+
                     break;
                 }
-#endif
-                }
+//#endif
+
+                ////required for Unity 2020 as Indices lost after Vertices change
+                //quadMesh.SetIndices(quadIndicesClockwise, MeshTopology.Quads, 0);
+                //clientSizeMeshFlippedX.SetIndices(quadIndicesClockwise, MeshTopology.Quads, 0);
+                //clientSizeMeshFlippedY.SetIndices(quadIndicesClockwise, MeshTopology.Quads, 0);
+            }
 
             if (S3DEnabled && !method.ToString().Contains("Two_Displays"))
             {
-                //RenderPipelineManager.endCameraRendering += SingleDisplayS3D_BlitToScreen_EndCameraRendering; //draw fullscreen quad at main camera with S3D combined output by S3D shader
+                //RenderPipelineManager.endCameraRendering += SingleDisplayBlitToScreen_EndCameraRendering; //draw fullscreen quad at main camera with S3D combined output by S3D shader
                 AssignRenderTextures_S3DOn();
-#if URP || HDRP
-#if UNITY_2021_1_OR_NEWER
-#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
-            if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
-                RenderPipelineManager.endContextRendering += SingleDisplayS3D_BlitToScreenGLES2_EndContextRendering; //draw fullscreen quad at main camera with S3D combined output by S3D shader
-            else
-#endif
-                RenderPipelineManager.endContextRendering += SingleDisplayS3D_BlitToScreen_EndContextRendering; //draw fullscreen quad at main camera with S3D combined output by S3D shader
-#else
-#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
-            if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
-                RenderPipelineManager.endFrameRendering += SingleDisplayS3D_BlitToScreen_EndFrameRendering; //draw fullscreen quad at main camera with S3D combined output by S3D shader
-            else
-#endif
-                RenderPipelineManager.endFrameRendering += SingleDisplayS3D_BlitToScreen_EndFrameRendering; //draw fullscreen quad at main camera with S3D combined output by S3D shader
-#endif
-#else
+//#if URP || HDRP
+//#if UNITY_2021_1_OR_NEWER
+////#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
+////            if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
+////                RenderPipelineManager.endContextRendering += SingleDisplayBlitToScreenGLES2_EndContextRendering; //draw fullscreen quad at main camera with S3D combined output by S3D shader
+////            else
+////#endif
+//                RenderPipelineManager.endContextRendering += SingleDisplayBlitToScreen_EndContextRendering; //draw fullscreen quad at main camera with S3D combined output by S3D shader
+//#else
+////#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
+////            if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
+////                RenderPipelineManager.endFrameRendering += SingleDisplayBlitToScreenGLES2_EndFrameRendering; //draw fullscreen quad at main camera with S3D combined output by S3D shader
+////            else
+////#endif
+//                RenderPipelineManager.endFrameRendering += SingleDisplayBlitToScreen_EndFrameRendering; //draw fullscreen quad at main camera with S3D combined output by S3D shader
+//#endif
+//#else
                 TargetDisplays_Set(cam.targetDisplay, cam.targetDisplay);
 
                 //if (cam.rect != Rect.MinMaxRect(0, 0, 1, 1) && openGL)
                     SetClientSizeRect();
 
+                //if (canvasCamera && canvasCamera.isActiveAndEnabled)
+                //    canvasBlitDelegate = Canvas_BlitToLeftRightRenderTexture;
+
                 switch (blitTime)
                 {
-                    case BlitToScreenTime.OnPostRender:
-#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
-                        if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
-                            Camera.onPostRender += SingleDisplayS3D_BlitToScreenGLES2_OnPostRender;
-                        else
+#if URP || HDRP
+                    case BlitToScreenTime.endContextRendering:
+
+#if HDRP
+                        if (additionalS3DTopmostCameraIndex != -1)
+                            renderTextureBlitDelegate = RenderTexture_BlitToRenderTexture;
 #endif
-                            Camera.onPostRender += SingleDisplayS3D_BlitToScreen_OnPostRender;
+
+#if UNITY_2021_1_OR_NEWER
+                        //RenderPipelineManager.endContextRendering += RenderTexture_BlitToRenderTexture_EndContextRendering;
+                        RenderPipelineManager.endContextRendering += SingleDisplayBlitToScreen_EndContextRendering; //draw fullscreen quad at main camera with S3D combined output by S3D shader
+#else
+                        //RenderPipelineManager.endFrameRendering += RenderTexture_BlitToRenderTexture_EndFrameRendering;
+                        RenderPipelineManager.endFrameRendering += SingleDisplayBlitToScreen_EndFrameRendering; //draw fullscreen quad at main camera with S3D combined output by S3D shader
+#endif
+                    break;
+#else
+                    case BlitToScreenTime.OnPostRender:
+//#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
+//                        if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
+//                            Camera.onPostRender += SingleDisplayBlitToScreenGLES2_OnPostRender;
+//                        else
+//#endif
+                            Camera.onPostRender += SingleDisplayBlitToScreen_OnPostRender;
                     break;
 
                     case BlitToScreenTime.OnRenderImage:
-#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
-                        if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
-                            onRenderImageDelegate_cameraMain.RenderImageEvent += SingleDisplayS3D_BlitToScreenGLES2_OnRenderImageDelegate;
-                        else
-#endif
-                            onRenderImageDelegate_cameraMain.RenderImageEvent += SingleDisplayS3D_BlitToScreen_OnRenderImageDelegate;
+//#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
+//                        if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
+//                            onRenderImageDelegate_cameraMain.RenderImageEvent += SingleDisplayBlitToScreenGLES2_OnRenderImageDelegate;
+//                        else
+//#endif
+                            onRenderImageDelegate_cameraMain.RenderImageEvent += SingleDisplayBlitToScreen_OnRenderImageDelegate;
                     break;
 
+                    case BlitToScreenTime.CommandBuffer:
+
+                        if (canvasCamera && canvasCamera.isActiveAndEnabled)
+                        {
+                            //cb_main.Blit(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1);
+                            //cb_main.Blit(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 2);
+
+                            ////textureBlitMaterial.SetTexture("_MainTex", canvasRenderTexture);
+                            ////cb_main.SetRenderTarget(renderTexture_left);
+                            ////cb_main.DrawMesh(SingleDisplayBlitMesh, Matrix4x4.identity, textureBlitMaterial, 0, 1);
+                            ////cb_main.SetRenderTarget(renderTexture_right);
+                            ////cb_main.DrawMesh(SingleDisplayBlitMesh, Matrix4x4.identity, textureBlitMaterial, 0, 2);
+                            //S3DMaterial.SetTexture("_CanvasTex", canvasRenderTexture);
+                            //S3DMaterial.SetInt("_GUI", 1);
+
+                            //cb_main.Blit(canvasRenderTexture, renderTexture_left, S3DMaterial, 9);
+                            //cb_main.Blit(canvasRenderTexture, renderTexture_right, S3DMaterial, 10);
+                            S3DMaterial.SetTexture("_MainTex", canvasRenderTexture);
+                            cb_main.SetRenderTarget(renderTexture_left);
+                            cb_main.DrawMesh(canvasBlitMesh, Matrix4x4.identity, S3DMaterial, 0, 9);
+                            cb_main.SetRenderTarget(renderTexture_right);
+                            cb_main.DrawMesh(canvasBlitMesh, Matrix4x4.identity, S3DMaterial, 0, 10);
+
+                            //S3DMaterialPropertyBlock.SetTexture("_MainTex", canvasRenderTexture);
+                            //S3DMaterialPropertyBlock.SetInt("_Flipped", 1);
+                            //cb_main.SetRenderTarget(renderTexture_left);
+                            //cb_main.DrawMesh(SingleDisplayBlitMesh, Matrix4x4.identity, S3DMaterial, 0, 9, S3DMaterialPropertyBlock);
+                            //cb_main.SetRenderTarget(renderTexture_right);
+                            //cb_main.DrawMesh(SingleDisplayBlitMesh, Matrix4x4.identity, S3DMaterial, 0, 10, S3DMaterialPropertyBlock);
+                        }
+
+                        cb_main.SetRenderTarget(null as RenderTexture);
+
+                        //cb_main.SetViewport(clientSizePixelRect);
+
+                        if (blitToScreenClearRequired)
+                            cb_main.ClearRenderTarget(true, true, clearScreenColor);
+
+                        //cb_main.Blit(null, null as RenderTexture, S3DMaterial, pass);
+                        //cb_main.SetViewport(camRectClampedPixels);
+                        //cb_main.SetViewport(blitRectPixels);
+                        //cb_main.DrawProcedural(Matrix4x4.identity, S3DMaterial, pass, MeshTopology.Quads, 4);
+                        //cb_main.DrawMesh(SingleDisplayBlitMesh, Matrix4x4.identity, S3DMaterial, 0, pass);
+                        cb_main.DrawMesh(screenBlitMesh, Matrix4x4.identity, S3DMaterial, 0, pass);
+
+                        cam.AddCommandBuffer(ce, cb_main);
+                        //cb_main.Release();
+                    break;
+#endif
                     case BlitToScreenTime.OnEndOfFrame:
                         //if (disableMainCam)
-#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
-                        if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
-                            endOfFrameDelegate += SingleDisplayS3D_BlitToScreenGLES2_OnEndOfFrame;
-                        else
+//#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
+//                        if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
+//                            endOfFrameDelegate += SingleDisplayBlitToScreenGLES2_OnEndOfFrame;
+//                        else
+//#endif
+
+#if HDRP
+                        if (additionalS3DTopmostCameraIndex != -1)
+                            renderTextureBlitDelegate = RenderTexture_BlitToRenderTexture;
 #endif
-                            endOfFrameDelegate += SingleDisplayS3D_BlitToScreen_OnEndOfFrame;
-                        //    //onRenderImageDelegate_cameraMain.RenderImageEvent += SingleDisplayS3D_BlitToScreen_OnRenderImageDelegate;
-                        //    Camera.onPostRender += SingleDisplayS3D_BlitToScreen_OnPostRender;
+
+                        endOfFrameDelegate += SingleDisplayBlitToScreen_OnEndOfFrame;
+                        //    //onRenderImageDelegate_cameraMain.RenderImageEvent += SingleDisplayBlitToScreen_OnRenderImageDelegate;
+                        //    Camera.onPostRender += SingleDisplayBlitToScreen_OnPostRender;
                         //    //camera_left.targetTexture = renderTexture_left;
                         //    //camera_right.targetTexture = renderTexture_right;
                     break;
                 }
-#endif
+//#endif
             }
         }
 //#else
 //        //Remove();
-//        onRenderImageDelegate_cameraMain.RenderImageEvent -= SingleDisplayS3D_BlitToScreen_OnRenderImageDelegate;
+//        onRenderImageDelegate_cameraMain.RenderImageEvent -= SingleDisplayBlitToScreen_OnRenderImageDelegate;
 //        onRenderImageDelegate_cameraMain.RenderImageEvent -= Canvas_BlitToLeftRightRenderTexture_OnRenderImageDelegate;
 
 //        if (canvasCamera && canvasCamera.isActiveAndEnabled)
@@ -10949,7 +12389,7 @@ struct tagRECT
 //                //canvasCamera.gameObject.AddComponent<OnRenderImageDelegate>().RenderImageEvent += Canvas_BlitToLeftRightRenderTexture_OnRenderImageDelegate;
 //                //cam.gameObject.AddComponent<OnRenderImageDelegate>().RenderImageEvent += Canvas_BlitToLeftRightRenderTexture_OnRenderImageDelegate;
 //                onRenderImageDelegate_cameraMain.RenderImageEvent += Canvas_BlitToLeftRightRenderTexture_OnRenderImageDelegate;
-//                onRenderImageDelegate_cameraMain.RenderImageEvent += SingleDisplayS3D_BlitToScreen_OnRenderImageDelegate;
+//                onRenderImageDelegate_cameraMain.RenderImageEvent += SingleDisplayBlitToScreen_OnRenderImageDelegate;
 
 //                if (method == Method.Two_Displays && !nativeRenderingPlugin)
 //                {
@@ -10989,13 +12429,27 @@ struct tagRECT
             //canvasCameraRectClamped = new Rect(viewportLeftBottomPos.x, viewportLeftBottomPos.y, viewportRightTopPos.x - viewportLeftBottomPos.x, viewportRightTopPos.y - viewportLeftBottomPos.y);
     }
 
-    void SetClientSizeRect()
+    void SetClientSizeRect(
+        [Optional]StereoTargetEyeMask leftRight
+        )
     {
-        camera_left.rect = camera_right.rect = Rect.MinMaxRect(0, 0, 1, 1);
+        if (leftRight == StereoTargetEyeMask.Left)
+            camera_left.rect = Rect.MinMaxRect(0, 0, 1, 1);
+        else
+            if (leftRight == StereoTargetEyeMask.Right)
+                camera_right.rect = Rect.MinMaxRect(0, 0, 1, 1);
+            else
+                camera_left.rect = camera_right.rect = Rect.MinMaxRect(0, 0, 1, 1);
 
         foreach (var c in additionalS3DCamerasStruct)
             if (c.camera)
-                c.camera_left.rect = c.camera_right.rect = Rect.MinMaxRect(0, 0, 1, 1);
+                if (leftRight == StereoTargetEyeMask.Left)
+                    c.camera_left.rect = Rect.MinMaxRect(0, 0, 1, 1);
+                else
+                    if (leftRight == StereoTargetEyeMask.Right)
+                        c.camera_right.rect = Rect.MinMaxRect(0, 0, 1, 1);
+                    else
+                        c.camera_left.rect = c.camera_right.rect = Rect.MinMaxRect(0, 0, 1, 1);
 
         //if (canvasCamera)
         //    canvasCamera.rect = Rect.MinMaxRect(0, 0, 1, 1);
@@ -11003,8 +12457,7 @@ struct tagRECT
 
     //void GetCanvasCameraActiveRenderTexture(Camera c)
     //{
-    //    //if (debugLog)
-    //        Debug.Log("GetCanvasCameraActiveRenderTexture");
+    //    //if (debugLog) Debug.Log("GetCanvasCameraActiveRenderTexture");
 
     //    if (c == canvasCamera)
     //    {
@@ -11013,7 +12466,7 @@ struct tagRECT
 
     //        if (canvasRenderTexture.format != c.activeTexture.format)
     //        {
-    //            Debug.Log("canvasRenderTexture.format != c.activeTexture.format");
+    //            if (debugLog) Debug.Log("canvasRenderTexture.format != c.activeTexture.format");
     //            canvasRenderTexture = new RenderTexture(c.activeTexture);
     //        }
 
@@ -11023,10 +12476,14 @@ struct tagRECT
     //    }
     //}
 
-    RenderTexture RT_Make([Optional]RenderTextureFormat formatOverride)
+    //RenderTexture RT_Make([Optional]RenderTextureFormat formatOverride)
+    RenderTexture RT_Make(RenderTexture rtOld, [Optional]RenderTextureFormat formatOverride)
     {
+        if (rtOld)
+            rtOld.Release();
+
         //counter++;
-//#if !URP && !HDRP && !UNITY_2022_1_OR_NEWER
+//#if !(URP || HDRP) && !UNITY_2022_1_OR_NEWER
 //        if (QualitySettings.antiAliasing != 0)
 //            lastRTFormat = RTFormat = RenderTextureFormat.ARGBFloat;
 //#endif
@@ -11043,14 +12500,8 @@ struct tagRECT
             //rt = new RenderTexture(rtWidth, rtHeight, 24, RTFormat);
             format = RTFormat;
 
-            rt = new RenderTexture(rtWidth, rtHeight, 24, format);
-
-#if !UNITY_2021_1_OR_NEWER
-        if ((int)rt.graphicsFormat == 142 || (int)rt.graphicsFormat == 143)
-                rt.graphicsFormat = UnityEngine.Experimental.Rendering.GraphicsFormat.B8G8R8A8_UNorm;
-#endif
-
         //RenderTextureDescriptor desc = new RenderTextureDescriptor(); //unflipped for use with bindMS = true custom antialiasing resolving samples in shader
+        //RenderTextureDescriptor desc = new RenderTextureDescriptor(0, 0); //flipped for use with bindMS = true custom antialiasing resolving samples in shader
         ////RenderTextureDescriptor desc = new RenderTextureDescriptor(rtWidth, rtHeight, RTFormat, 24);
         //desc.width = rtWidth;
         //desc.height = rtHeight;
@@ -11062,11 +12513,28 @@ struct tagRECT
         ////desc.enableRandomWrite = true;
         //desc.dimension = UnityEngine.Rendering.TextureDimension.Tex2D;
         //desc.volumeDepth = 1;
-        ////desc.msaaSamples = 1;
-        //desc.msaaSamples = QualitySettings.antiAliasing;
-        //desc.bindMS = true;
-        //RenderTexture rt = new RenderTexture(desc);
-        //if (debugLog) Debug.Log(rt.descriptor.flags);
+
+        //if (QualitySettings.antiAliasing > 0)
+        //    desc.msaaSamples = QualitySettings.antiAliasing;
+        //else
+        //    desc.msaaSamples = 1;
+
+        ////desc.bindMS = true;
+        ////RenderTexture rt = new RenderTexture(desc);
+        //rt = new RenderTexture(desc);
+
+        ////RenderTextureCreationFlags flags = new RenderTextureCreationFlags();
+        ////desc.flags = flags;
+        ////rt.descriptor.flags = flags;
+
+        ////if (debugLog) Debug.Log("rt.descriptor.flags: " + rt.descriptor.flags);
+
+        rt = new RenderTexture(rtWidth, rtHeight, 24, format);
+
+#if !UNITY_2021_1_OR_NEWER
+        if ((int)rt.graphicsFormat == 142 || (int)rt.graphicsFormat == 143)
+            rt.graphicsFormat = UnityEngine.Experimental.Rendering.GraphicsFormat.B8G8R8A8_UNorm;
+#endif
 
         rt.filterMode = FilterMode.Point;
         //rt.wrapMode = TextureWrapMode.Repeat;
@@ -11280,24 +12748,53 @@ struct tagRECT
         {
             bool resetRenderTarget = false;
 
-            if (!display_left.active)
+#if !(UNITY_2020_1_OR_NEWER && !UNITY_2023_1_OR_NEWER) //preactivate required for Vulkan to work correct with Two_Displays & avoid crash in UNITY_2022
+            if (!(blitTime == BlitToScreenTime.OnEndOfFrame && SystemInfo.graphicsDeviceType == GraphicsDeviceType.Vulkan))
             {
-                display_left.Activate();
-                resetRenderTarget = true;
-            }
+                if (!display_left.active)
+                {
+                    display_left.Activate();
+                    resetRenderTarget = true;
+                }
 
-            if (!display_right.active)
-            {
-                display_right.Activate();
-                resetRenderTarget = true;
+                if (!display_right.active)
+                {
+                    display_right.Activate();
+                    resetRenderTarget = true;
+                }
             }
+#endif
 
             if (resetRenderTarget && method.ToString().Contains("Two_Displays") && blitTime == BlitToScreenTime.OnEndOfFrame && renderTexture_left != null)
                 RenderTextureContextSet(); //fix blackscreen as required Graphics.SetRenderTarget(display_right.colorBuffer, display_right.depthBuffer) after activate display_right
 
+            //CameraEvent ce = CameraEvent.AfterEverything;
+
+            //CommandBuffer cb_right = new CommandBuffer();
+            //camera_right.RemoveAllCommandBuffers();
+            ////camera_right.RemoveCommandBuffer(ce, cb_right);
+            //cb_right.Clear();
+            ////RenderTargetIdentifier rti_right = new RenderTargetIdentifier(Display.displays[1].colorBuffer);
+            //cb_right.SetRenderTarget(Display.displays[1].colorBuffer, Display.displays[1].depthBuffer);
+            ////cb_right.SetRenderTarget(Display.displays[1].colorBuffer);
+            //cb_right.ClearRenderTarget(true, true, Color.blue);
+            ////cb_right.Blit(null, null as RenderTexture, S3DMaterial, pass + 1);
+            ////cb_right.Blit(null, Display.displays[1].colorBuffer, S3DMaterial, pass + 1);
+            //camera_right.AddCommandBuffer(ce, cb_right);
+            //cb_right.Release();
+
             //secondWindow = true;
             DataForPlugin.secondWindow = true;
             SendDataToPlugin();
+
+            if (renderTexture_left &&
+                (
+#if !(URP || HDRP)
+                !renderTextureSetTargetBuffers && blitTime == BlitToScreenTime.CommandBuffer ||
+#endif
+                blitTime == BlitToScreenTime.OnEndOfFrame && SystemInfo.graphicsDeviceType == GraphicsDeviceType.Vulkan)
+                )
+                RenderTextureContextSet();
         }
 #endif
     }
@@ -11327,6 +12824,7 @@ struct tagRECT
 
     void cameraRestore()
     {
+        if (debugLog) Debug.Log("cameraRestore");
         //camera_left.enabled = false;
         //camera_right.enabled = false;
         camera_left.enabled = camera_right.enabled = false;
@@ -11365,10 +12863,82 @@ struct tagRECT
         //CameraDataStruct_Change();
     }
 
+    //bool nativeRenderingPluginDataSetOnce;
+    //IntPtr renderTexturePtr;
+
+////#if URP || HDRP
+////#if UNITY_2021_1_OR_NEWER
+////    void SetTexture_EndContextRendering(ScriptableRenderContext context, List<Camera> cameraList)
+////#else
+////    void SetTexture_EndFrameRendering(ScriptableRenderContext context, Camera[] cameraList)
+////#endif
+////#else
+//    void SetTexture_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
+////#endif
+//    {
+//        if (debugLog) 
+////#if URP || HDRP
+////            foreach (Camera c in cameraList)
+////#endif
+//                Debug.Log(c + " SetTexture " + Time.time);
+
+//        //Graphics.Blit(source, destination);
+
+////#if URP || HDRP
+////        foreach (Camera c in cameraList)
+////            if (c == cam)
+////#endif
+//                ////if (!renderTexture)
+//                //if (renderTexture == null)
+//                ////if (renderTexture == null && source != null)
+//                ////if (renderTexture == null && RenderTexture.active != null)
+//                {
+//                    //Debug.Log(c + " renderTexture = c.activeTexture " + Time.time);
+//#if Debug
+//                    activeRenderTexture = RenderTexture.active;
+//#endif
+//                    renderTexture = RenderTexture.active;
+//                    //renderTexture = source;
+//                    //renderTexture = new RenderTexture(source);
+//                    //Graphics.CopyTexture(source, renderTexture);
+//                    //AssignRenderTextures_S3DOff();
+
+////#if HDRP
+////                    if (nativeRenderingPlugin)
+////#endif
+//                    //if (!nativeRenderingPluginDataSetOnce)
+//                    if (renderTexturePtr != renderTexture.GetNativeTexturePtr())
+//                        {
+//                            renderTexturePtr = renderTexture.GetNativeTexturePtr();
+//                            //nativeRenderingPluginDataSetOnce = true;
+//                            SetTexturesForPlugin(renderTexture, null);
+//                        }
+//                }
+//                //else
+//                //    Graphics.CopyTexture(source, renderTexture);
+////#if HDRP
+////                else
+////                    for (int i = 0; i < additionalS3DCamerasStruct.Length; i++)
+////                        if (c == additionalS3DCamerasStruct[i].camera)
+////                            additionalS3DCamerasStruct[i].renderTexture = RenderTexture.active;
+////#endif
+
+////#if URP || HDRP
+////#if UNITY_2021_1_OR_NEWER
+////        RenderPipelineManager.endContextRendering -= SetTexture_EndContextRendering;
+////#else
+////        RenderPipelineManager.endFrameRendering -= SetTexture_EndFrameRendering;
+////#endif
+////#else
+//        //Graphics.Blit(source, destination);
+//        onRenderImageDelegate_cameraMain.RenderImageEvent -= SetTexture_OnRenderImageDelegate;
+////#endif
+//    }
+
 //#if UNITY_2019_1_OR_NEWER
 //#if HDRP
 #if URP || HDRP
-    CommandBuffer commandBuffer;
+    //CommandBuffer commandBuffer;
     //float frameTime;
     //Camera cameraToResetLeft;
     //Camera cameraToResetRight;
@@ -11385,10 +12955,10 @@ struct tagRECT
     void RenderTexture_Reset_OnPreRender(Camera c)
 #endif
     {
-        //if (debugLog)
-//#if URP || HDRP
-//        foreach (Camera c in cameraList)
-//#endif
+        if (debugLog)
+#if URP || HDRP
+        foreach (Camera c in cameraList)
+#endif
             Debug.Log(c + " RenderTexture_Reset " + Time.time);
 
 #if URP || HDRP
@@ -11517,53 +13087,51 @@ struct tagRECT
         //        context.Submit();
 
         foreach (Camera c in cameraList)
-#if URP
 //        if (GetComponent<Camera>() == camera_left)
 //            camera_left.targetTexture = renderTexture_left;
 //        else
 //            if (GetComponent<Camera>() == camera_right)
 //                camera_right.targetTexture = renderTexture_right;
-
-        if (c == camera_left)
-            c.targetTexture = renderTexture_left;
-        else
-            if (c == camera_right)
-                c.targetTexture = renderTexture_right;
-#elif HDRP
-        if (c == cam)
-            c.targetTexture = renderTexture;
-        else
-            if (c == camera_left)
-                c.targetTexture = renderTexture_left;
+#if HDRP
+            if (c == cam)
+                c.targetTexture = renderTexture;
             else
-                if (c == camera_right)
-                    c.targetTexture = renderTexture_right;
-                //else
-                //    if (c == canvasCamera)
-                //        c.targetTexture = canvasRenderTexture;
-                //    //else
-                //    //    if (c == canvasCamera_left)
-                //    //        c.targetTexture = canvasRenderTexture_left;
-                //    //    else
-                //    //        if (c == canvasCamera_right)
-                //    //            c.targetTexture = canvasRenderTexture_right;
-                            else
-                                //for (int i = 0; i < additionalS3DCamerasStruct.Length; i++)
-                                //    if (additionalS3DCamerasStruct[i].camera)
-                                //        if (c == additionalS3DCamerasStruct[i].camera_left)
-                                //            additionalS3DCamerasStruct[i].camera_left.targetTexture = additionalS3DCamerasStruct[i].renderTexture_left;
-                                //        else
-                                //            if (c == additionalS3DCamerasStruct[i].camera_right)
-                                //                additionalS3DCamerasStruct[i].camera_right.targetTexture = additionalS3DCamerasStruct[i].renderTexture_right;
-                                if (additionalS3DTopmostCameraIndex != -1)
-                                        if (c == additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].camera)
-                                            additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].camera.targetTexture = additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].renderTexture;
-                                        else
-                                            if (c == additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].camera_left)
-                                                additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].camera_left.targetTexture = additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].renderTexture_left;
+#endif
+                if (c == camera_left)
+                    c.targetTexture = renderTexture_left;
+                else
+                    if (c == camera_right)
+                        c.targetTexture = renderTexture_right;
+#if HDRP
+                    //else
+                    //    if (c == canvasCamera)
+                    //        c.targetTexture = canvasRenderTexture;
+                    //    //else
+                    //    //    if (c == canvasCamera_left)
+                    //    //        c.targetTexture = canvasRenderTexture_left;
+                    //    //    else
+                    //    //        if (c == canvasCamera_right)
+                    //    //            c.targetTexture = canvasRenderTexture_right;
+                                else
+                                    //for (int i = 0; i < additionalS3DCamerasStruct.Length; i++)
+                                    //    if (additionalS3DCamerasStruct[i].camera)
+                                    //        if (c == additionalS3DCamerasStruct[i].camera_left)
+                                    //            additionalS3DCamerasStruct[i].camera_left.targetTexture = additionalS3DCamerasStruct[i].renderTexture_left;
+                                    //        else
+                                    //            if (c == additionalS3DCamerasStruct[i].camera_right)
+                                    //                additionalS3DCamerasStruct[i].camera_right.targetTexture = additionalS3DCamerasStruct[i].renderTexture_right;
+                                    if (additionalS3DTopmostCameraIndex != -1)
+                                            if (c == additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].camera)
+                                                //additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].camera.targetTexture = renderTexture;
+                                                additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].camera.targetTexture = additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].renderTexture;
                                             else
-                                                if (c == additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].camera_right)
-                                                    additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].camera_right.targetTexture = additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].renderTexture_right;
+                                                if (c == additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].camera_left)
+                                                    //additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].camera_left.targetTexture = renderTexture_left;
+                                                    additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].camera_left.targetTexture = additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].renderTexture_left;
+                                                else
+                                                    if (c == additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].camera_right)
+                                                        //additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].camera_right.targetTexture = renderTexture_right;
+                                                        additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].camera_right.targetTexture = additionalS3DCamerasStruct[additionalS3DTopmostCameraIndex].renderTexture_right;
 
         //if (c == cameraToResetLeft)
         //    c.targetTexture = renderTextureToResetLeft;
@@ -11627,6 +13195,7 @@ struct tagRECT
 
         if (c.name.Contains("_left")) //restore all textures at once here works better(same performance but no black blinks) than restore individual last topmost Cameras before it changes in TopMostCamera_Set()
         //if (c == camera_left)
+        //if (c == topmostCamera_left)
         {
             //if (debugLog) Debug.Log(c + " RenderTexture_Reset_left " + Time.time);
 
@@ -11637,15 +13206,16 @@ struct tagRECT
         }
         else
             if (c.name.Contains("_right"))
-        //if (c == camera_right)
-        {
-            //if (debugLog) Debug.Log(c + " RenderTexture_Reset_right " + Time.time);
+            //if (c == camera_right)
+            //if (c == topmostCamera_right)
+            {
+                //if (debugLog) Debug.Log(c + " RenderTexture_Reset_right " + Time.time);
 
-            //if (renderTextureSetTargetBuffers)
-            //    c.SetTargetBuffers(renderTexture_right.colorBuffer, renderTexture_right.depthBuffer);
-            //else
-                c.targetTexture = renderTexture_right;
-        }
+                //if (renderTextureSetTargetBuffers)
+                //    c.SetTargetBuffers(renderTexture_right.colorBuffer, renderTexture_right.depthBuffer);
+                //else
+                    c.targetTexture = renderTexture_right;
+            }
 
         //if (c == topmostCamera_left)
         //{
@@ -11664,16 +13234,17 @@ struct tagRECT
 
     void RenderTexture_ResetTargetBuffers_OnPreRender(Camera c)
     {
-        //if (debugLog)
-            Debug.Log(c + " RenderTexture_ResetTargetBuffers_OnPreRender " + Time.time);
+        if (debugLog) Debug.Log(c + " RenderTexture_ResetTargetBuffers_OnPreRender " + Time.time);
 
         if (c.name.Contains("_left")) //restore all textures at once here works better(same performance but no black blinks) than restore individual last topmost Cameras before it changes in TopMostCamera_Set()
+        //if (c == topmostCamera_left)
         {
             //if (debugLog) Debug.Log(c + " RenderTexture_Reset_left " + Time.time);
             c.SetTargetBuffers(renderTexture_left.colorBuffer, renderTexture_left.depthBuffer);
         }
         else
             if (c.name.Contains("_right"))
+            //if (c == topmostCamera_right)
             {
                 //if (debugLog) Debug.Log(c + " RenderTexture_Reset_right " + Time.time);
                 c.SetTargetBuffers(renderTexture_right.colorBuffer, renderTexture_right.depthBuffer);
@@ -11741,24 +13312,24 @@ struct tagRECT
 //    }
 
 //#if Debug
-//    public int SingleDisplayS3D_BlitToScreen_CameraListCountMC;
-//    public int SingleDisplayS3D_BlitToScreen_CameraListCount;
+//    public int SingleDisplayBlitToScreen_CameraListCountMC;
+//    public int SingleDisplayBlitToScreen_CameraListCount;
 //    public int renderTextureBlitToRenderTextureCameraListCountMC;
 //    public int renderTextureBlitToRenderTextureCameraListCount;
 //#endif
 
 #if URP || HDRP
-    //void SingleDisplayS3D_BlitToScreen_EndCameraRendering(ScriptableRenderContext context, Camera camera)
+    //void SingleDisplayBlitToScreen_EndCameraRendering(ScriptableRenderContext context, Camera camera)
 #if UNITY_2021_1_OR_NEWER
-    void SingleDisplayS3D_BlitToScreen_EndContextRendering(ScriptableRenderContext context, List<Camera> cameraList)
+    void SingleDisplayBlitToScreen_EndContextRendering(ScriptableRenderContext context, List<Camera> cameraList)
 #else
-    void SingleDisplayS3D_BlitToScreen_EndFrameRendering(ScriptableRenderContext context, Camera[] cameraList)
+    void SingleDisplayBlitToScreen_EndFrameRendering(ScriptableRenderContext context, Camera[] cameraList)
 #endif
 #else
-    void SingleDisplayS3D_BlitToScreen_OnPostRender(Camera c)
+    void SingleDisplayBlitToScreen_OnPostRender(Camera c)
 #endif
     {
-        //Debug.Log("SingleDisplayS3D_BlitToScreen_CameraListCount " + cameraList.Count);
+        //Debug.Log("SingleDisplayBlitToScreen_CameraListCount " + cameraList.Count);
 
 //commandBuffer = new CommandBuffer();
 
@@ -11767,18 +13338,18 @@ struct tagRECT
 #endif
         {
             //if (debugLog)
-                //Debug.Log(c + " SingleDisplayS3D_BlitToScreen " + Time.time);
+                //Debug.Log(c + " SingleDisplayBlitToScreen " + Time.time);
 
 //#if Debug
 //            if (c == cam)
 //#if UNITY_2021_1_OR_NEWER
-//                SingleDisplayS3D_BlitToScreen_CameraListCountMC = cameraList.Count;
+//                SingleDisplayBlitToScreen_CameraListCountMC = cameraList.Count;
 //            else
-//                SingleDisplayS3D_BlitToScreen_CameraListCount = cameraList.Count;
+//                SingleDisplayBlitToScreen_CameraListCount = cameraList.Count;
 //#else
-//                SingleDisplayS3D_BlitToScreen_CameraListCountMC = cameraList.Length;
+//                SingleDisplayBlitToScreen_CameraListCountMC = cameraList.Length;
 //            else
-//                SingleDisplayS3D_BlitToScreen_CameraListCount = cameraList.Length;
+//                SingleDisplayBlitToScreen_CameraListCount = cameraList.Length;
 //#endif
 //#endif
 
@@ -11788,13 +13359,13 @@ struct tagRECT
                 //c.rect = Rect.MinMaxRect(0, 0, 1, 1); //set temporary rect required before Graphics.Blit to blit render texture correctly with no fullscreen rect
 
                 ////commandBuffer = new CommandBuffer();
-                ////commandBuffer.name = "SingleDisplayS3D_BlitToScreen";
+                ////commandBuffer.name = "SingleDisplayBlitToScreen";
 
                 ////RenderTexture.active = null; //fixes rect inside rect
                 ////render clip space screen quad using S3DMaterial preset vertices buffer with:
                 ////commandBuffer.DrawProcedural(Matrix4x4.identity, S3DMaterial, pass, MeshTopology.Quads, 4); //this need "nearClipPlane = -1" for same quad position as using Blit with custom camera Rect coordinates
-                //CustomBlitDrawProceduralNow(null, null, S3DMaterial, pass);
-                ////CustomBlit(null, null, S3DMaterial, pass, false, false, false);
+                //CustomBlitScreen(null, null, S3DMaterial, pass);
+                ////CustomBlitGL(null, null, S3DMaterial, pass, false, false, false);
 
                 ////commandBuffer.Blit(null, cam.activeTexture, S3DMaterial, pass); //or this //not working with OpenGL core
                 ////commandBuffer.Blit(null, null as RenderTexture, S3DMaterial, pass); //or this //not working with OpenGL core
@@ -11810,7 +13381,7 @@ struct tagRECT
 
                 //c.rect = r;
 
-                SingleDisplayS3D_BlitToScreen();
+                SingleDisplayBlitToScreen();
             }
         }
 
@@ -11819,37 +13390,7 @@ struct tagRECT
         //context.Submit();
     }
 
-#if URP || HDRP
-    //void SingleDisplayS3D_BlitToScreenGLES2_EndCameraRendering(ScriptableRenderContext context, Camera camera)
-#if UNITY_2021_1_OR_NEWER
-    void SingleDisplayS3D_BlitToScreenGLES2_EndContextRendering(ScriptableRenderContext context, List<Camera> cameraList)
-#else
-    void SingleDisplayS3D_BlitToScreenGLES2_EndFrameRendering(ScriptableRenderContext context, Camera[] cameraList)
-#endif
-#else
-    void SingleDisplayS3D_BlitToScreenGLES2_OnPostRender(Camera c)
-#endif
-    {
-#if URP || HDRP
-        foreach (Camera c in cameraList)
-#endif
-        if (c == cam)
-        {
-            //if (debugLog)
-            //    Debug.Log(c + " SingleDisplayS3D_BlitToScreenGLES2 " + Time.time);
-
-            //Rect r = c.rect;
-            //c.rect = Rect.MinMaxRect(0, 0, 1, 1); //set temporary rect required before Graphics.Blit to blit render texture correctly with no fullscreen rect
-
-            //if (c == cam)
-            //    //CustomBlitGLES2(null, null, S3DMaterial, pass, false, false, false, false, false);
-            //    CustomBlitGLES2(null, null, S3DMaterial, pass, false, false, false);
-
-            //c.rect = r;
-
-            SingleDisplayS3D_BlitToScreenGLES2();
-        }
-    }
+    private Material mat;
 
 #if URP || HDRP
     //void RenderTexture_BlitToScreen_EndCameraRendering(ScriptableRenderContext context, Camera camera)
@@ -11862,7 +13403,7 @@ struct tagRECT
     void RenderTexture_BlitToScreen_OnPostRender(Camera c)
 #endif
     {
-        //if (debugLog)
+        if (debugLog)
 #if URP || HDRP
         foreach (Camera c in cameraList)
 #endif
@@ -11918,20 +13459,20 @@ struct tagRECT
                 //CustomBlitGLES2(method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY);
                 ////c.rect = r;
 
-                if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
-                    //CustomBlitGLES2(method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY);
-                    //CustomBlitGLES2(renderTexture_left, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY);
-                    //CustomBlitGLES2(renderTexture_left, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, false, false, false);
-                    CustomBlitGLES2(renderTexture_left, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, false);
-                    //CustomBlitGLES2(renderTexture_left, null, null, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY);
-                    //CustomBlitGLES2(renderTexture_left, null, S3DMaterial, pass, false, false);
-                else
+                //if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
+                //    //CustomBlitGLES2(method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY);
+                //    //CustomBlitGLES2(renderTexture_left, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY);
+                //    //CustomBlitGLES2(renderTexture_left, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, false, false, false);
+                //    CustomBlitGLES2(renderTexture_left, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, false);
+                //    //CustomBlitGLES2(renderTexture_left, null, null, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY);
+                //    //CustomBlitGLES2(renderTexture_left, null, S3DMaterial, pass, false, false);
+                //else
                 {
+                    canvasBlitDelegate(1);
                     //RenderTexture.active = null;
                     //S3DMaterial.SetTexture("_MainTex", renderTexture_left);
                     //commandBuffer.DrawProcedural(Matrix4x4.identity, S3DMaterial, pass, MeshTopology.Quads, 4); //this need "nearClipPlane = -1" for same quad position as using Blit with custom camera Rect coordinates
-                    
-                    CustomBlitDrawProceduralNow(renderTexture_left, null, S3DMaterial, pass);
+                    CustomBlitScreen(renderTexture_left, null, screenBlitMeshFlipped, S3DMaterial, pass, blitToScreenClearRequired);
                 }
             //}
             //else
@@ -11943,14 +13484,16 @@ struct tagRECT
             //        //else
             //        //    commandBuffer.Blit(renderTexture_left, null as RenderTexture);
 
-            //        CustomBlitDrawProceduralNow(renderTexture_left, null, S3DMaterial, pass);
-            //        //CustomBlit(renderTexture_left, null, S3DMaterial, pass, false, false, false);
+            //        CustomBlitScreen(renderTexture_left, null, S3DMaterial, pass);
+            //        //CustomBlitGL(renderTexture_left, null, S3DMaterial, pass, false, false, false);
             //    }
         }
         else
             if (c == camera_right)
             {
                 c.targetTexture = null;
+
+                canvasBlitDelegate(0);
                 //commandBuffer.Blit(renderTexture_right, null as RenderTexture, RenderTextureFlipMaterial);
                 //commandBuffer.Blit(renderTexture_right, null as RenderTexture, S3DMaterial, pass);
 
@@ -11971,15 +13514,19 @@ struct tagRECT
                 //    commandBuffer.Blit(renderTexture_right, null as RenderTexture, S3DMaterial, pass);
 
                 //commandBuffer.Blit(renderTexture_right, null as RenderTexture);
-
-                CustomBlitDrawProceduralNow(renderTexture_right, null, S3DMaterial, pass + 1);
-                //CustomBlit(renderTexture_right, null, S3DMaterial, pass + 1, false, false, false);
+                CustomBlitScreen(renderTexture_right, null, screenBlitMesh, S3DMaterial, pass + 1, blitToScreenClearRequired);
+                //CustomBlitGL(renderTexture_right, null, S3DMaterial, pass + 1, false, false, false);
             }
 #elif HDRP
         if (c == topmostCamera)
         {
+            renderTextureBlitDelegate(renderTexture);
+
             c.targetTexture = null;
-            commandBuffer.Blit(renderTexture, null as RenderTexture);
+            //commandBuffer.Blit(renderTexture, null as RenderTexture);
+            Graphics.Blit(renderTexture, null as RenderTexture);
+            //CustomBlitScreen(renderTexture, null, clientSizeMesh, S3DMaterial, 8, blitToScreenClearRequired);
+            CustomBlitScreen(renderTexture, null, screenBlitMesh, S3DMaterial, 8, blitToScreenClearRequired);
         }
         else
             if (c == topmostCamera_left)
@@ -11992,15 +13539,20 @@ struct tagRECT
                 //    commandBuffer.Blit(canvasCamera.targetTexture, renderTexture_left, textureBlitMaterial, 1);
                 //}
 
+                renderTextureBlitDelegate(renderTexture_left);
+
                 //cameraToResetLeft = c;
                 //renderTextureToResetLeft = c.targetTexture;
                 c.targetTexture = null;
                 //commandBuffer.Blit(renderTexture_left, null as RenderTexture);
 
-                if (method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
-                    commandBuffer.Blit(renderTexture_left, null as RenderTexture, S3DMaterial, pass);
-                else
-                    commandBuffer.Blit(renderTexture_left, null as RenderTexture);
+                //if (method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
+                //    commandBuffer.Blit(renderTexture_left, null as RenderTexture, S3DMaterial, pass);
+                //else
+                //    commandBuffer.Blit(renderTexture_left, null as RenderTexture);
+
+                canvasBlitDelegate(1);
+                CustomBlitScreen(renderTexture_left, null, screenBlitMeshFlipped, S3DMaterial, pass, blitToScreenClearRequired);
             }
             else
                 if (c == topmostCamera_right)
@@ -12012,6 +13564,8 @@ struct tagRECT
                     //    commandBuffer.Blit(canvasCamera.targetTexture, renderTexture_right, textureBlitMaterial, 2);
                     //}
 
+                    renderTextureBlitDelegate(renderTexture_right);
+
                     //cameraToResetRight = c;
                     //renderTextureToResetRight = c.targetTexture;
                     c.targetTexture = null;
@@ -12022,8 +13576,21 @@ struct tagRECT
                     //else
                     //    commandBuffer.Blit(renderTexture_right, null as RenderTexture);
 
-                    commandBuffer.Blit(renderTexture_right, null as RenderTexture);
+                    //commandBuffer.Blit(renderTexture_right, null as RenderTexture);
+
+                    canvasBlitDelegate(0);
+                    CustomBlitScreen(renderTexture_right, null, screenBlitMesh, S3DMaterial, pass + 1, blitToScreenClearRequired);
                 }
+                //else
+                //    foreach (var s in additionalS3DCamerasStruct)
+                //        if (c == s.camera)
+                //            renderTextureBlitDelegate(s.camera.targetTexture, renderTexture);
+                //        else
+                //            if (c == s.camera_left)
+                //                renderTextureBlitDelegate(s.camera.targetTexture, renderTexture_left);
+                //            else
+                //                if (c == s.camera_right)
+                //                    renderTextureBlitDelegate(s.camera.targetTexture, renderTexture_right);
 
         //if (c == camera_left && c == topmostCamera_left)
         //{
@@ -12074,10 +13641,111 @@ struct tagRECT
         //context.Submit();
 #else
         //if (c == camera_left)
-        if (c == topmostCamera_left)
+        //if (c == topmostCamera_left)
+        if (c == blitCamera_left)
         {
-//            if (!renderTextureSetTargetBuffers)
-//                c.targetTexture = null;
+            //if (!renderTextureSetTargetBuffers)
+            //    c.targetTexture = null;
+
+            //#if !UNITY_EDITOR
+            //            Graphics.SetRenderTarget(display_left.colorBuffer, display_left.depthBuffer);
+            //#endif
+
+            //GL.Viewport(clientSizePixelRect);
+            //GL.Clear(true, true, clearScreenColor);
+            //GL.Viewport(cam.pixelRect);
+            //GL.Viewport(camRectClampedPixels);
+            //GL.Viewport(camRectClampedPixelsFlipped);
+
+            //    RenderTexture rta = RenderTexture.active;
+            //    RenderTexture.active = null;
+            //GL.Clear(true, true, Color.green);
+            //    //    RenderTexture.active = renderTexture_left;
+
+            //    textureBlitMaterial.SetTexture("_MainTex", canvasRenderTexture);
+            //    textureBlitMaterial.SetInt("_Clockwise", 1);
+            //    //textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset * (1 - 2 * right));
+            //    //textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift * (1 - right));
+            //    //textureBlitMaterial.SetInt("_FlipX", (method == Method.Two_Displays_MirrorX ? 1 : 0) * left);
+            //    //textureBlitMaterial.SetInt("_FlipY", (method == Method.Two_Displays_MirrorY ? 1 : 0) * left);
+
+            //bool flipX = method == Method.Two_Displays_MirrorX;
+            //bool flipY = method == Method.Two_Displays_MirrorY;
+            //    //comment above & uncomment below if two displays works with OpenGL
+            //    //int flipXInt = (method == Method.Two_Displays_MirrorX ? 1 : 0) * left;
+            //    //int flipYInt = (method == Method.Two_Displays_MirrorY ? 1 : 0) * left;
+            //    //bool flipX = flipXInt == 1 ? true : false;
+            //    //bool flipY = flipYInt == 1 ? true : false;
+
+            //    textureBlitMaterial.SetPass(1);    // start the first rendering pass
+            //S3DMaterial.SetPass(8);
+
+            //int vertexMin = 0;
+
+            //// Low-Level Graphics Library calls
+            //GL.PushMatrix();    // Calculate MVP Matrix and push it to the GL stack
+
+            //GL.LoadOrtho();    // Set up Ortho-Perspective Transform
+
+            //GL.Begin(GL.QUADS);
+
+            //GL.TexCoord2(flipX ? 1 : 0, flipY ? 1 : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
+            //GL.Vertex3(vertexMin, vertexMin, 0.0f); // Finalize and submit this vertex for rendering (bottom left)
+
+            //GL.TexCoord2(flipX ? 1 : 0, flipY ? 0 : 1); // prepare input struct (Texcoord0 (UV's)) for this vertex
+            //GL.Vertex3(vertexMin, 1.0f, 0.0f); // Finalize and submit this vertex for rendering (top left)
+
+            //GL.TexCoord2(flipX ? 0 : 1, flipY ? 0 : 1); // prepare input struct (Texcoord0 (UV's)) for this vertex
+            //GL.Vertex3(1.0f, 1.0f, 0.0f); // Finalize and submit this vertex for rendering  (top right)
+
+            //GL.TexCoord2(flipX ? 0 : 1, flipY ? 1 : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
+            //GL.Vertex3(1.0f, vertexMin, 0.0f); // Finalize and submit this vertex for rendering  (bottom right)
+
+            //GL.End();
+            //GL.PopMatrix(); // Pop the matrices off the stack
+
+            //if (!mat)
+            //{
+            //    // Unity has a built-in shader that is useful for drawing
+            //    // simple colored things. In this case, we just want to use
+            //    // a blend mode that inverts destination colors.
+            //    var shader = Shader.Find("Hidden/Internal-Colored");
+            //    mat = new Material(shader);
+            //    mat.hideFlags = HideFlags.HideAndDontSave;
+            //    // Set blend mode to invert destination colors.
+            //    mat.SetInt("_SrcBlend", (int)UnityEngine.Rendering.BlendMode.OneMinusDstColor);
+            //    mat.SetInt("_DstBlend", (int)UnityEngine.Rendering.BlendMode.Zero);
+            //    // Turn off backface culling, depth writes, depth test.
+            //    mat.SetInt("_Cull", (int)UnityEngine.Rendering.CullMode.Front);
+            //    mat.SetInt("_ZWrite", 0);
+            //    mat.SetInt("_ZTest", (int)UnityEngine.Rendering.CompareFunction.Always);
+            //}
+
+            //GL.PushMatrix();
+            //GL.LoadOrtho();
+
+            //RenderTexture rt = new RenderTexture(RenderTexture.active);
+            //Graphics.CopyTexture(RenderTexture.active, rt);
+
+            // activate the first shader pass (in this case we know it is the only pass)
+            //mat.SetPass(0);
+            //S3DMaterial.SetTexture("_MainTex", renderTexture_left);
+            //S3DMaterial.SetPass(pass);
+            //S3DMaterial.SetTexture("_MainTex", rt);
+            //S3DMaterial.SetInt("_FlipX", 1);
+            //S3DMaterial.SetInt("_FlipY", 1);
+            // draw a quad over whole screen
+            //    GL.Begin(GL.QUADS);
+            //GL.Vertex3(0, 0, 0);
+            ////GL.Vertex3(0, 1, 0);
+            ////GL.Vertex3(1, 1, 0);
+            ////GL.Vertex3(1, 0, 0);
+            //GL.Vertex3(1, 0, 0);
+            //GL.Vertex3(1, 1, 0);
+            //GL.Vertex3(0, 1, 0);
+            //GL.End();
+
+            //GL.PopMatrix();
 
             //Rect r = c.rect;
             //c.rect = Rect.MinMaxRect(0, 0, 1, 1); //set temporary rect required before Graphics.Blit to blit render texture correctly with no fullscreen rect
@@ -12098,41 +13766,134 @@ struct tagRECT
 
             //    ////Graphics.Blit(canvasRenderTexture, destination, textureBlitMaterial, 1);
             //    ////Graphics.Blit(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1);
-            //    ////CustomBlit(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
-            //    //CustomBlit(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1, false, false, false);
+            //    ////CustomBlitGL(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
+            //    //CustomBlitGL(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1, false, false, false);
 
             //    ////Graphics.Blit(source, destination);
-            //    //CustomBlit(source, destination, textureBlitMaterial, 0, false, false, false, c.pixelRect);
-            //    //CustomBlit(canvasRenderTexture, destination, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
+            //    //CustomBlitGL(source, destination, textureBlitMaterial, 0, false, false, false, c.pixelRect);
+            //    //CustomBlitGL(canvasRenderTexture, destination, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
 
-            //    //CustomBlit(source, renderTexture_left, textureBlitMaterial, 0, false, false, false, c.pixelRect);
-            //    //CustomBlit(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
-            //    CustomBlit(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false, false);
+            //    //CustomBlitGL(source, renderTexture_left, textureBlitMaterial, 0, false, false, false, c.pixelRect);
+            //    //CustomBlitGL(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
+            //    CustomBlitGL(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false, false);
             //}
 
-            //CustomBlit(RenderTexture.active, null as RenderTexture, S3DMaterial, pass, false, false, false, clientSizePixelRect);
-            //CustomBlit(renderTexture_left, null as RenderTexture, S3DMaterial, pass, false, false, false, clientSizePixelRect);
-            //CustomBlitDrawProceduralNowRect(renderTexture_left, null as RenderTexture, S3DMaterial, pass, clientSizePixelRect);
-            //CustomBlitDrawProceduralNow(renderTexture_left, null as RenderTexture, S3DMaterial, pass);
-            //CustomBlit(RenderTexture.active, null as RenderTexture, S3DMaterial, pass, false, false, false);
-            //CustomBlitDrawProceduralNowRect(RenderTexture.active, null as RenderTexture, S3DMaterial, pass, blitToScreenClearRequired, cam.pixelRect);
-            //CustomBlitDrawProceduralNowRect(RenderTexture.active, null as RenderTexture, S3DMaterial, pass, blitToScreenClearRequired, camRectClampedPixels);
-            CustomBlitDrawProceduralNowRect(RenderTexture.active, null as RenderTexture, S3DMaterial, pass, blitToScreenClearRequired, camRectClampedPixelsMod);
-            //CustomBlit(RenderTexture.active, null as RenderTexture, S3DMaterial, pass, false, true, blitToScreenClearRequired, cam.pixelRect);
+            ////RenderTexture rta = new RenderTexture(RenderTexture.active);
+            ////Graphics.CopyTexture(RenderTexture.active, rta);
+            ////S3DMaterial.SetTexture("_LeftTex", rta);
+            //RenderTexture rta = RenderTexture.active;
+            //activeRenderTexture = RenderTexture.active;
+            //Graphics.Blit(RenderTexture.active, renderTexture_left);
 
-            //S3DMaterial.SetTexture("_MainTex", RenderTexture.active);
-            //RenderTexture.active = null;
-            //S3DMaterial.SetPass(pass);
-            //Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
+//            RenderTexture.active = null;
+//            GL.Viewport(clientSizePixelRect);
+//            GL.Clear(true, true, clearScreenColor);
 
+//            RenderTexture.active = rta;
+//            //S3DMaterial.SetTexture("_MainTex", RenderTexture.active);
+//            S3DMaterial.SetTexture("_MainTex", renderTexture_left);
+//            S3DMaterial.SetPass(pass);
+//            ////RenderTexture.active = null;
+
+////#if !UNITY_EDITOR
+////            Graphics.SetRenderTarget(display_left.colorBuffer, display_left.depthBuffer);
+////#endif
+//            //GL.Viewport(cam.pixelRect);
+//            //GL.Viewport(camRectClampedPixels);
+//            //GL.Viewport(camRectClampedPixelsFlipped);
+
+//            Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
+
+        //    RenderTexture rta = RenderTexture.active;
+        //    //textureBlitMaterial.SetInt("_Clockwise", 0);
+        //    //c.targetTexture = null;
+        ////textureBlitMaterial.SetInt("_FlipX", method == Method.Two_Displays_MirrorX ? 1 : 0);
+        ////textureBlitMaterial.SetInt("_FlipY", method == Method.Two_Displays_MirrorY ? 1 : 0);
+        //    Graphics.Blit(RenderTexture.active, renderTexture_left);
+        //    //Graphics.CopyTexture(RenderTexture.active, renderTexture_left);
+        //    RenderTexture.active = rta;
+        //    //CustomBlitScreen(renderTexture_left, rta, textureBlitMaterial, 0);
+        //    CustomBlitScreen(renderTexture_left, RenderTexture.active, S3DMaterial, pass);
+
+            ////CustomBlitGL(RenderTexture.active, null as RenderTexture, S3DMaterial, pass, false, false, false, clientSizePixelRect);
+            ////CustomBlitGL(renderTexture_left, null as RenderTexture, S3DMaterial, pass, false, false, false, clientSizePixelRect);
+            ////CustomBlitScreen(renderTexture_left, null as RenderTexture, S3DMaterial, pass, clientSizePixelRect);
+            ////CustomBlitScreen(renderTexture_left, null as RenderTexture, S3DMaterial, pass);
+            ////CustomBlitGL(RenderTexture.active, null as RenderTexture, S3DMaterial, pass, false, false, false);
+            ////CustomBlitScreen(RenderTexture.active, null as RenderTexture, S3DMaterial, pass, blitToScreenClearRequired, cam.pixelRect);
+            ////CustomBlitScreen(RenderTexture.active, null as RenderTexture, S3DMaterial, pass, blitToScreenClearRequired, camRectClampedPixels);
+            ////CustomBlitScreen(RenderTexture.active, null as RenderTexture, S3DMaterial, pass, blitToScreenClearRequired, camRectClampedPixelsFlipped);
+            ////CustomBlitScreen(renderTexture_left, null as RenderTexture, S3DMaterial, pass, blitToScreenClearRequired, camRectClampedPixelsFlipped);
+            //CustomBlitScreen(renderTexture_left, rta, S3DMaterial, pass, blitToScreenClearRequired);
+            ////CustomBlitScreen(renderTexture_left, RenderTexture.active, S3DMaterial, pass, blitToScreenClearRequired);
+            ////CustomBlitGLES2(renderTexture_left, RenderTexture.active, S3DMaterial, pass, false, true, camRectClampedPixelsFlipped, blitToScreenClearRequired);
+            ///CustomBlitGLES2(renderTexture_left, rta, S3DMaterial, pass, false, true, blitToScreenClearRequired, camRectClampedPixelsFlipped);
+            ////CustomBlitGL(RenderTexture.active, null as RenderTexture, S3DMaterial, pass, false, true, blitToScreenClearRequired, cam.pixelRect);
+
+            //if (blitToDisplayBuffer)
+            //    CustomBlitScreen(renderTexture_left, RenderTexture.active, S3DMaterial, pass, blitToScreenClearRequired, display_left);
+            //else
+            //{
+            //    RenderTexture rta = RenderTexture.active;
+            //    activeRenderTexture = RenderTexture.active;
+            //    Graphics.Blit(RenderTexture.active, renderTexture_left);
+
+            //    CustomBlitScreen(renderTexture_left, rta, S3DMaterial, pass, blitToScreenClearRequired);
+            //}
+
+            //canvasBlitDelegate(1);
+
+            //blitToScreenDelegate(renderTexture_left, pass, display_left, camRectClampedPixelsFlipped);
+            //blitToScreenDelegate(renderTexture_left, screenBlitMeshFlipped, pass, display_left, camRectClampedPixelsFlipped);
+            blitToScreenDelegate(renderTexture_left, screenBlitMeshFlipped, pass, display_left);
+
+            //rta.Release();
             //c.rect = r;
         }
         else
             //if (c == camera_right)
-            if (c == topmostCamera_right)
+            //if (c == topmostCamera_right)
+            if (c == blitCamera_right)
             {
-                if (!renderTextureSetTargetBuffers)
-                    c.targetTexture = null;
+            //if (!renderTextureSetTargetBuffers)
+            //    c.targetTexture = null;
+
+//#if !UNITY_EDITOR
+//            Graphics.SetRenderTarget(display_right.colorBuffer, display_right.depthBuffer);
+//#endif
+
+        //GL.Viewport(clientSizePixelRect);
+        //GL.Clear(true, true, clearScreenColor);
+        ////GL.Viewport(cam.pixelRect);
+        //GL.Viewport(camRectClampedPixels);
+        ////GL.Viewport(camRectClampedPixelsFlipped);
+
+        //GL.PushMatrix();
+        //GL.LoadOrtho();
+
+            //RenderTexture rt = new RenderTexture(RenderTexture.active);
+            //Graphics.CopyTexture(RenderTexture.active, rt);
+
+        // activate the first shader pass (in this case we know it is the only pass)
+        //mat.SetPass(0);
+        //S3DMaterial.SetTexture("_MainTex", renderTexture_right);
+        //S3DMaterial.SetPass(pass + 1);
+        //S3DMaterial.SetTexture("_MainTex", rt);
+            //S3DMaterial.SetInt("_FlipX", 1);
+            //S3DMaterial.SetInt("_FlipY", 1);
+            // draw a quad over whole screen
+        //    GL.Begin(GL.QUADS);
+        //GL.Vertex3(0, 0, 0);
+        //GL.Vertex3(1, 0, 0);
+        //GL.Vertex3(1, 1, 0);
+        //GL.Vertex3(0, 1, 0);
+        ////GL.Vertex3(0, 1, 0);
+        ////GL.Vertex3(1, 1, 0);
+        ////GL.Vertex3(1, 0, 0);
+        ////GL.Vertex3(0, 0, 0);
+        //GL.End();
+
+        //GL.PopMatrix();
 
                 //Rect r = c.rect;
                 //c.rect = Rect.MinMaxRect(0, 0, 1, 1); //set temporary rect required before Graphics.Blit to blit render texture correctly with no fullscreen rect
@@ -12143,12 +13904,33 @@ struct tagRECT
                 ////Graphics.Blit(renderTexture_right, null as RenderTexture);
                 ////CustomBlitGLES2(false, false, renderTexture_right, S3DMaterial);
 
-                ////S3DMaterial.SetTexture("_MainTex", RenderTexture.active);
-                ////S3DMaterial.SetInt("_FlipX", 0);
-                ////S3DMaterial.SetInt("_FlipY", 0);
-                ////RenderTexture.active = null;
-                ////S3DMaterial.SetPass(pass);
-                ////Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
+            ////RenderTexture rta = new RenderTexture(RenderTexture.active);
+            ////Graphics.CopyTexture(RenderTexture.active, rta);
+            //RenderTexture rta = RenderTexture.active;
+            //Graphics.Blit(RenderTexture.active, renderTexture_right);
+
+//            RenderTexture.active = null;
+//        GL.Viewport(clientSizePixelRect);
+//        GL.Clear(true, true, clearScreenColor);
+
+//            RenderTexture.active = rta;
+//                S3DMaterial.SetTexture("_MainTex", renderTexture_right);
+//                //S3DMaterial.SetTexture("_RightTex", RenderTexture.active);
+//                ////S3DMaterial.SetInt("_FlipX", 0);
+//                ////S3DMaterial.SetInt("_FlipY", 0);
+//                S3DMaterial.SetPass(pass + 1);
+//                ////RenderTexture.active = null;
+
+////#if !UNITY_EDITOR
+////            Graphics.SetRenderTarget(display_right.colorBuffer, display_right.depthBuffer);
+////#endif
+
+//        //GL.Viewport(cam.pixelRect);
+//        //GL.Viewport(camRectClampedPixels);
+//        //GL.Viewport(camRectClampedPixelsFlipped);
+
+//                Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
+//            //rta.Release();
 
                 //if (canvasCamera && canvasCamera.isActiveAndEnabled)
                 //{
@@ -12157,86 +13939,84 @@ struct tagRECT
 
                 //    ////Graphics.Blit(canvasRenderTexture, destination, textureBlitMaterial, 1);
                 //    ////Graphics.Blit(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1);
-                //    ////CustomBlit(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
-                //    //CustomBlit(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1, false, false, false);
+                //    ////CustomBlitGL(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
+                //    //CustomBlitGL(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1, false, false, false);
 
-                //    //CustomBlit(source, destination, textureBlitMaterial, 0, false, false, false, c.pixelRect);
-                //    //CustomBlit(canvasRenderTexture, destination, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
+                //    //CustomBlitGL(source, destination, textureBlitMaterial, 0, false, false, false, c.pixelRect);
+                //    //CustomBlitGL(canvasRenderTexture, destination, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
 
-                //    //CustomBlit(source, renderTexture_right, textureBlitMaterial, 0, false, false, false, c.pixelRect);
-                //    //CustomBlit(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
-                //    CustomBlit(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1, false, false, false);
+                //    //CustomBlitGL(source, renderTexture_right, textureBlitMaterial, 0, false, false, false, c.pixelRect);
+                //    //CustomBlitGL(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
+                //    CustomBlitGL(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1, false, false, false);
                 //}
 
-                //CustomBlit(RenderTexture.active, null as RenderTexture, S3DMaterial, pass + 1, false, false, false, clientSizePixelRect);
-                //CustomBlit(renderTexture_right, null as RenderTexture, S3DMaterial, pass + 1, false, false, false, clientSizePixelRect);
-                //CustomBlitDrawProceduralNowRect(renderTexture_right, null as RenderTexture, S3DMaterial, pass + 1, clientSizePixelRect);
-                //CustomBlitDrawProceduralNow(renderTexture_right, null as RenderTexture, S3DMaterial, pass + 1);
-                //CustomBlit(RenderTexture.active, null as RenderTexture, S3DMaterial, pass + 1, false, false, false);
-                //CustomBlitDrawProceduralNowRect(RenderTexture.active, null as RenderTexture, S3DMaterial, pass + 1, blitToScreenClearRequired, cam.pixelRect);
-                CustomBlitDrawProceduralNowRect(RenderTexture.active, null as RenderTexture, S3DMaterial, pass + 1, blitToScreenClearRequired, camRectClampedPixels);
+                ////CustomBlitGL(RenderTexture.active, null as RenderTexture, S3DMaterial, pass + 1, false, false, false, clientSizePixelRect);
+                ////CustomBlitGL(renderTexture_right, null as RenderTexture, S3DMaterial, pass + 1, false, false, false, clientSizePixelRect);
+                ////CustomBlitScreen(renderTexture_right, null as RenderTexture, S3DMaterial, pass + 1, clientSizePixelRect);
+                ////CustomBlitScreen(renderTexture_right, null as RenderTexture, S3DMaterial, pass + 1);
+                ////CustomBlitGL(RenderTexture.active, null as RenderTexture, S3DMaterial, pass + 1, false, false, false);
+                ////CustomBlitScreen(RenderTexture.active, null as RenderTexture, S3DMaterial, pass + 1, blitToScreenClearRequired, cam.pixelRect);
+                ////CustomBlitScreen(RenderTexture.active, null as RenderTexture, S3DMaterial, pass + 1, blitToScreenClearRequired, camRectClampedPixels);
+                ////CustomBlitScreen(renderTexture_right, null as RenderTexture, S3DMaterial, pass + 1, blitToScreenClearRequired, camRectClampedPixels);
+                //CustomBlitScreen(renderTexture_right, rta, S3DMaterial, pass + 1, blitToScreenClearRequired);
+                ////CustomBlitScreen(renderTexture_right, RenderTexture.active, S3DMaterial, pass + 1, blitToScreenClearRequired);
+
+            //if (blitToDisplayBuffer)
+            //    CustomBlitScreen(renderTexture_right, RenderTexture.active, S3DMaterial, pass + 1, blitToScreenClearRequired, display_right);
+            //else
+            //{
+            //    RenderTexture rta = RenderTexture.active;
+            //    Graphics.Blit(RenderTexture.active, renderTexture_right);
+
+            //    CustomBlitScreen(renderTexture_right, rta, S3DMaterial, pass + 1, blitToScreenClearRequired);
+            //}
+
+            //canvasBlitDelegate(0);
+
+            //blitToScreenDelegate(renderTexture_right, pass + 1, display_right, camRectClampedPixels);
+            //blitToScreenDelegate(renderTexture_right, quadMesh, pass + 1, display_right, camRectClampedPixels);
+            blitToScreenDelegate(renderTexture_right, screenBlitMesh, pass + 1, display_right);
 
                 //c.rect = r;
             }
 #endif
+        }
+
+    //void BlitToDisplayBuffer(RenderTexture rt, Mesh blitMesh, int pass, Display display, Rect pixelRect)
+    void BlitToDisplayBuffer(RenderTexture rt, Mesh blitMesh, int pass, Display display)
+    {
+        canvasBlitDelegate(rt == renderTexture_left ? 1 : 0);
+
+        //CustomBlitScreen(rt, RenderTexture.active, blitMesh, S3DMaterial, pass, blitToScreenClearRequired, display:display);
+        CustomBlitDisplay(rt, display, blitMesh, S3DMaterial, pass, blitToScreenClearRequired);
     }
 
-    void RenderTexture_BlitToScreenGLES2_OnPostRender(Camera c)
+    //void BlitToActiveTexture(RenderTexture rt, Mesh blitMesh, int pass, Display display, Rect pixelRect)
+    void BlitToActiveTexture(RenderTexture rt, Mesh blitMesh, int pass, Display display)
     {
-        //if (debugLog)
-            //Debug.Log(c + " RenderTexture_BlitToScreenGLES2 " + Time.time);
-
-        //if (c == camera_left)
-        if (c == topmostCamera_left)
-        {
-            //if (canvasCamera && canvasCamera.isActiveAndEnabled)
-            //{
-            //    textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset);
-            //    textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift);
-
-            //    CustomBlitGLES2(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false, false);
-            //}
-
-            //CustomBlitGLES2(renderTexture_left, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, false, false, false, clientSizePixelRect);
-            //CustomBlitGLES2(renderTexture_left, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, false, clientSizePixelRect);
-            //CustomBlitGLES2(renderTexture_left, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, false);
-            //CustomBlitGLES2(renderTexture_left, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, false, cam.pixelRect);
-            //CustomBlitGLES2(renderTexture_left, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY);
-            //CustomBlitGLES2(renderTexture_left, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, cam.pixelRect);
-            //CustomBlitGLES2(renderTexture_left, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, camRectClampedPixels);
-            CustomBlitGLES2(renderTexture_left, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, camRectClampedPixelsMod);
-        }
-        else
-            //if (c == camera_right)
-            //if (c == topmostCamera_right && Display.displays[twoDisplaysIndex_right].active)
-            if (c == topmostCamera_right
-#if !UNITY_EDITOR
-            //&& Display.displays[twoDisplaysIndex_right].active
-            && display_right != null && display_right.active
+        RenderTexture rta = RenderTexture.active;
+#if Debug
+        activeRenderTexture = RenderTexture.active;
 #endif
-            )
-            {
-                //if (canvasCamera && canvasCamera.isActiveAndEnabled)
-                //{
-                //    textureBlitMaterial.SetFloat("_ShiftX", -renderTextureOffset);
-                //    textureBlitMaterial.SetFloat("_ShiftY", 0);
+        Graphics.Blit(RenderTexture.active, rt);
 
-                //    CustomBlitGLES2(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1, false, false, false);
-                //}
+        canvasBlitDelegate(rt == renderTexture_left ? 1 : 0);
 
-                //CustomBlitGLES2(renderTexture_right, null, S3DMaterial, pass, false, false, false, false, false, clientSizePixelRect);
-                //CustomBlitGLES2(renderTexture_right, null, S3DMaterial, pass, false, false, false, clientSizePixelRect);
-                //CustomBlitGLES2(renderTexture_right, null, S3DMaterial, pass, false, false, false);
-                //CustomBlitGLES2(renderTexture_right, null, S3DMaterial, pass, false, false, false, cam.pixelRect);
-                //CustomBlitGLES2(renderTexture_right, null, S3DMaterial, pass, false, false);
-                //CustomBlitGLES2(renderTexture_right, null, S3DMaterial, pass, false, false, cam.pixelRect);
-                CustomBlitGLES2(renderTexture_right, null, S3DMaterial, pass, false, false, camRectClampedPixels);
-            }
+        CustomBlitScreen(rt, rta, blitMesh, S3DMaterial, pass, blitToScreenClearRequired);
+    }
+
+    //void BlitToScreen(RenderTexture rt, Mesh blitMesh, int pass, Display display, Rect pixelRect)
+    void BlitToScreen(RenderTexture rt, Mesh blitMesh, int pass, Display display)
+    {
+        canvasBlitDelegate(rt == renderTexture_left ? 1 : 0);
+
+        //CustomBlitScreen(rt, null, blitMesh, S3DMaterial, pass, blitToScreenClearRequired, pixelRect);
+        CustomBlitScreen(rt, null, blitMesh, S3DMaterial, pass, blitToScreenClearRequired, clientSizePixelRect);
     }
 
 //    void RenderTexture_BlitToScreenLeftRight_OnEndOfFrame()
 //    {
-//        Debug.Log("RenderTexture_BlitToScreenLeftRight_OnEndOfFrame " + Time.time);
+//        if (debugLog) Debug.Log("RenderTexture_BlitToScreenLeftRight_OnEndOfFrame " + Time.time);
 
 //        S3DMaterial.SetTexture("_MainTex", renderTexture_left);
 //        //RenderTexture.active = null;
@@ -12244,7 +14024,7 @@ struct tagRECT
 //        S3DMaterial.SetPass(pass);
 //        Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
 
-//        //CustomBlitDrawProceduralNow(renderTexture_left, null as RenderTexture, S3DMaterial, pass);
+//        //CustomBlitScreen(renderTexture_left, null as RenderTexture, S3DMaterial, pass);
 
 //#if !UNITY_EDITOR
 //        if (!openGL)
@@ -12258,363 +14038,1045 @@ struct tagRECT
 //#endif
 //    }
 
+    void RenderTexture_BlitToDisplayLeft_OnEndOfFrame()
+    {
+        if (debugLog) Debug.Log("RenderTexture_BlitToDisplayLeft_OnEndOfFrame " + Time.time);
+
+//        //RenderTexture.active = null;
+//#if !UNITY_EDITOR
+//        //if (!openGL)
+//        if (SystemInfo.graphicsDeviceType.ToString().Contains("Direct3D"))
+//#endif
+//            //Graphics.SetRenderTarget(Display.displays[twoDisplaysIndex_left].colorBuffer, Display.displays[twoDisplaysIndex_left].depthBuffer);
+//            Graphics.SetRenderTarget(display_left.colorBuffer, display_left.depthBuffer);
+
+//        GL.Clear(true, true, clearScreenColor);
+//        //GL.Viewport(cam.pixelRect);
+//        //GL.Viewport(camRectClampedPixels);
+//        GL.Viewport(camRectClampedPixelsFlipped);
+
+//        S3DMaterial.SetTexture("_MainTex", renderTexture_left);
+//        S3DMaterial.SetPass(pass);
+
+//        //if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
+//        //{
+//        //    bool flipX = method == Method.Two_Displays_MirrorX;
+//        //    bool flipY = method == Method.Two_Displays_MirrorY;
+//        //    int vertexMin = -1;
+
+//        //    // Low-Level Graphics Library calls
+//        //    GL.PushMatrix();    // Calculate MVP Matrix and push it to the GL stack
+
+//        //    GL.LoadOrtho();    // Set up Ortho-Perspective Transform
+
+//        //    GL.Begin(GL.QUADS);
+
+//        //    GL.TexCoord2(flipX ? 1 : 0, flipY ? 1 : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
+//        //    GL.Vertex3(vertexMin, vertexMin, 0.0f); // Finalize and submit this vertex for rendering (bottom left)
+
+//        //    GL.TexCoord2(flipX ? 1 : 0, flipY ? 0 : 1); // prepare input struct (Texcoord0 (UV's)) for this vertex
+//        //    GL.Vertex3(vertexMin, 1.0f, 0.0f); // Finalize and submit this vertex for rendering (top left)
+
+//        //    GL.TexCoord2(flipX ? 0 : 1, flipY ? 0 : 1); // prepare input struct (Texcoord0 (UV's)) for this vertex
+//        //    GL.Vertex3(1.0f, 1.0f, 0.0f); // Finalize and submit this vertex for rendering  (top right)
+
+//        //    GL.TexCoord2(flipX ? 0 : 1, flipY ? 1 : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
+//        //    GL.Vertex3(1.0f, vertexMin, 0.0f); // Finalize and submit this vertex for rendering  (bottom right)
+
+//        //    GL.End();
+//        //    GL.PopMatrix(); // Pop the matrices off the stack
+//        //}
+//        //else
+//            //Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
+//            Graphics.DrawMeshNow(screenBlitMeshFlipped, Matrix4x4.identity); //169 *2 FPS //299 *2 FPS Mono
+//            //CustomBlitScreen(renderTexture_left, null as RenderTexture, S3DMaterial, pass);
+
+//        //textureBlitMaterial.SetTexture("_MainTex", canvasRenderTexture);
+//        //textureBlitMaterial.SetInt("_Clockwise", 1);
+//        //textureBlitMaterial.SetPass(1);    // start the first rendering pass
+
+//        //if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
+//        //{
+//        //    bool flipX = method == Method.Two_Displays_MirrorX;
+//        //    bool flipY = method == Method.Two_Displays_MirrorY;
+//        //    int vertexMin = -1;
+
+//        //    // Low-Level Graphics Library calls
+//        //    GL.PushMatrix();    // Calculate MVP Matrix and push it to the GL stack
+
+//        //    GL.LoadOrtho();    // Set up Ortho-Perspective Transform
+
+//        //    GL.Begin(GL.QUADS);
+
+//        //    GL.TexCoord2(flipX ? 1 : 0, flipY ? 1 : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
+//        //    GL.Vertex3(vertexMin, vertexMin, 0.0f); // Finalize and submit this vertex for rendering (bottom left)
+
+//        //    GL.TexCoord2(flipX ? 1 : 0, flipY ? 0 : 1); // prepare input struct (Texcoord0 (UV's)) for this vertex
+//        //    GL.Vertex3(vertexMin, 1.0f, 0.0f); // Finalize and submit this vertex for rendering (top left)
+
+//        //    GL.TexCoord2(flipX ? 0 : 1, flipY ? 0 : 1); // prepare input struct (Texcoord0 (UV's)) for this vertex
+//        //    GL.Vertex3(1.0f, 1.0f, 0.0f); // Finalize and submit this vertex for rendering  (top right)
+
+//        //    GL.TexCoord2(flipX ? 0 : 1, flipY ? 1 : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
+//        //    GL.Vertex3(1.0f, vertexMin, 0.0f); // Finalize and submit this vertex for rendering  (bottom right)
+
+//        //    GL.End();
+//        //    GL.PopMatrix(); // Pop the matrices off the stack
+//        //}
+//        //else
+//        //    Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
+
+#if HDRP
+        renderTextureBlitDelegate(renderTexture_left);
+#endif
+
+        //if (canvasBlitDelegate != null)
+        canvasBlitDelegate(1);
+
+        //CustomBlitScreen(renderTexture_left, null as RenderTexture, screenBlitMeshFlipped, S3DMaterial, pass, blitToScreenClearRequired, camRectClampedPixelsFlipped, display_left);
+        //CustomBlitDisplay(renderTexture_left, display_left, screenBlitMeshFlipped, S3DMaterial, pass, blitToScreenClearRequired, camRectClampedPixelsFlipped);
+        CustomBlitDisplay(renderTexture_left, display_left, screenBlitMeshFlipped, S3DMaterial, pass, blitToScreenClearRequired);
+    }
+
+    void RenderTexture_BlitToDisplayRight_OnEndOfFrame()
+    {
+        if (debugLog) Debug.Log("RenderTexture_BlitToDisplayRight_OnEndOfFrame " + Time.time);
+
+//        //RenderTexture.active = null;
+//#if !UNITY_EDITOR
+//        //if (!openGL)
+//        if (SystemInfo.graphicsDeviceType.ToString().Contains("Direct3D"))
+//#endif
+//        //Graphics.SetRenderTarget(Display.displays[twoDisplaysIndex_right].colorBuffer, Display.displays[twoDisplaysIndex_right].depthBuffer);
+//        Graphics.SetRenderTarget(display_right.colorBuffer, display_right.depthBuffer);
+
+//        GL.Clear(true, true, clearScreenColor);
+//        //GL.Viewport(cam.pixelRect);
+//        GL.Viewport(camRectClampedPixels);
+
+//        S3DMaterial.SetTexture("_MainTex", renderTexture_right);
+//        S3DMaterial.SetPass(pass + 1);
+
+//        //Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
+//        Graphics.DrawMeshNow(quadMesh, Matrix4x4.identity); //169 *2 FPS //299 *2 FPS Mono
+
+#if HDRP
+        renderTextureBlitDelegate(renderTexture_right);
+#endif
+
+        //if (canvasBlitDelegate != null)
+            canvasBlitDelegate(0);
+
+        //CustomBlitScreen(renderTexture_right, null as RenderTexture, quadMesh, S3DMaterial, pass + 1, blitToScreenClearRequired, camRectClampedPixels, display_right);
+        //CustomBlitDisplay(renderTexture_right, display_right, quadMesh, S3DMaterial, pass + 1, blitToScreenClearRequired, camRectClampedPixels);
+        CustomBlitDisplay(renderTexture_right, display_right, screenBlitMesh, S3DMaterial, pass + 1, blitToScreenClearRequired);
+    }
+
     void RenderTexture_BlitToScreenLeft_OnEndOfFrame()
     {
-        Debug.Log("RenderTexture_BlitToScreenLeft_OnEndOfFrame " + Time.time);
+        if (debugLog) Debug.Log("RenderTexture_BlitToScreenLeft_OnEndOfFrame " + Time.time);
 
-        //RenderTexture.active = null;
-#if !UNITY_EDITOR
-        //if (!openGL)
-        if (SystemInfo.graphicsDeviceType.ToString().Contains("Direct3D"))
+#if HDRP
+        renderTextureBlitDelegate(renderTexture_left);
 #endif
-            //Graphics.SetRenderTarget(Display.displays[twoDisplaysIndex_left].colorBuffer, Display.displays[twoDisplaysIndex_left].depthBuffer);
-            Graphics.SetRenderTarget(display_left.colorBuffer, display_left.depthBuffer);
 
-        GL.Clear(true, true, clearScreenColor);
-        //GL.Viewport(cam.pixelRect);
-        //GL.Viewport(camRectClampedPixels);
-        GL.Viewport(camRectClampedPixelsMod);
-
-        S3DMaterial.SetTexture("_MainTex", renderTexture_left);
-        S3DMaterial.SetPass(pass);
-
-        //if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
-        //{
-        //    bool flipX = method == Method.Two_Displays_MirrorX;
-        //    bool flipY = method == Method.Two_Displays_MirrorY;
-        //    int vertexMin = -1;
-
-        //    // Low-Level Graphics Library calls
-        //    GL.PushMatrix();    // Calculate MVP Matrix and push it to the GL stack
-
-        //    GL.LoadOrtho();    // Set up Ortho-Perspective Transform
-
-        //    GL.Begin(GL.QUADS);
-
-        //    GL.TexCoord2(flipX ? 1 : 0, flipY ? 1 : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
-        //    GL.Vertex3(vertexMin, vertexMin, 0.0f); // Finalize and submit this vertex for rendering (bottom left)
-
-        //    GL.TexCoord2(flipX ? 1 : 0, flipY ? 0 : 1); // prepare input struct (Texcoord0 (UV's)) for this vertex
-        //    GL.Vertex3(vertexMin, 1.0f, 0.0f); // Finalize and submit this vertex for rendering (top left)
-
-        //    GL.TexCoord2(flipX ? 0 : 1, flipY ? 0 : 1); // prepare input struct (Texcoord0 (UV's)) for this vertex
-        //    GL.Vertex3(1.0f, 1.0f, 0.0f); // Finalize and submit this vertex for rendering  (top right)
-
-        //    GL.TexCoord2(flipX ? 0 : 1, flipY ? 1 : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
-        //    GL.Vertex3(1.0f, vertexMin, 0.0f); // Finalize and submit this vertex for rendering  (bottom right)
-
-        //    GL.End();
-        //    GL.PopMatrix(); // Pop the matrices off the stack
-        //}
-        //else
-            Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
-                                                               //CustomBlitDrawProceduralNow(renderTexture_left, null as RenderTexture, S3DMaterial, pass);
-
-        //textureBlitMaterial.SetTexture("_MainTex", canvasRenderTexture);
-        //textureBlitMaterial.SetInt("_Clockwise", 1);
-        //textureBlitMaterial.SetPass(1);    // start the first rendering pass
-
-        //if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
-        //{
-        //    bool flipX = method == Method.Two_Displays_MirrorX;
-        //    bool flipY = method == Method.Two_Displays_MirrorY;
-        //    int vertexMin = -1;
-
-        //    // Low-Level Graphics Library calls
-        //    GL.PushMatrix();    // Calculate MVP Matrix and push it to the GL stack
-
-        //    GL.LoadOrtho();    // Set up Ortho-Perspective Transform
-
-        //    GL.Begin(GL.QUADS);
-
-        //    GL.TexCoord2(flipX ? 1 : 0, flipY ? 1 : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
-        //    GL.Vertex3(vertexMin, vertexMin, 0.0f); // Finalize and submit this vertex for rendering (bottom left)
-
-        //    GL.TexCoord2(flipX ? 1 : 0, flipY ? 0 : 1); // prepare input struct (Texcoord0 (UV's)) for this vertex
-        //    GL.Vertex3(vertexMin, 1.0f, 0.0f); // Finalize and submit this vertex for rendering (top left)
-
-        //    GL.TexCoord2(flipX ? 0 : 1, flipY ? 0 : 1); // prepare input struct (Texcoord0 (UV's)) for this vertex
-        //    GL.Vertex3(1.0f, 1.0f, 0.0f); // Finalize and submit this vertex for rendering  (top right)
-
-        //    GL.TexCoord2(flipX ? 0 : 1, flipY ? 1 : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
-        //    GL.Vertex3(1.0f, vertexMin, 0.0f); // Finalize and submit this vertex for rendering  (bottom right)
-
-        //    GL.End();
-        //    GL.PopMatrix(); // Pop the matrices off the stack
-        //}
-        //else
-        //    Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
-
-        if (canvasBlitToScreenDelegate != null)
-            canvasBlitToScreenDelegate(1);
+        canvasBlitDelegate(1);
+        //CustomBlitScreen(renderTexture_left, null as RenderTexture, screenBlitMeshFlipped, S3DMaterial, pass, blitToScreenClearRequired, camRectClampedPixelsFlipped);
+        CustomBlitScreen(renderTexture_left, null as RenderTexture, screenBlitMeshFlipped, S3DMaterial, pass, blitToScreenClearRequired);
     }
 
     void RenderTexture_BlitToScreenRight_OnEndOfFrame()
     {
-        Debug.Log("RenderTexture_BlitToScreenRight_OnEndOfFrame " + Time.time);
-
-        //RenderTexture.active = null;
-#if !UNITY_EDITOR
-        //if (!openGL)
-        if (SystemInfo.graphicsDeviceType.ToString().Contains("Direct3D"))
-#endif
-        //Graphics.SetRenderTarget(Display.displays[twoDisplaysIndex_right].colorBuffer, Display.displays[twoDisplaysIndex_right].depthBuffer);
-        Graphics.SetRenderTarget(display_right.colorBuffer, display_right.depthBuffer);
-
-        GL.Clear(true, true, clearScreenColor);
-        //GL.Viewport(cam.pixelRect);
-        GL.Viewport(camRectClampedPixels);
-
-        S3DMaterial.SetTexture("_MainTex", renderTexture_right);
-        S3DMaterial.SetPass(pass + 1);
-
-        Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
-
-        if (canvasBlitToScreenDelegate != null)
-            canvasBlitToScreenDelegate(0);
-    }
-
-    void RenderTexture_BlitToScreenLeftGLES2_OnEndOfFrame()
-    {
-        Debug.Log("RenderTexture_BlitToScreenLeftGLES2_OnEndOfFrame " + Time.time);
-
-        //RenderTexture.active = null;
-#if !UNITY_EDITOR
-        //if (!openGL)
-        if (SystemInfo.graphicsDeviceType.ToString().Contains("Direct3D"))
-#endif
-            //Graphics.SetRenderTarget(Display.displays[twoDisplaysIndex_left].colorBuffer, Display.displays[twoDisplaysIndex_left].depthBuffer);
-            Graphics.SetRenderTarget(display_left.colorBuffer, display_left.depthBuffer);
-
-        GL.Clear(true, true, clearScreenColor);
-        //GL.Viewport(cam.pixelRect);
-        //GL.Viewport(camRectClampedPixels);
-        GL.Viewport(camRectClampedPixelsMod);
-
-        S3DMaterial.SetTexture("_MainTex", renderTexture_left);
-        S3DMaterial.SetPass(pass);
-
-        bool flipX = method == Method.Two_Displays_MirrorX;
-        bool flipY = method == Method.Two_Displays_MirrorY;
-        int vertexMin = -1;
-
-        // Low-Level Graphics Library calls
-        GL.PushMatrix();    // Calculate MVP Matrix and push it to the GL stack
-
-        GL.LoadOrtho();    // Set up Ortho-Perspective Transform
-
-        GL.Begin(GL.QUADS);
-
-        GL.TexCoord2(flipX ? 1 : 0, flipY ? 1 : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
-        GL.Vertex3(vertexMin, vertexMin, 0.0f); // Finalize and submit this vertex for rendering (bottom left)
-
-        GL.TexCoord2(flipX ? 1 : 0, flipY ? 0 : 1); // prepare input struct (Texcoord0 (UV's)) for this vertex
-        GL.Vertex3(vertexMin, 1.0f, 0.0f); // Finalize and submit this vertex for rendering (top left)
-
-        GL.TexCoord2(flipX ? 0 : 1, flipY ? 0 : 1); // prepare input struct (Texcoord0 (UV's)) for this vertex
-        GL.Vertex3(1.0f, 1.0f, 0.0f); // Finalize and submit this vertex for rendering  (top right)
-
-        GL.TexCoord2(flipX ? 0 : 1, flipY ? 1 : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
-        GL.Vertex3(1.0f, vertexMin, 0.0f); // Finalize and submit this vertex for rendering  (bottom right)
-
-        GL.End();
-        GL.PopMatrix(); // Pop the matrices off the stack
-
-        if (canvasBlitToScreenDelegate != null)
-            canvasBlitToScreenDelegate(1);
-    }
+        if (debugLog) Debug.Log("RenderTexture_BlitToScreenRight_OnEndOfFrame " + Time.time);
 
 #if HDRP
-    //void RenderTexture_BlitToRenderTexture_EndCameraRendering(ScriptableRenderContext context, Camera camera)
+        renderTextureBlitDelegate(renderTexture_right);
+#endif
+
+        canvasBlitDelegate(0);
+        //CustomBlitScreen(renderTexture_right, null as RenderTexture, quadMesh, S3DMaterial, pass + 1, blitToScreenClearRequired, camRectClampedPixels);
+        CustomBlitScreen(renderTexture_right, null as RenderTexture, screenBlitMesh, S3DMaterial, pass + 1, blitToScreenClearRequired);
+    }
+
+#if URP || HDRP
 #if UNITY_2021_1_OR_NEWER
-    void RenderTexture_BlitToRenderTexture_EndContextRendering(ScriptableRenderContext context, List<Camera> cameraList)
+    void CameraRectSet_BeginContextRendering(ScriptableRenderContext context, List<Camera> cameraList)
 #else
-    void RenderTexture_BlitToRenderTexture_EndFrameRendering(ScriptableRenderContext context, Camera[] cameraList)
+    void CameraRectSet_BeginFrameRendering(ScriptableRenderContext context, Camera[] cameraList)
 #endif
     {
-        //Debug.Log(Time.time + " cameraList.Length " + cameraList.Length);
+        if (debugLog) Debug.Log("CameraRectSet " + Time.time);
 
-        ////if (debugLog) Debug.Log(camera + " RenderTexture_BlitToRenderTexture " + Time.time);
-        //if (debugLog)
-        foreach (Camera camera in cameraList)
-            Debug.Log(camera + " RenderTexture_BlitToRenderTexture " + Time.time);
-
-//#if Debug
-//        foreach (Camera camera in cameraList)
-//            if (camera == cam)
-//#if UNITY_2021_1_OR_NEWER
-//                renderTextureBlitToRenderTextureCameraListCountMC = cameraList.Count;
-//            else
-//                renderTextureBlitToRenderTextureCameraListCount = cameraList.Count;
-//#else
-//                renderTextureBlitToRenderTextureCameraListCountMC = cameraList.Length;
-//            else
-//                renderTextureBlitToRenderTextureCameraListCount = cameraList.Length;
-//#endif
-//#endif
-
-                commandBuffer = new CommandBuffer();
-
-//#if HDRP
-//        foreach (Camera camera in cameraList)
-//        if (camera == topmostCamera)
-//        {
-//            if (camera == canvasCamera)
-//            {
-//                if (S3DEnabled)
-//                {
-//                    //commandBuffer.Blit(canvasCamera.targetTexture, renderTexture_left, S3DPanelMaterial);
-//                    //commandBuffer.Blit(canvasCamera.targetTexture, renderTexture_right, S3DPanelMaterial);
-
-//                    textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset);
-//                    textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift);
-//                    commandBuffer.Blit(canvasCamera.targetTexture, renderTexture_left, textureBlitMaterial, 1);
-//                    commandBuffer.Blit(canvasCamera.targetTexture, renderTexture_right, textureBlitMaterial, 2);
-//                }
-//                else
-//                    commandBuffer.Blit(canvasCamera.targetTexture, renderTexture, S3DPanelMaterial);
-//            }
-//            else
-//            {
-//                //foreach (var c in additionalS3DCamerasStruct)
-//                //    if (c.camera && topmostCamera != c.camera)
-//                //        commandBuffer.Blit(c.camera.targetTexture, renderTexture, S3DPanelMaterial);
-
-//                commandBuffer.Blit(topmostCamera.targetTexture, renderTexture, S3DPanelMaterial);
-//            }
-//        }
-//        else
-//            if (camera == topmostCamera_left)
-//            {
-//                //camera.targetTexture = null;
-
-//                //foreach (var c in additionalS3DCamerasStruct)
-//                //    if (c.camera && topmostCamera_left != c.camera_left)
-//                //        commandBuffer.Blit(c.camera_left.targetTexture, renderTexture_left, S3DPanelMaterial);
-
-//                commandBuffer.Blit(topmostCamera_left.targetTexture, renderTexture_left, S3DPanelMaterial);
-//            }
-//            else
-//                if (camera == topmostCamera_right)
-//                {
-//                    //camera.targetTexture = null;
-
-//                    //foreach (var c in additionalS3DCamerasStruct)
-//                    //    if (c.camera && topmostCamera_right != c.camera_right)
-//                    //        commandBuffer.Blit(c.camera_right.targetTexture, renderTexture_right, S3DPanelMaterial);
-
-//                    commandBuffer.Blit(topmostCamera_right.targetTexture, renderTexture_right, S3DPanelMaterial);
-//                }
-//                else
-//                    foreach (var c in additionalS3DCamerasStruct)
-//                        if (camera == c.camera && topmostCamera != c.camera)
-//                            commandBuffer.Blit(c.camera.targetTexture, renderTexture, S3DPanelMaterial);
-//                        else
-//                            if (camera == c.camera_left && topmostCamera_left != c.camera_left)
-//                                commandBuffer.Blit(c.camera_left.targetTexture, renderTexture_left, S3DPanelMaterial);
-//                            else
-//                                if (camera == c.camera_right && topmostCamera_right != c.camera_right)
-//                                    commandBuffer.Blit(c.camera_right.targetTexture, renderTexture_right, S3DPanelMaterial);
-//#endif
-
-        foreach (Camera camera in cameraList)
-            //if (camera == canvasCamera)
-#if URP
-            if (camera == cam)
-#else
-            if (camera == topmostCamera)
-#endif
-            {
-                //Debug.Log(Time.time + " camera == topmostCamera " + camera);
-#if HDRP
-                if (!S3DEnabled)
-                    commandBuffer.Blit(topmostCamera.targetTexture, renderTexture, textureBlitMaterial, 0);
-#endif
-
-                //if (S3DEnabled)
-                //{
-                //    if (!method.ToString().Contains("Two_Displays"))
-                //    {
-                //        //Debug.Log("canvasCamera.targetTexture blit to RT " + Time.time);
-                //        //commandBuffer.Blit(canvasCamera.targetTexture, renderTexture_left, S3DPanelMaterial);
-                //        //commandBuffer.Blit(canvasCamera.targetTexture, renderTexture_right, S3DPanelMaterial);
-
-                //        textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset);
-                //        textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift);
-                //        commandBuffer.Blit(canvasCamera.targetTexture, renderTexture_left, textureBlitMaterial, 1);
-                //        commandBuffer.Blit(canvasCamera.targetTexture, renderTexture_right, textureBlitMaterial, 2);
-                //    }
-                //}
-                //else
-                if (canvasCamera && canvasCamera.isActiveAndEnabled)
-                    commandBuffer.Blit(canvasCamera.targetTexture, renderTexture, textureBlitMaterial, 0);
-            }
+        foreach (Camera c in cameraList)
+            if (c == cam)
+                cam.rect = new Rect(0, 0, 1, 1);
             else
-#if URP
-                if (camera == camera_left)
+                foreach (var s in additionalS3DCamerasStruct)
+                    if (c == s.camera)
+                        s.camera.rect = new Rect(0, 0, 1, 1);
+    }
+
+#if UNITY_2021_1_OR_NEWER
+    void CameraRectReset_EndContextRendering(ScriptableRenderContext context, List<Camera> cameraList)
 #else
-                if (camera == topmostCamera_left)
+    void CameraRectReset_EndFrameRendering(ScriptableRenderContext context, Camera[] cameraList)
 #endif
-                {
+    {
+        if (debugLog) Debug.Log("CameraRectReset " + Time.time);
+
+        foreach (Camera c in cameraList)
+            if (c == cam)
+                cam.rect = lastCamRect;
+            else
+                foreach (var s in additionalS3DCamerasStruct)
+                    if (c == s.camera)
+                        s.camera.rect = lastCamRect;
+    }
+
 #if HDRP
-                commandBuffer.Blit(topmostCamera_left.targetTexture, renderTexture_left, textureBlitMaterial, 0);
-#endif
+//    //void RenderTexture_BlitToRenderTexture_EndCameraRendering(ScriptableRenderContext context, Camera camera)
+//#if UNITY_2021_1_OR_NEWER
+//    void RenderTexture_BlitToRenderTexture_EndContextRendering(ScriptableRenderContext context, List<Camera> cameraList)
+//#else
+//    void RenderTexture_BlitToRenderTexture_EndFrameRendering(ScriptableRenderContext context, Camera[] cameraList)
+//#endif
+//    {
+//        //Debug.Log(Time.time + " cameraList.Length " + cameraList.Length);
 
-                    if (canvasCamera && canvasCamera.isActiveAndEnabled)
-                    {
-                        Debug.Log("canvasRenderTexture blit to renderTexture_left " + Time.time);
-                        textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset);
-                        textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift);
-                        //commandBuffer.Blit(canvasCamera.targetTexture, renderTexture_left, textureBlitMaterial, 1);
-                        commandBuffer.Blit(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1);
+//        ////if (debugLog) Debug.Log(camera + " RenderTexture_BlitToRenderTexture " + Time.time);
+//        if (debugLog)
+//        foreach (Camera camera in cameraList)
+//            Debug.Log(camera + " RenderTexture_BlitToRenderTexture " + Time.time);
 
-                        //RenderTexture.active = renderTexture_left;
-                        //textureBlitMaterial.SetTexture("_MainTex", canvasRenderTexture);
-                        //commandBuffer.DrawProcedural(Matrix4x4.identity, textureBlitMaterial, 1, MeshTopology.Quads, 4); //this need "nearClipPlane = -1" for same quad position as using Blit with custom camera Rect coordinates
-                        ////CustomBlit(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false, false);
-                    }
-                }
+////#if Debug
+////        foreach (Camera camera in cameraList)
+////            if (camera == cam)
+////#if UNITY_2021_1_OR_NEWER
+////                renderTextureBlitToRenderTextureCameraListCountMC = cameraList.Count;
+////            else
+////                renderTextureBlitToRenderTextureCameraListCount = cameraList.Count;
+////#else
+////                renderTextureBlitToRenderTextureCameraListCountMC = cameraList.Length;
+////            else
+////                renderTextureBlitToRenderTextureCameraListCount = cameraList.Length;
+////#endif
+////#endif
+
+//                //commandBuffer = new CommandBuffer();
+
+////#if HDRP
+////        foreach (Camera camera in cameraList)
+////        if (camera == topmostCamera)
+////        {
+////            if (camera == canvasCamera)
+////            {
+////                if (S3DEnabled)
+////                {
+////                    //commandBuffer.Blit(canvasCamera.targetTexture, renderTexture_left, S3DPanelMaterial);
+////                    //commandBuffer.Blit(canvasCamera.targetTexture, renderTexture_right, S3DPanelMaterial);
+
+////                    textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset);
+////                    textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift);
+////                    commandBuffer.Blit(canvasCamera.targetTexture, renderTexture_left, textureBlitMaterial, 1);
+////                    commandBuffer.Blit(canvasCamera.targetTexture, renderTexture_right, textureBlitMaterial, 2);
+////                }
+////                else
+////                    commandBuffer.Blit(canvasCamera.targetTexture, renderTexture, S3DPanelMaterial);
+////            }
+////            else
+////            {
+////                //foreach (var c in additionalS3DCamerasStruct)
+////                //    if (c.camera && topmostCamera != c.camera)
+////                //        commandBuffer.Blit(c.camera.targetTexture, renderTexture, S3DPanelMaterial);
+
+////                commandBuffer.Blit(topmostCamera.targetTexture, renderTexture, S3DPanelMaterial);
+////            }
+////        }
+////        else
+////            if (camera == topmostCamera_left)
+////            {
+////                //camera.targetTexture = null;
+
+////                //foreach (var c in additionalS3DCamerasStruct)
+////                //    if (c.camera && topmostCamera_left != c.camera_left)
+////                //        commandBuffer.Blit(c.camera_left.targetTexture, renderTexture_left, S3DPanelMaterial);
+
+////                commandBuffer.Blit(topmostCamera_left.targetTexture, renderTexture_left, S3DPanelMaterial);
+////            }
+////            else
+////                if (camera == topmostCamera_right)
+////                {
+////                    //camera.targetTexture = null;
+
+////                    //foreach (var c in additionalS3DCamerasStruct)
+////                    //    if (c.camera && topmostCamera_right != c.camera_right)
+////                    //        commandBuffer.Blit(c.camera_right.targetTexture, renderTexture_right, S3DPanelMaterial);
+
+////                    commandBuffer.Blit(topmostCamera_right.targetTexture, renderTexture_right, S3DPanelMaterial);
+////                }
+////                else
+////                    foreach (var c in additionalS3DCamerasStruct)
+////                        if (camera == c.camera && topmostCamera != c.camera)
+////                            commandBuffer.Blit(c.camera.targetTexture, renderTexture, S3DPanelMaterial);
+////                        else
+////                            if (camera == c.camera_left && topmostCamera_left != c.camera_left)
+////                                commandBuffer.Blit(c.camera_left.targetTexture, renderTexture_left, S3DPanelMaterial);
+////                            else
+////                                if (camera == c.camera_right && topmostCamera_right != c.camera_right)
+////                                    commandBuffer.Blit(c.camera_right.targetTexture, renderTexture_right, S3DPanelMaterial);
+////#endif
+
+//        S3DMaterial.SetInt("_Flipped", 1);
+
+//        foreach (Camera camera in cameraList)
+//            //if (camera == canvasCamera)
+////#if URP
+////            if (camera == cam)
+////#else
+//            if (camera == topmostCamera)
+////#endif
+//            {
+//                //Debug.Log(Time.time + " camera == topmostCamera " + camera);
+////#if HDRP
+//                if (!S3DEnabled)
+//                    //commandBuffer.Blit(topmostCamera.targetTexture, renderTexture, textureBlitMaterial, 0);
+//                    CustomBlitTexture(topmostCamera.targetTexture, renderTexture, clientSizeMesh, S3DMaterial, 8);
+////#endif
+
+//                ////if (S3DEnabled)
+//                ////{
+//                ////    if (!method.ToString().Contains("Two_Displays"))
+//                ////    {
+//                ////        //Debug.Log("canvasCamera.targetTexture blit to RT " + Time.time);
+//                ////        //commandBuffer.Blit(canvasCamera.targetTexture, renderTexture_left, S3DPanelMaterial);
+//                ////        //commandBuffer.Blit(canvasCamera.targetTexture, renderTexture_right, S3DPanelMaterial);
+
+//                ////        textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset);
+//                ////        textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift);
+//                ////        commandBuffer.Blit(canvasCamera.targetTexture, renderTexture_left, textureBlitMaterial, 1);
+//                ////        commandBuffer.Blit(canvasCamera.targetTexture, renderTexture_right, textureBlitMaterial, 2);
+//                ////    }
+//                ////}
+//                ////else
+//                //if (canvasCamera && canvasCamera.isActiveAndEnabled)
+//                //    commandBuffer.Blit(canvasCamera.targetTexture, renderTexture, textureBlitMaterial, 0);
+//            }
+//            else
+////#if URP
+////                if (camera == camera_left)
+////#else
+//                if (camera == topmostCamera_left)
+////#endif
+//                {
+////#if HDRP
+//                    //commandBuffer.Blit(topmostCamera_left.targetTexture, renderTexture_left, textureBlitMaterial, 0);
+//                    CustomBlitTexture(topmostCamera_left.targetTexture, renderTexture_left, clientSizeMesh, S3DMaterial, 8);
+//                    //Graphics.Blit(topmostCamera_left.targetTexture, renderTexture_left, S3DMaterial, 8);
+////#endif
+
+//                    //if (canvasCamera && canvasCamera.isActiveAndEnabled)
+//                    //{
+//                    //    if (debugLog) Debug.Log("canvasRenderTexture blit to renderTexture_left " + Time.time);
+//                    //    textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset);
+//                    //    textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift);
+//                    //    //commandBuffer.Blit(canvasCamera.targetTexture, renderTexture_left, textureBlitMaterial, 1);
+//                    //    commandBuffer.Blit(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1);
+
+//                    //    //RenderTexture.active = renderTexture_left;
+//                    //    //textureBlitMaterial.SetTexture("_MainTex", canvasRenderTexture);
+//                    //    //commandBuffer.DrawProcedural(Matrix4x4.identity, textureBlitMaterial, 1, MeshTopology.Quads, 4); //this need "nearClipPlane = -1" for same quad position as using Blit with custom camera Rect coordinates
+//                    //    ////CustomBlitGL(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false, false);
+//                    //}
+//                }
+//                else
+////#if URP
+////                    if (camera == camera_right)
+////#else
+//                    if (camera == topmostCamera_right)
+////#endif
+//                    {
+////#if HDRP
+//                        //commandBuffer.Blit(topmostCamera_right.targetTexture, renderTexture_right, textureBlitMaterial, 0);
+//                        CustomBlitTexture(topmostCamera_right.targetTexture, renderTexture_right, clientSizeMesh, S3DMaterial, 8);
+////#endif
+
+//                        //if (canvasCamera && canvasCamera.isActiveAndEnabled)
+//                        //{
+//                        //    textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset);
+//                        //    textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift);
+//                        //    //commandBuffer.Blit(canvasCamera.targetTexture, renderTexture_right, textureBlitMaterial, 2);
+//                        //    commandBuffer.Blit(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 2);
+
+//                        //    //RenderTexture.active = renderTexture_right;
+//                        //    //textureBlitMaterial.SetTexture("_MainTex", canvasRenderTexture);
+//                        //    //commandBuffer.DrawProcedural(Matrix4x4.identity, textureBlitMaterial, 2, MeshTopology.Quads, 4); //this need "nearClipPlane = -1" for same quad position as using Blit with custom camera Rect coordinates
+//                        //}
+//                    }
+////#if HDRP
+//                    else
+//                        foreach (var c in additionalS3DCamerasStruct)
+//                            if (camera == c.camera)
+//                                //commandBuffer.Blit(c.camera.targetTexture, renderTexture, textureBlitMaterial, 0);
+//                                CustomBlitTexture(c.camera.targetTexture, renderTexture, clientSizeMesh, S3DMaterial, 8);
+//                            else
+//                                if (camera == c.camera_left)
+//                                    //commandBuffer.Blit(c.camera_left.targetTexture, renderTexture_left, textureBlitMaterial, 0);
+//                                    CustomBlitTexture(c.camera_left.targetTexture, renderTexture_left, clientSizeMesh, S3DMaterial, 8);
+//                                else
+//                                    if (camera == c.camera_right)
+//                                        //commandBuffer.Blit(c.camera_right.targetTexture, renderTexture_right, textureBlitMaterial, 0);
+//                                        CustomBlitTexture(c.camera_right.targetTexture, renderTexture_right, clientSizeMesh, S3DMaterial, 8);
+////#endif
+
+//        //context.ExecuteCommandBuffer(commandBuffer);
+//        //commandBuffer.Release();
+//        //context.Submit();
+
+//        S3DMaterial.SetInt("_Flipped", 0);
+//    }
+
+    void RenderTexture_BlitToRenderTexture(
+        //RenderTexture source, 
+        RenderTexture destination)
+    {
+        if (debugLog) Debug.Log("RenderTexture_BlitToRenderTexture " + Time.time);
+
+        S3DMaterial.SetInt("_Flipped", 1);
+        //CustomBlitTexture(source, destination, clientSizeMesh, S3DMaterial, 8);
+
+        foreach (var s in additionalS3DCamerasStruct)
+            if (s.camera)
+                if (destination == renderTexture)
+                    CustomBlitTexture(s.camera.targetTexture, destination, clientSizeMesh, S3DMaterial, 8);
                 else
-#if URP
-                    if (camera == camera_right)
-#else
-                    if (camera == topmostCamera_right)
-#endif
-                    {
-#if HDRP
-                        commandBuffer.Blit(topmostCamera_right.targetTexture, renderTexture_right, textureBlitMaterial, 0);
-#endif
-
-                        if (canvasCamera && canvasCamera.isActiveAndEnabled)
-                        {
-                            textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset);
-                            textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift);
-                            //commandBuffer.Blit(canvasCamera.targetTexture, renderTexture_right, textureBlitMaterial, 2);
-                            commandBuffer.Blit(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 2);
-
-                            //RenderTexture.active = renderTexture_right;
-                            //textureBlitMaterial.SetTexture("_MainTex", canvasRenderTexture);
-                            //commandBuffer.DrawProcedural(Matrix4x4.identity, textureBlitMaterial, 2, MeshTopology.Quads, 4); //this need "nearClipPlane = -1" for same quad position as using Blit with custom camera Rect coordinates
-                        }
-                    }
-#if HDRP
+                    if (destination == renderTexture_left)
+                        CustomBlitTexture(s.camera_left.targetTexture, destination, clientSizeMesh, S3DMaterial, 8);
                     else
-                        foreach (var c in additionalS3DCamerasStruct)
-                            if (camera == c.camera)
-                                commandBuffer.Blit(c.camera.targetTexture, renderTexture, textureBlitMaterial, 0);
-                            else
-                                if (camera == c.camera_left)
-                                    commandBuffer.Blit(c.camera_left.targetTexture, renderTexture_left, textureBlitMaterial, 0);
-                                else
-                                    if (camera == c.camera_right)
-                                        commandBuffer.Blit(c.camera_right.targetTexture, renderTexture_right, textureBlitMaterial, 0);
-#endif
+                        if (destination == renderTexture_right)
+                            CustomBlitTexture(s.camera_right.targetTexture, destination, clientSizeMesh, S3DMaterial, 8);
 
-        context.ExecuteCommandBuffer(commandBuffer);
-        commandBuffer.Release();
-        context.Submit();
+        S3DMaterial.SetInt("_Flipped", 0);
+    }
+
+    void RenderTexture_BlitToDisplay_OnEndOfFrame()
+    {
+        if (debugLog) Debug.Log("RenderTexture_BlitToDisplay_OnEndOfFrame " + Time.time);
+
+        renderTextureBlitDelegate(renderTexture);
+
+        canvasBlitDelegate(1);
+
+        CustomBlitDisplay(renderTexture, Display.displays[cam.targetDisplay], screenBlitMesh, S3DMaterial, 8, blitToScreenClearRequired);
+    }
+
+    void RenderTexture_BlitToScreen_OnEndOfFrame()
+    {
+        if (debugLog) Debug.Log("RenderTexture_BlitToScreen_OnEndOfFrame " + Time.time);
+
+        renderTextureBlitDelegate(renderTexture);
+
+        canvasBlitDelegate(1);
+
+        CustomBlitScreen(renderTexture, null as RenderTexture, screenBlitMesh, S3DMaterial, 8, blitToScreenClearRequired);
     }
 #endif
+#else
+
+    //ignored in SRP(URP or HDRP) but in default render via cam buffer even empty function give fps gain from 294 to 308
+    //void OnRenderImage(RenderTexture source, RenderTexture destination) //works only in the default render pipeline
+    //void OnPostRender() //works only in the default render pipeline //not working if antialiasing set in quality settings
+    //void PostRender(Camera c) //works only in the default render pipeline
+    void SingleDisplayBlitToScreen_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
+    //void SingleDisplayBlitToScreen_OnPostRender(Camera c)
+    {
+        if (debugLog)
+            //Debug.Log("OnRenderImage");
+            //Debug.Log("OnRenderImage Camera.current: " + Camera.current);
+            //Debug.Log(Camera.current + " Stereo3D OnRenderImage " + Time.time);
+            Debug.Log(c + " SingleDisplayBlitToScreen_OnRenderImageDelegate " + Time.time);
+
+        //////if (defaultRender) //commented till SRP don't go here
+        //if (S3DEnabled)
+        //////if (c == canvasCamera) //without OnGUI
+        ////if (c == topmostCamera_right) //with S3D OnGUI
+        //{
+            SingleDisplayBlitToScreen();
+        //}
+        //else
+        //{
+        //    if (nativeRenderingPlugin)
+        //    {
+        //        ////Rect r = cam.rect;
+        //        ////cam.rect = Rect.MinMaxRect(0, 0, 1, 1); //set temporary rect required before Graphics.Blit to blit render texture correctly with no fullscreen rect
+        //        ////Graphics.Blit(source, null as RenderTexture);
+        //        //CustomBlitGLES2(source, destination, S3DMaterial, 7, false, false);
+        //        ////cam.rect = r;
+
+        //        if (additionalS3DTopmostCameraIndex != -1)
+        //        {
+        //            Graphics.Blit(source, destination);
+        //        }
+        //        else
+        //            if (canvasCamera && canvasCamera.isActiveAndEnabled)
+        //                CustomBlitGL(canvasRenderTexture, renderTexture, textureBlitMaterial, 0, false, false, false);
+        //    }
+        //    else
+        //        Graphics.Blit(source, destination);
+        //}
+    }
+
+    //void OnPostRender()
+    //{
+    //    if (debugLog) Debug.Log(Camera.current + " Stereo3D OnPostRender " + Time.time);
+    //    activeRenderTexture = RenderTexture.active;
+    //}
+
+    //public RenderTexture renderTextureTarget;
+    //public RenderTexture renderTextureActive;
+
+    //void PostRender(Camera c) //Graphics.Blit & Graphics.DrawProceduralNow not working with antialiasing in quality settings and working OK with OnRenderImage
+    //{
+    //    //if (debugLog) Debug.Log(c + " PostRender " + Time.time);
+
+    //    //if (c == canvasCamera_right)
+    //    //    canvasCamera_right.targetTexture = null;
+
+    //    if (method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
+    //        if (!(canvasCamera_left && canvasCamera_left.isActiveAndEnabled))
+    //        {
+    //            //if (debugLog) Debug.Log(c + " !(canvasCamera_left && canvasCamera_left.isActiveAndEnabled) " + Time.time);
+
+    //            if (c == camera_left)
+    //            {
+    //                camera_left.targetTexture = null;
+    //                //Graphics.Blit(renderTexture_left, null as RenderTexture);
+    //                Graphics.Blit(RenderTexture.active, null as RenderTexture);
+    //            }
+    //            else
+    //                if (c == camera_right)
+    //                {
+    //                    //canvasCamera_left.targetTexture = renderTexture_left;
+    //                    //cam.targetTexture = renderTexture;
+    //                    //GL.invertCulling = false;
+    //                    camera_right.targetTexture = null;
+    //                    //RenderTexture.active = null;
+    //                    //RenderTextureFlipMaterial.SetTexture("_MainTex", renderTexture_right);
+
+    //                        //if (method == Method.Two_Displays_MirrorX)
+    //                        //{
+    //                        //    RenderTextureFlipMaterial.SetInt("_FlipX", 1);
+    //                        //    RenderTextureFlipMaterial.SetInt("_FlipY", 0);
+    //                        //}
+    //                        //else
+    //                        //    if (method == Method.Two_Displays_MirrorY)
+    //                        //    {
+    //                        //        RenderTextureFlipMaterial.SetInt("_FlipX", 0);
+    //                        //        RenderTextureFlipMaterial.SetInt("_FlipY", 1);
+    //                        //    }
+
+    //                    //RenderTextureFlipMaterial.SetPass(0);
+    //                    //Graphics.Blit(renderTexture_right, null, RenderTextureFlipMaterial);
+    //                    Graphics.Blit(RenderTexture.active, null, RenderTextureFlipMaterial);
+    //                    //Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
+    //                }
+    //        }
+    //        else
+    //            if (c == canvasCamera_left)
+    //            {
+    //                //camera_left.targetTexture = null;
+    //                canvasCamera_left.targetTexture = null;
+    //                //Graphics.Blit(renderTexture_left, null as RenderTexture);
+    //                Graphics.Blit(RenderTexture.active, null as RenderTexture);
+    //            }
+    //            else
+    //                if (c == canvasCamera_right)
+    //                {
+    //                    //renderTextureTarget = canvasCamera_right.targetTexture;
+    //                    //renderTextureActive = RenderTexture.active;
+    //                    //if (debugLog) Debug.Log(c + " !(canvasCamera_left && canvasCamera_left.isActiveAndEnabled) " + Time.time);
+    //                    //canvasCamera_left.targetTexture = renderTexture_left;
+    //                    //cam.targetTexture = renderTexture;
+    //                    //GL.invertCulling = false;
+    //                    //camera_right.targetTexture = null;
+    //                    //RenderTexture rt = RenderTexture.active;
+    //                    canvasCamera_right.targetTexture = null;
+    //                    //RenderTexture.active = null;
+    //                    //RenderTextureFlipMaterial.SetTexture("_MainTex", renderTexture_right);
+
+    //                    //if (method == Method.Two_Displays_MirrorX)
+    //                    //{
+    //                    //    RenderTextureFlipMaterial.SetInt("_FlipX", 1);
+    //                    //    RenderTextureFlipMaterial.SetInt("_FlipY", 0);
+    //                    //}
+    //                    //else
+    //                    //    if (method == Method.Two_Displays_MirrorY)
+    //                    //    {
+    //                    //        RenderTextureFlipMaterial.SetInt("_FlipX", 0);
+    //                    //        RenderTextureFlipMaterial.SetInt("_FlipY", 1);
+    //                    //    }
+
+    //                    //RenderTextureFlipMaterial.SetPass(0);
+    //                    //Graphics.Blit(renderTexture_right, null, RenderTextureFlipMaterial);
+    //                    Graphics.Blit(RenderTexture.active, null, RenderTextureFlipMaterial);
+    //                    //RenderTexture.active = null;
+    //                    //RenderTextureFlipMaterial.SetTexture("_MainTex", renderTexture_right);
+    //                    //RenderTextureFlipMaterial.SetTexture("_MainTex", renderTextureActive);
+    //                    //Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
+    //                }
+    //}
+
+    //    void RenderTexture_BlitToScreen_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
+    //    //void BlitToScreen(Camera c)
+    //    {
+    //        //if (debugLog) Debug.Log(c + " RenderTexture_BlitToScreen_OnRenderImageDelegate " + Time.time);
+
+    //        //if (method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
+    //        //    if (!(canvasCamera_left && canvasCamera_left.isActiveAndEnabled))
+    //        //    {
+    //        //        //if (debugLog) Debug.Log(c + " !(canvasCamera_left && canvasCamera_left.isActiveAndEnabled) " + Time.time);
+
+    //        //        if (c == camera_left)
+    //        //            BlitToScreen(c, null);
+    //        //        else
+    //        //            if (c == camera_right)
+    //        //                BlitToScreen(c, RenderTextureFlipMaterial);
+    //        //    }
+    //        //    else
+    //        //        if (c == canvasCamera_left)
+    //        //            BlitToScreen(c, null);
+    //        //        else
+    //        //            if (c == canvasCamera_right)
+    //        //                BlitToScreen(c, RenderTextureFlipMaterial);
+
+    //        //if (c.name.Contains("_left"))
+    //        //    BlitToScreen(c, null);
+    //        //else
+    //        //    BlitToScreen(c, RenderTextureFlipMaterial);
+
+    //        c.targetTexture = null;
+
+    ////#if UNITY_2022_1_OR_NEWER
+    ////        Rect r = c.rect;
+    ////        c.rect = Rect.MinMaxRect(0, 0, 1, 1);
+    ////#endif
+
+    //        if (c.name.Contains("_left"))
+    //        {
+    ////            if (openGL)
+    ////            {
+    ////                //Rect r = camera.rect;
+    ////                //camera.rect = Rect.MinMaxRect(0, 0, 1, 1);
+    ////                //S3DMaterial.SetTexture("_MainTex", renderTexture_left);
+    ////                //S3DMaterial.SetPass(pass);
+    ////                //CustomBlitGLES2(method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, rt, S3DMaterial);
+    ////                //camera.rect = r;
+    ////#if UNITY_2022_1_OR_NEWER
+    ////                if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
+    ////                    CustomBlitGLES2(renderTexture_left, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, false);
+    ////                else
+    ////                {
+    ////                    RenderTexture.active = null;
+    ////                    S3DMaterial.SetTexture("_MainTex", renderTexture_left);
+    ////                    S3DMaterial.SetPass(pass);
+    ////                    Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
+    ////                }
+    ////#else
+    ////                RenderTexture rt = new RenderTexture(RenderTexture.active);
+    ////                Graphics.CopyTexture(RenderTexture.active, rt);
+
+    ////                if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
+    ////                    CustomBlitGLES2(rt, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, false);
+    ////                else
+    ////                {
+    ////                    RenderTexture.active = null;
+    ////                    S3DMaterial.SetTexture("_MainTex", rt);
+    ////                    S3DMaterial.SetPass(pass);
+    ////                    Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
+    ////                }
+
+    ////                rt.Release();
+    ////#endif
+    ////            }
+    ////            else
+    //            {
+    //                ////Graphics.Blit(RenderTexture.active, null as RenderTexture);
+    //                ////Graphics.Blit(RenderTexture.active, null, S3DMaterial, pass);
+    //                ////Graphics.Blit(source, destination);
+    //                ////Graphics.Blit(destination, null as RenderTexture);
+    //                ////Graphics.Blit(renderTexture_left, null as RenderTexture);
+    //                ////Graphics.Blit(renderTexture_left, null, S3DMaterial, pass);
+    //                ////Graphics.Blit(rt, null, S3DMaterial, pass);
+    //                //Graphics.Blit(RenderTexture.active, null as RenderTexture, S3DMaterial, pass);
+
+    //                //CustomBlitGL(RenderTexture.active, null as RenderTexture, S3DMaterial, pass, false, false, false, clientSizePixelRect);
+    //                //CustomBlitGL(renderTexture_left, null as RenderTexture, S3DMaterial, pass, false, false, false, clientSizePixelRect);
+    //                //CustomBlitGL(RenderTexture.active, null as RenderTexture, S3DMaterial, pass, false, false, false);
+    //                CustomBlitScreen(RenderTexture.active, null as RenderTexture, S3DMaterial, pass, clientSizePixelRect);
+
+    //                //S3DMaterial.SetTexture("_MainTex", RenderTexture.active);
+    //                //RenderTexture.active = null;
+    //                //S3DMaterial.SetPass(pass);
+    //                //Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
+    //            }
+    //        }
+    //        else
+    //        {
+    //            ////Graphics.Blit(RenderTexture.active, null, S3DMaterial, pass);
+    //            //Graphics.Blit(RenderTexture.active, null as RenderTexture);
+    //            ////Graphics.Blit(renderTexture_right, null, S3DMaterial, pass);
+    //            ////Graphics.Blit(renderTexture_right, null as RenderTexture);
+    //            ////CustomBlitGLES2(false, false, renderTexture_right, S3DMaterial);
+
+    //            ////S3DMaterial.SetTexture("_MainTex", RenderTexture.active);
+    //            ////S3DMaterial.SetInt("_FlipX", 0);
+    //            ////S3DMaterial.SetInt("_FlipY", 0);
+    //            ////RenderTexture.active = null;
+    //            ////S3DMaterial.SetPass(pass);
+    //            ////Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
+
+    //            //CustomBlitGL(RenderTexture.active, null as RenderTexture, S3DMaterial, pass + 1, false, false, false, clientSizePixelRect);
+    //            //CustomBlitGL(renderTexture_right, null as RenderTexture, S3DMaterial, pass + 1, false, false, false, clientSizePixelRect);
+    //            //CustomBlitGL(RenderTexture.active, null as RenderTexture, S3DMaterial, pass + 1, false, false, false);
+    //            CustomBlitScreen(RenderTexture.active, null as RenderTexture, S3DMaterial, pass + 1, clientSizePixelRect);
+    //        }
+
+    ////#if UNITY_2022_1_OR_NEWER
+    ////        c.rect = r;
+    ////#endif
+    //    }
+
+    //void BlitSourceToDestination_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
+    //{
+    //    //if (debugLog) Debug.Log(c + " BlitSourceToDestination_OnRenderImageDelegate " + Time.time);
+
+    //    //activeRenderTexture = RenderTexture.active;
+    //    Graphics.Blit(source, destination);
+    //    //CustomBlitScreen(source, destination, textureBlitMaterial, 0, false, new Rect(-camRectClampedPixels.x, -camRectClampedPixels.y, camRectClampedPixels.width + camRectClampedPixels.x * 2, camRectClampedPixels.height + camRectClampedPixels.y * 2));
+    //}
+
+    void BlitSourceToRenderTextureLeft_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
+    {
+        if (debugLog) Debug.Log(c + " BlitSourceToRenderTextureLeft_OnRenderImageDelegate " + Time.time);
+
+        Graphics.Blit(source, renderTexture_left);
+    }
+
+    void BlitSourceToRenderTextureRight_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
+    {
+        if (debugLog) Debug.Log(c + " BlitSourceToRenderTextureRight_OnRenderImageDelegate " + Time.time);
+
+        Graphics.Blit(source, renderTexture_right);
+    }
+
+    void CamerasTargetRemoveLeft()
+    {
+        if (debugLog) Debug.Log("CamerasTargetRemoveLeft " + Time.time);
+
+        camera_left.targetTexture = null;
+
+        foreach (var c in additionalS3DCamerasStruct)
+            //if (c.camera && c.camera != topmostCamera)
+            if (c.camera)
+                c.camera_left.targetTexture = null;
+    }
+
+    void CamerasTargetRemoveRight()
+    {
+        if (debugLog) Debug.Log("CamerasTargetRemoveRight " + Time.time);
+
+        camera_right.targetTexture = null;
+
+        foreach (var c in additionalS3DCamerasStruct)
+            //if (c.camera && c.camera != topmostCamera)
+            if (c.camera)
+                c.camera_right.targetTexture = null;
+    }
+
+    void RenderTexture_BlitToScreenLeft_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
+    {
+        if (debugLog) Debug.Log(c + " RenderTexture_BlitToScreenLeft_OnRenderImageDelegate " + Time.time);
+
+        //Graphics.Blit(source, destination);
+
+        //if (camerasTargetRemoveDelegateLeft != null)
+            camerasTargetRemoveDelegateLeft();
+
+        c.targetTexture = null;
+
+        canvasBlitDelegate(1);
+
+        //Rect r = c.rect;
+        //c.rect = Rect.MinMaxRect(0, 0, 1, 1); //set temporary rect required before Graphics.Blit to blit render texture correctly with no fullscreen rect
+
+        ////Graphics.Blit(RenderTexture.active, null as RenderTexture);
+        ////Graphics.Blit(RenderTexture.active, null, S3DMaterial, pass);
+        ////Graphics.Blit(source, destination);
+        ////Graphics.Blit(destination, null as RenderTexture);
+        ////Graphics.Blit(renderTexture_left, null as RenderTexture);
+        ////Graphics.Blit(renderTexture_left, null, S3DMaterial, pass);
+        ////Graphics.Blit(rt, null, S3DMaterial, pass);
+        //Graphics.Blit(RenderTexture.active, null as RenderTexture, S3DMaterial, pass);
+
+        ////CustomBlitGL(RenderTexture.active, null as RenderTexture, S3DMaterial, pass, false, false, false, clientSizePixelRect);
+        ////CustomBlitGL(renderTexture_left, null as RenderTexture, S3DMaterial, pass, false, false, false, clientSizePixelRect);
+        ////CustomBlitGL(RenderTexture.active, null as RenderTexture, S3DMaterial, pass, false, false, false);
+        ////CustomBlitScreen(RenderTexture.active, null as RenderTexture, S3DMaterial, pass, clientSizePixelRect);
+        ////CustomBlitScreen(renderTexture_left, null as RenderTexture, S3DMaterial, pass);
+        ////CustomBlitScreen(RenderTexture.active, null as RenderTexture, S3DMaterial, pass);
+        ////activeRenderTexture = RenderTexture.active;
+        ////CustomBlitScreen(RenderTexture.active, null as RenderTexture, S3DMaterial, pass, cam.pixelRect);
+        ////CustomBlitScreen(RenderTexture.active, null as RenderTexture, S3DMaterial, pass, blitToScreenClearRequired, cam.pixelRect);
+        ////CustomBlitScreen(renderTexture_left, null as RenderTexture, S3DMaterial, pass, blitToScreenClearRequired, cam.pixelRect);
+        ////CustomBlitScreen(renderTexture_left, null as RenderTexture, S3DMaterial, pass, blitToScreenClearRequired, camRectClampedPixels);
+        //CustomBlitScreen(renderTexture_left, null as RenderTexture, S3DMaterial, pass, blitToScreenClearRequired, camRectClampedPixelsFlipped);
+        //CustomBlitScreen(renderTexture_left, null as RenderTexture, screenBlitMeshFlipped, S3DMaterial, pass, blitToScreenClearRequired, camRectClampedPixelsFlipped);
+        CustomBlitScreen(renderTexture_left, null as RenderTexture, screenBlitMeshFlipped, S3DMaterial, pass, blitToScreenClearRequired);
+
+        //S3DMaterial.SetTexture("_MainTex", RenderTexture.active);
+        //RenderTexture.active = null;
+        //S3DMaterial.SetPass(pass);
+        //Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
+
+        //c.rect = r;
+    }
+
+    void RenderTexture_BlitToScreenRight_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
+    {
+        if (debugLog) Debug.Log(c + " RenderTexture_BlitToScreenRight_OnRenderImageDelegate " + Time.time);
+
+        //Graphics.Blit(source, destination);
+
+        //if (camerasTargetRemoveDelegateRight != null)
+            camerasTargetRemoveDelegateRight();
+
+        c.targetTexture = null;
+
+        canvasBlitDelegate(0);
+
+        //Rect r = c.rect;
+        //c.rect = Rect.MinMaxRect(0, 0, 1, 1); //set temporary rect required before Graphics.Blit to blit render texture correctly with no fullscreen rect
+
+        ////Graphics.Blit(RenderTexture.active, null, S3DMaterial, pass);
+        //Graphics.Blit(RenderTexture.active, null as RenderTexture);
+        ////Graphics.Blit(renderTexture_right, null, S3DMaterial, pass);
+        ////Graphics.Blit(renderTexture_right, null as RenderTexture);
+        ////CustomBlitGLES2(false, false, renderTexture_right, S3DMaterial);
+
+        ////S3DMaterial.SetTexture("_MainTex", RenderTexture.active);
+        ////S3DMaterial.SetInt("_FlipX", 0);
+        ////S3DMaterial.SetInt("_FlipY", 0);
+        ////RenderTexture.active = null;
+        ////S3DMaterial.SetPass(pass);
+        ////Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
+        
+        ////CustomBlitGL(RenderTexture.active, null as RenderTexture, S3DMaterial, pass + 1, false, false, false, clientSizePixelRect);
+        ////CustomBlitGL(renderTexture_right, null as RenderTexture, S3DMaterial, pass + 1, false, false, false, clientSizePixelRect);
+        ////CustomBlitGL(RenderTexture.active, null as RenderTexture, S3DMaterial, pass + 1, false, false, false);
+        ////CustomBlitScreen(RenderTexture.active, null as RenderTexture, S3DMaterial, pass + 1, clientSizePixelRect);
+        ////CustomBlitScreen(renderTexture_right, null as RenderTexture, S3DMaterial, pass + 1);
+        ////CustomBlitScreen(RenderTexture.active, null as RenderTexture, S3DMaterial, pass + 1);
+        ////CustomBlitScreen(RenderTexture.active, null as RenderTexture, S3DMaterial, pass + 1, cam.pixelRect);
+        ////CustomBlitScreen(RenderTexture.active, null as RenderTexture, S3DMaterial, pass + 1, blitToScreenClearRequired, cam.pixelRect);
+        ////CustomBlitScreen(renderTexture_right, null as RenderTexture, S3DMaterial, pass + 1, blitToScreenClearRequired, cam.pixelRect);
+        //CustomBlitScreen(renderTexture_right, null as RenderTexture, S3DMaterial, pass + 1, blitToScreenClearRequired, camRectClampedPixels);
+        //CustomBlitScreen(renderTexture_right, null as RenderTexture, quadMesh, S3DMaterial, pass + 1, blitToScreenClearRequired, camRectClampedPixels);
+        CustomBlitScreen(renderTexture_right, null as RenderTexture, screenBlitMesh, S3DMaterial, pass + 1, blitToScreenClearRequired);
+
+        //c.rect = r;
+    }
+
+    //void BlitToTexture(RenderTexture source, RenderTexture destination, Camera c)
+    //{
+    //    //if (debugLog) Debug.Log(c + " OnRenderImage_BlitToTExture " + Time.time);
+
+    //    //GL.Viewport(new Rect(cam.rect.x * clientSize.x, cam.rect.y * clientSize.y, cam.rect.width * clientSize.x, cam.rect.height * clientSize.y));
+    //    //GL.Viewport(new Rect(0, 0, 0, 0));
+
+    //    //GL.Viewport(new Rect(flipX ? (1 - cam.rect.x) * clientSize.x - cam.pixelWidth : cam.rect.x * clientSize.x, 
+    //    //    flipY ? (1 - cam.rect.y) * clientSize.y - cam.pixelHeight : cam.rect.y * clientSize.y, 
+    //    //    cam.rect.width * clientSize.x, 
+    //    //    cam.rect.height * clientSize.y));
+
+    //    //Rect r = c.rect;
+    //    //c.rect = Rect.MinMaxRect(0, 0, 1, 1); //set temporary rect required before Graphics.Blit to blit render texture correctly with no fullscreen rect
+
+    //    if (c.name.Contains("_left"))
+    //    {
+    //        Graphics.Blit(source, destination);
+    //        //CustomBlitGL(source, destination, null, pass, false, false);
+
+    //        textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset);
+    //        textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift);
+    //        Graphics.Blit(canvasCamera.targetTexture, renderTexture_left, textureBlitMaterial, 1);
+    //        //Graphics.Blit(canvasCamera.targetTexture, destination, textureBlitMaterial, 1);
+    //        //CustomBlitGL(source, destination, textureBlitMaterial, 1, false, false);
+    //    }
+    //    else
+    //        if (c.name.Contains("_right"))
+    //        {
+    //            Graphics.Blit(source, destination);
+    //            //CustomBlitGL(source, destination, null, pass, false, false);
+
+    //            //textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset);
+    //            //textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift);
+    //            ////Graphics.Blit(canvasCamera.targetTexture, renderTexture_right, textureBlitMaterial, 2);
+    //            //Graphics.Blit(canvasCamera.targetTexture, destination, textureBlitMaterial, 2);
+
+    //            textureBlitMaterial.SetFloat("_ShiftX", -renderTextureOffset);
+    //            textureBlitMaterial.SetFloat("_ShiftY", 0);
+    //            //Graphics.Blit(canvasCamera.targetTexture, destination, textureBlitMaterial, 1);
+    //            Graphics.Blit(canvasCamera.targetTexture, renderTexture_right, textureBlitMaterial, 1);
+    //            //CustomBlitGL(source, destination, textureBlitMaterial, 1, false, false);
+    //        }
+    //        //else
+    //        //{
+    //        //    Graphics.Blit(source, destination);
+
+    //        //    //textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset);
+    //        //    //textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift);
+    //        //    ////Graphics.Blit(canvasCamera.targetTexture, renderTexture_right, textureBlitMaterial, 2);
+    //        //    //Graphics.Blit(canvasCamera.targetTexture, destination, textureBlitMaterial, 2);
+
+    //        //    textureBlitMaterial.SetFloat("_ShiftX", 0);
+    //        //    textureBlitMaterial.SetFloat("_ShiftY", 0);
+    //        //    Graphics.Blit(canvasCamera.targetTexture, destination, textureBlitMaterial, 1);
+    //        //}
+
+    //    //c.rect = r;
+    //}
+
+    //void SetTextureLeft_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
+    ////void Canvas_BlitToLeftRightRenderTexture_OnPostRender(Camera c)
+    //{
+    //    //if (debugLog) Debug.Log(c + " SetTextureLeft_OnRenderImageDelegate " + Time.time);
+
+    //    //Graphics.Blit(source, destination);
+
+    //    //if (!renderTexture_left)
+    //    //{
+    //    //    //Debug.Log(c + " renderTexture = c.activeTexture " + Time.time);
+    //    //    //renderTexture = RenderTexture.active;
+    //    //    //renderTexture_left = source;
+    //    //    renderTexture_left = new RenderTexture(RenderTexture.active);
+    //    //}
+
+    //    //Graphics.CopyTexture(source, renderTexture_left);
+    //    Graphics.Blit(source, renderTexture_left);
+
+    //    //Graphics.Blit(source, destination);
+    //}
+
+    //void SetTextureRight_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
+    ////void Canvas_BlitToLeftRightRenderTexture_OnPostRender(Camera c)
+    //{
+    //    //if (debugLog) Debug.Log(c + " SetTextureRight_OnRenderImageDelegate " + Time.time);
+
+    //    //Graphics.Blit(source, destination);
+
+    //    //if (!renderTexture_right)
+    //    //{
+    //    //    //Debug.Log(c + " renderTexture = c.activeTexture " + Time.time);
+    //    //    //renderTexture = RenderTexture.active;
+    //    //    //renderTexture_right = source;
+    //    //    renderTexture_right = new RenderTexture(RenderTexture.active);
+    //    //    //SetTexturesForPlugin(renderTexture_left, renderTexture_right);
+    //    //}
+
+    //    //Graphics.CopyTexture(source, renderTexture_right);
+    //    Graphics.Blit(source, renderTexture_right);
+    //    SetTexturesForPlugin(renderTexture_left, renderTexture_right);
+
+    //    //Graphics.Blit(source, destination);
+    //}
+
+//    void Canvas_BlitToRenderTexture_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
+//    //void Canvas_BlitToLeftRightRenderTexture_OnPostRender(Camera c)
+//    {
+//        //if (debugLog) Debug.Log(c + " Canvas_BlitToRenderTexture_OnRenderImageDelegate " + Time.time);
+
+//        //Graphics.Blit(source, destination);
+
+//        //if (!renderTexture)
+//        //{
+//        //    //Debug.Log(c + " renderTexture = c.activeTexture " + Time.time);
+//        //    //renderTexture = RenderTexture.active;
+//        //    renderTexture = source;
+//        //    //renderTexture = new RenderTexture(source);
+//        //}
+
+//        //Graphics.CopyTexture(source, renderTexture);
+
+//        //Graphics.Blit(source, destination);
+
+//        //Canvas_BlitToLeftRightRenderTexture();
+//        //CustomBlitScreen(canvasRenderTexture, destination, textureBlitMaterial, 0);
+//        CustomBlitScreen(canvasRenderTexture, renderTexture, textureBlitMaterial, 0);
+//    }
+
+//    void Canvas_BlitToLeftRightRenderTexture_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
+//    //void Canvas_BlitToLeftRightRenderTexture_OnPostRender(Camera c)
+//    {
+//        //if (debugLog) Debug.Log(c + " Canvas_BlitToLeftRightRenderTexture_OnRenderImageDelegate " + Time.time);
+
+//        Canvas_BlitToLeftRightRenderTexture();
+//    }
+
+//    void Canvas_BlitToLeftRightRenderTexture_OnEndOfFrame()
+//    {
+//        //if (debugLog) Debug.Log("Canvas_BlitToLeftRightRenderTexture_OnEndOfFrame " + Time.time);
+
+//        Canvas_BlitToLeftRightRenderTexture();
+//    }
+
+//    //void Canvas_BlitToScreenEmpty(int left)
+//    //{
+//    //    //if (debugLog) Debug.Log("Canvas_BlitToScreenEmpty " + Time.time);
+//    //}
+
+//    //void Canvas_BlitToScreen(int right)
+//    void Canvas_BlitToScreen(int left)
+//    {
+//        //if (debugLog) Debug.Log("Canvas_BlitToScreen " + Time.time);
+
+//        textureBlitMaterial.SetTexture("_MainTex", canvasRenderTexture);
+//        textureBlitMaterial.SetInt("_Clockwise", 1);
+//        //textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset * (1 - 2 * right));
+//        //textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift * (1 - right));
+//        textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset * (2 * left - 1));
+//        textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift * left);
+//        textureBlitMaterial.SetInt("_FlipX", (method == Method.Two_Displays_MirrorX ? 1 : 0) * left);
+//        textureBlitMaterial.SetInt("_FlipY", (method == Method.Two_Displays_MirrorY ? 1 : 0) * left);
+//        textureBlitMaterial.SetPass(1);    // start the first rendering pass
+
+//        Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
+//    }
+
+    void SetTexture_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
+    {
+        if (debugLog) Debug.Log(c + " SetTexture " + Time.time);
+#if Debug
+        activeRenderTexture = RenderTexture.active;
+#endif
+        renderTexture = RenderTexture.active;
+
+        if (renderTexturePtr != renderTexture.GetNativeTexturePtr())
+            {
+                renderTexturePtr = renderTexture.GetNativeTexturePtr();
+                //nativeRenderingPluginDataSetOnce = true;
+                SetTexturesForPlugin(renderTexture, null);
+            }
+
+        onRenderImageDelegate_cameraMain.RenderImageEvent -= SetTexture_OnRenderImageDelegate;
+    }
+
+#endif
+
+    void Canvas_BlitToRenderTexture(int left)
+    {
+        if (debugLog) Debug.Log("Canvas_BlitToRenderTexture");
+
+        CustomBlitTexture(canvasRenderTexture, renderTexture, canvasBlitMesh, S3DMaterial, 9);
+    }
 
 //    //void PostRenderContext(ScriptableRenderContext context, List<Camera> cameraList)
 //    void PostRenderContext(ScriptableRenderContext context, Camera camera)
@@ -13178,79 +15640,20 @@ struct tagRECT
 
     //private void OnPreRender()
     //{
-    //    Debug.Log(Camera.current + " Stereo3D OnPreRender " + Time.time);
+    //    if (debugLog) Debug.Log(Camera.current + " Stereo3D OnPreRender " + Time.time);
     //}
 
-    //ignored in SRP(URP or HDRP) but in default render via cam buffer even empty function give fps gain from 294 to 308
-    //void OnRenderImage(RenderTexture source, RenderTexture destination) //works only in the default render pipeline
-    //void OnPostRender() //works only in the default render pipeline //not working if antialiasing set in quality settings
-    //void PostRender(Camera c) //works only in the default render pipeline
-    void SingleDisplayS3D_BlitToScreen_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
-    //void SingleDisplayS3D_BlitToScreen_OnPostRender(Camera c)
+    void SingleDisplayBlitToScreen_OnEndOfFrame()
     {
-        //if (debugLog)
-            //Debug.Log("OnRenderImage");
-        //if (debugLog)
-            //Debug.Log("OnRenderImage Camera.current: " + Camera.current);
-            //Debug.Log(Camera.current + " Stereo3D OnRenderImage " + Time.time);
-            Debug.Log(c + " SingleDisplayS3D_BlitToScreen_OnRenderImageDelegate " + Time.time);
+        if (debugLog) Debug.Log("SingleDisplayBlitToScreen_OnEndOfFrame " + Time.time);
 
-        //////if (defaultRender) //commented till SRP don't go here
-        //if (S3DEnabled)
-        //////if (c == canvasCamera) //without OnGUI
-        ////if (c == topmostCamera_right) //with S3D OnGUI
-        //{
-            SingleDisplayS3D_BlitToScreen();
-        //}
-        //else
-        //{
-        //    if (nativeRenderingPlugin)
-        //    {
-        //        ////Rect r = cam.rect;
-        //        ////cam.rect = Rect.MinMaxRect(0, 0, 1, 1); //set temporary rect required before Graphics.Blit to blit render texture correctly with no fullscreen rect
-        //        ////Graphics.Blit(source, null as RenderTexture);
-        //        //CustomBlitGLES2(source, destination, S3DMaterial, 7, false, false);
-        //        ////cam.rect = r;
-
-        //        if (additionalS3DTopmostCameraIndex != -1)
-        //        {
-        //            Graphics.Blit(source, destination);
-        //        }
-        //        else
-        //            if (canvasCamera && canvasCamera.isActiveAndEnabled)
-        //                CustomBlit(canvasRenderTexture, renderTexture, textureBlitMaterial, 0, false, false, false);
-        //    }
-        //    else
-        //        Graphics.Blit(source, destination);
-        //}
+        SingleDisplayBlitToScreen();
     }
 
-    void SingleDisplayS3D_BlitToScreenGLES2_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
+    void SingleDisplayBlitToScreen()
     {
         //if (debugLog)
-            Debug.Log(c + " SingleDisplayS3D_BlitToScreenGLES2_OnRenderImageDelegate " + Time.time);
-
-        SingleDisplayS3D_BlitToScreenGLES2();
-    }
-
-    void SingleDisplayS3D_BlitToScreen_OnEndOfFrame()
-    {
-        Debug.Log("SingleDisplayS3D_BlitToScreen_OnEndOfFrame " + Time.time);
-
-        SingleDisplayS3D_BlitToScreen();
-    }
-
-    void SingleDisplayS3D_BlitToScreenGLES2_OnEndOfFrame()
-    {
-        Debug.Log("SingleDisplayS3D_BlitToScreenGLES2_OnEndOfFrame " + Time.time);
-
-        SingleDisplayS3D_BlitToScreenGLES2();
-    }
-
-    void SingleDisplayS3D_BlitToScreen()
-    {
-        //if (debugLog)
-            //Debug.Log("SingleDisplayS3D_BlitToScreen " + Time.time);
+            //Debug.Log("SingleDisplayBlitToScreen " + Time.time);
 
         //if (method == Method.Two_Displays || method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
         //{
@@ -13314,12 +15717,12 @@ struct tagRECT
                 //    textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset);
                 //    textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift);
                 //    Graphics.Blit(canvasCamera.targetTexture, renderTexture_left, textureBlitMaterial, 1);
-                //    //CustomBlit(canvasCamera.targetTexture, renderTexture_left, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
+                //    //CustomBlitGL(canvasCamera.targetTexture, renderTexture_left, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
 
                 //    textureBlitMaterial.SetFloat("_ShiftX", -renderTextureOffset);
                 //    textureBlitMaterial.SetFloat("_ShiftY", 0);
                 //    Graphics.Blit(canvasCamera.targetTexture, renderTexture_right, textureBlitMaterial, 1);
-                //    //CustomBlit(canvasCamera.targetTexture, renderTexture_right, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
+                //    //CustomBlitGL(canvasCamera.targetTexture, renderTexture_right, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
                 //}
 
                 ////canvasCamera_left.targetTexture = null;
@@ -13339,43 +15742,55 @@ struct tagRECT
 
                 //    ////Graphics.Blit(canvasCamera.targetTexture, destination, textureBlitMaterial, 1);
                 //    ////Graphics.Blit(canvasCamera.targetTexture, RenderTexture.active, textureBlitMaterial, 1);
-                //    ////CustomBlit(canvasCamera.targetTexture, RenderTexture.active, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
-                //    //CustomBlit(canvasCamera.targetTexture, RenderTexture.active, textureBlitMaterial, 1, false, false, false);
+                //    ////CustomBlitGL(canvasCamera.targetTexture, RenderTexture.active, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
+                //    //CustomBlitGL(canvasCamera.targetTexture, RenderTexture.active, textureBlitMaterial, 1, false, false, false);
 
                 //    ////Graphics.Blit(source, destination);
-                //    //CustomBlit(source, destination, textureBlitMaterial, 0, false, false, false, c.pixelRect);
-                //    //CustomBlit(canvasCamera.targetTexture, destination, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
+                //    //CustomBlitGL(source, destination, textureBlitMaterial, 0, false, false, false, c.pixelRect);
+                //    //CustomBlitGL(canvasCamera.targetTexture, destination, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
 
-                //    //CustomBlit(source, renderTexture_left, textureBlitMaterial, 0, false, false, false, c.pixelRect);
-                //    //CustomBlit(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
-                //    CustomBlit(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false, false);
+                //    //CustomBlitGL(source, renderTexture_left, textureBlitMaterial, 0, false, false, false, c.pixelRect);
+                //    //CustomBlitGL(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
+                //    CustomBlitGL(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false, false);
 
                 //    textureBlitMaterial.SetFloat("_ShiftX", -renderTextureOffset);
                 //    textureBlitMaterial.SetFloat("_ShiftY", 0);
 
                 //    ////Graphics.Blit(canvasRenderTexture, destination, textureBlitMaterial, 1);
                 //    ////Graphics.Blit(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1);
-                //    ////CustomBlit(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
-                //    //CustomBlit(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1, false, false, false);
+                //    ////CustomBlitGL(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
+                //    //CustomBlitGL(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1, false, false, false);
 
-                //    //CustomBlit(source, destination, textureBlitMaterial, 0, false, false, false, c.pixelRect);
-                //    //CustomBlit(canvasRenderTexture, destination, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
+                //    //CustomBlitGL(source, destination, textureBlitMaterial, 0, false, false, false, c.pixelRect);
+                //    //CustomBlitGL(canvasRenderTexture, destination, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
 
-                //    //CustomBlit(source, renderTexture_right, textureBlitMaterial, 0, false, false, false, c.pixelRect);
-                //    //CustomBlit(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
-                //    CustomBlit(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1, false, false, false);
+                //    //CustomBlitGL(source, renderTexture_right, textureBlitMaterial, 0, false, false, false, c.pixelRect);
+                //    //CustomBlitGL(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
+                //    CustomBlitGL(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1, false, false, false);
                 //}
 
-                ////CustomBlit(null, null, S3DMaterial, pass, false, false, false, clientSizePixelRect);
-                ////CustomBlitDrawProceduralNow(null, null, S3DMaterial, pass);
-                ////CustomBlitDrawProceduralNowRect(null, null, S3DMaterial, pass, clientSizePixelRect);
-                ////CustomBlitDrawProceduralNowRect(null, null, S3DMaterial, pass, renderTextureRect);
-                ////CustomBlitDrawProceduralNowRect(null, null, S3DMaterial, pass);
-                ////CustomBlitDrawProceduralNowRect(null, null, S3DMaterial, pass, pr);
-                ////CustomBlitDrawProceduralNowRect(null, null, S3DMaterial, pass, cam.pixelRect);
-                //CustomBlitDrawProceduralNowRect(null, null, S3DMaterial, pass, blitToScreenClearRequired, cam.pixelRect);
-                ////CustomBlit(null, null, S3DMaterial, pass, false, false, blitToScreenClearRequired, cam.pixelRect);
-                CustomBlitDrawProceduralNowRect(null, null, S3DMaterial, pass, blitToScreenClearRequired, camRectClampedPixels);
+#if HDRP
+                renderTextureBlitDelegate(renderTexture_left);
+                renderTextureBlitDelegate(renderTexture_right);
+#endif
+
+                canvasBlitDelegate(1);
+                canvasBlitDelegate(0);
+
+                //////CustomBlitGL(null, null, S3DMaterial, pass, false, false, false, clientSizePixelRect);
+                //////CustomBlitScreen(null, null, S3DMaterial, pass);
+                //////CustomBlitScreen(null, null, S3DMaterial, pass, clientSizePixelRect);
+                //////CustomBlitScreen(null, null, S3DMaterial, pass, renderTextureRect);
+                //////CustomBlitScreen(null, null, S3DMaterial, pass);
+                //////CustomBlitScreen(null, null, S3DMaterial, pass, pr);
+                //////CustomBlitScreen(null, null, S3DMaterial, pass, cam.pixelRect);
+                ////CustomBlitScreen(null, null, S3DMaterial, pass, blitToScreenClearRequired, cam.pixelRect);
+                //////CustomBlitGL(null, null, S3DMaterial, pass, false, false, blitToScreenClearRequired, cam.pixelRect);
+                //CustomBlitScreen(null, null, S3DMaterial, pass, blitToScreenClearRequired, camRectClampedPixels);
+                //CustomBlitScreen(null, null, SingleDisplayBlitMesh, S3DMaterial, pass, blitToScreenClearRequired, camRectClampedPixels);
+                //CustomBlitScreen(null, null, SingleDisplayBlitMesh, S3DMaterial, pass, blitToScreenClearRequired, blitRectPixels);
+                //CustomBlitScreen(null, null, screenBlitMesh, S3DMaterial, pass, blitToScreenClearRequired);
+                CustomBlitScreen(null, null, screenBlitMesh, S3DMaterial, pass, blitToScreenClearRequired, clientSizePixelRect);
             }
 
             //if (method != Method.Two_Displays)
@@ -13391,864 +15806,193 @@ struct tagRECT
         //}
     }
 
-    void SingleDisplayS3D_BlitToScreenGLES2()
+    void NativeRenderingPlugin_EndOfFrame_Delegate_S3DOn()
     {
-        //if (debugLog)
-            //Debug.Log("SingleDisplayS3D_BlitToScreenGLES2 " + Time.time);
+        if (debugLog) Debug.Log("NativeRenderingPlugin_EndOfFrame_Delegate_S3DOn: " + Time.time);
 
-        //Rect r = cam.rect;
-        //cam.rect = Rect.MinMaxRect(0, 0, 1, 1); //set temporary rect required before Graphics.Blit to blit render texture correctly with no fullscreen rect
+#if HDRP
+        renderTextureBlitDelegate(renderTexture_left);
+        renderTextureBlitDelegate(renderTexture_right);
+#endif
 
-        ////CustomBlitGLES2(null, null, S3DMaterial, pass, false, false, false, clientSizePixelRect);
-        ////CustomBlitGLES2(null, null, S3DMaterial, pass, false, false, false);
-        ////CustomBlitGLES2(null, null, S3DMaterial, pass, false, false, false, cam.pixelRect);
-        ////CustomBlitGLES2(null, null, S3DMaterial, pass, false, false);
-        //CustomBlitGLES2(null, null, S3DMaterial, pass, false, false, cam.pixelRect);
-        //CustomBlitGLES2(null, null, S3DMaterial, pass, false, false, camRectClampedPixels);
-        CustomBlitGLES2(null, null, S3DMaterial, pass, false, false, camRectClampedPixels, blitToScreenClearRequired);
-
-        //cam.rect = r;
+        canvasBlitDelegate(1);
+        canvasBlitDelegate(0);
     }
 
-    //private void OnPostRender()
+    void NativeRenderingPlugin_EndOfFrame_Delegate_S3DOff()
+    {
+        if (debugLog) Debug.Log("NativeRenderingPlugin_EndOfFrame_Delegate_S3DOff: " + Time.time);
+
+#if HDRP
+        renderTextureBlitDelegate(renderTexture);
+#endif
+
+        canvasBlitDelegate(1);
+    }
+
+    void Canvas_BlitToLeftRightRenderTexture(int left)
+    {
+        if (debugLog) Debug.Log("Canvas_BlitToLeftRightRenderTexture left: " + left);
+
+        ////S3DMaterial.SetTexture("_MainTex", canvasRenderTexture);
+        ////S3DMaterial.SetInt("_Clockwise", 1);
+        ////S3DMaterial.SetFloat("_ShiftX", renderTextureOffset * (1 - 2 * right));
+        ////S3DMaterial.SetFloat("_ShiftY", renderTextureOneRowShift * (1 - right));
+        //S3DMaterial.SetFloat("_ShiftX", renderTextureOffset * (2 * left - 1));
+        //S3DMaterial.SetFloat("_ShiftY", renderTextureOneRowShift * left);
+        ////S3DMaterial.SetInt("_FlipX", (method == Method.Two_Displays_MirrorX ? 1 : 0) * left);
+        ////S3DMaterial.SetInt("_FlipY", (method == Method.Two_Displays_MirrorY ? 1 : 0) * left);
+        ////S3DMaterial.SetPass(9);    // start the first rendering pass
+
+        //RenderTexture.active = renderTexture_left;
+        //GL.Clear(true, true, Color.green);
+        //Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
+        //Graphics.Blit(canvasRenderTexture, left == 1 ? renderTexture_left : renderTexture_right, S3DMaterial, 9);
+        //CustomBlitTexture(canvasRenderTexture, left == 1 ? renderTexture_left : renderTexture_right, clientSizeMeshFlippedY, S3DMaterial, 9);
+        //CustomBlitTexture(canvasRenderTexture, left == 1 ? renderTexture_left : renderTexture_right, clientSizeMeshFlippedY, S3DMaterial, 10 - left);
+        CustomBlitTexture(canvasRenderTexture, left == 1 ? renderTexture_left : renderTexture_right, canvasBlitMesh, S3DMaterial, 10 - left);
+    }
+
+    //void Canvas_BlitToLeftRightRenderTexture(int left)
     //{
-    //    Debug.Log(Camera.current + " Stereo3D OnPostRender " + Time.time);
-    //}
+    //    if (debugLog) Debug.Log("Canvas_BlitToLeftRightRenderTexture " + Time.time);
 
-    //public RenderTexture renderTextureTarget;
-    //public RenderTexture renderTextureActive;
+//    S3DMaterial.SetFloat("_ShiftX", renderTextureOffset);
+//    S3DMaterial.SetFloat("_ShiftY", renderTextureOneRowShift);
+//    //Graphics.Blit(canvasRenderTexture, renderTexture_left, S3DMaterial, 9);
+//    CustomBlitTexture(canvasRenderTexture, renderTexture_left, clientSizeMeshFlippedY, S3DMaterial, 9);
 
-    //void PostRender(Camera c) //Graphics.Blit & Graphics.DrawProceduralNow not working with antialiasing in quality settings and working OK with OnRenderImage
-    //{
-    //    //if (debugLog) Debug.Log(c + " PostRender " + Time.time);
+//    S3DMaterial.SetFloat("_ShiftX", -renderTextureOffset);
+//    S3DMaterial.SetFloat("_ShiftY", 0);
+//    //Graphics.Blit(canvasRenderTexture, renderTexture_right, S3DMaterial, 9);
+//    CustomBlitTexture(canvasRenderTexture, renderTexture_right, clientSizeMeshFlippedY, S3DMaterial, 9);
+//}
 
-    //    //if (c == canvasCamera_right)
-    //    //    canvasCamera_right.targetTexture = null;
+//    //void Canvas_BlitToLeftRightRenderTexture()
+//    //{
+//    //    //if (debugLog)
+//    //        //Debug.Log("Canvas_BlitToLeftRightRenderTexture " + Time.time);
 
-    //    if (method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
-    //        if (!(canvasCamera_left && canvasCamera_left.isActiveAndEnabled))
-    //        {
-    //            //if (debugLog) Debug.Log(c + " !(canvasCamera_left && canvasCamera_left.isActiveAndEnabled) " + Time.time);
+//    //    CustomBlitTexture(canvasRenderTexture, renderTexture, textureBlitMaterial, 0);
+//    //}
 
-    //            if (c == camera_left)
-    //            {
-    //                camera_left.targetTexture = null;
-    //                //Graphics.Blit(renderTexture_left, null as RenderTexture);
-    //                Graphics.Blit(RenderTexture.active, null as RenderTexture);
-    //            }
-    //            else
-    //                if (c == camera_right)
-    //                {
-    //                    //canvasCamera_left.targetTexture = renderTexture_left;
-    //                    //cam.targetTexture = renderTexture;
-    //                    //GL.invertCulling = false;
-    //                    camera_right.targetTexture = null;
-    //                    //RenderTexture.active = null;
-    //                    //RenderTextureFlipMaterial.SetTexture("_MainTex", renderTexture_right);
-
-    //                        //if (method == Method.Two_Displays_MirrorX)
-    //                        //{
-    //                        //    RenderTextureFlipMaterial.SetInt("_FlipX", 1);
-    //                        //    RenderTextureFlipMaterial.SetInt("_FlipY", 0);
-    //                        //}
-    //                        //else
-    //                        //    if (method == Method.Two_Displays_MirrorY)
-    //                        //    {
-    //                        //        RenderTextureFlipMaterial.SetInt("_FlipX", 0);
-    //                        //        RenderTextureFlipMaterial.SetInt("_FlipY", 1);
-    //                        //    }
-
-    //                    //RenderTextureFlipMaterial.SetPass(0);
-    //                    //Graphics.Blit(renderTexture_right, null, RenderTextureFlipMaterial);
-    //                    Graphics.Blit(RenderTexture.active, null, RenderTextureFlipMaterial);
-    //                    //Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
-    //                }
-    //        }
-    //        else
-    //            if (c == canvasCamera_left)
-    //            {
-    //                //camera_left.targetTexture = null;
-    //                canvasCamera_left.targetTexture = null;
-    //                //Graphics.Blit(renderTexture_left, null as RenderTexture);
-    //                Graphics.Blit(RenderTexture.active, null as RenderTexture);
-    //            }
-    //            else
-    //                if (c == canvasCamera_right)
-    //                {
-    //                    //renderTextureTarget = canvasCamera_right.targetTexture;
-    //                    //renderTextureActive = RenderTexture.active;
-    //                    //if (debugLog) Debug.Log(c + " !(canvasCamera_left && canvasCamera_left.isActiveAndEnabled) " + Time.time);
-    //                    //canvasCamera_left.targetTexture = renderTexture_left;
-    //                    //cam.targetTexture = renderTexture;
-    //                    //GL.invertCulling = false;
-    //                    //camera_right.targetTexture = null;
-    //                    //RenderTexture rt = RenderTexture.active;
-    //                    canvasCamera_right.targetTexture = null;
-    //                    //RenderTexture.active = null;
-    //                    //RenderTextureFlipMaterial.SetTexture("_MainTex", renderTexture_right);
-
-    //                    //if (method == Method.Two_Displays_MirrorX)
-    //                    //{
-    //                    //    RenderTextureFlipMaterial.SetInt("_FlipX", 1);
-    //                    //    RenderTextureFlipMaterial.SetInt("_FlipY", 0);
-    //                    //}
-    //                    //else
-    //                    //    if (method == Method.Two_Displays_MirrorY)
-    //                    //    {
-    //                    //        RenderTextureFlipMaterial.SetInt("_FlipX", 0);
-    //                    //        RenderTextureFlipMaterial.SetInt("_FlipY", 1);
-    //                    //    }
-
-    //                    //RenderTextureFlipMaterial.SetPass(0);
-    //                    //Graphics.Blit(renderTexture_right, null, RenderTextureFlipMaterial);
-    //                    Graphics.Blit(RenderTexture.active, null, RenderTextureFlipMaterial);
-    //                    //RenderTexture.active = null;
-    //                    //RenderTextureFlipMaterial.SetTexture("_MainTex", renderTexture_right);
-    //                    //RenderTextureFlipMaterial.SetTexture("_MainTex", renderTextureActive);
-    //                    //Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
-    //                }
-    //}
-
-//    void RenderTexture_BlitToScreen_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
-//    //void BlitToScreen(Camera c)
+//    void Canvas_BlitToLeftRightRenderTexture()
 //    {
 //        //if (debugLog)
-//            Debug.Log(c + " RenderTexture_BlitToScreen_OnRenderImageDelegate " + Time.time);
+//            //Debug.Log("Canvas_BlitToLeftRightRenderTexture " + Time.time);
 
-//        //if (method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
-//        //    if (!(canvasCamera_left && canvasCamera_left.isActiveAndEnabled))
-//        //    {
-//        //        //if (debugLog) Debug.Log(c + " !(canvasCamera_left && canvasCamera_left.isActiveAndEnabled) " + Time.time);
+//        //GL.Viewport(new Rect(cam.rect.x * clientSize.x, cam.rect.y * clientSize.y, cam.rect.width * clientSize.x, cam.rect.height * clientSize.y));
+//        //GL.Viewport(new Rect(0, 0, 0, 0));
 
-//        //        if (c == camera_left)
-//        //            BlitToScreen(c, null);
-//        //        else
-//        //            if (c == camera_right)
-//        //                BlitToScreen(c, RenderTextureFlipMaterial);
-//        //    }
-//        //    else
-//        //        if (c == canvasCamera_left)
-//        //            BlitToScreen(c, null);
-//        //        else
-//        //            if (c == canvasCamera_right)
-//        //                BlitToScreen(c, RenderTextureFlipMaterial);
+//        //GL.Viewport(new Rect(flipX ? (1 - cam.rect.x) * clientSize.x - cam.pixelWidth : cam.rect.x * clientSize.x, 
+//        //    flipY ? (1 - cam.rect.y) * clientSize.y - cam.pixelHeight : cam.rect.y * clientSize.y, 
+//        //    cam.rect.width * clientSize.x, 
+//        //    cam.rect.height * clientSize.y));
 
-//        //if (c.name.Contains("_left"))
-//        //    BlitToScreen(c, null);
-//        //else
-//        //    BlitToScreen(c, RenderTextureFlipMaterial);
+//        //Rect r = c.rect;
+//        //c.rect = Rect.MinMaxRect(0, 0, 1, 1); //set temporary rect required before Graphics.Blit to blit render texture correctly with no fullscreen rect
 
-//        c.targetTexture = null;
+//        //Graphics.Blit(source, destination);
+//        //CustomBlitGL(source, destination, S3DPanelMaterial, 0, false, false, true, cam.pixelRect);
 
-////#if UNITY_2022_1_OR_NEWER
-////        Rect r = c.rect;
-////        c.rect = Rect.MinMaxRect(0, 0, 1, 1);
-////#endif
+//        textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset);
+//        textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift);
+//        //Graphics.Blit(canvasRenderTexture, destination, textureBlitMaterial, 1);
+//        //Graphics.Blit(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1);
+//        //CustomBlitGL(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
+//        //CustomBlitGL(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false, false);
+//        CustomBlitTexture(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1);
 
-//        if (c.name.Contains("_left"))
-//        {
-////            if (openGL)
-////            {
-////                //Rect r = camera.rect;
-////                //camera.rect = Rect.MinMaxRect(0, 0, 1, 1);
-////                //S3DMaterial.SetTexture("_MainTex", renderTexture_left);
-////                //S3DMaterial.SetPass(pass);
-////                //CustomBlitGLES2(method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, rt, S3DMaterial);
-////                //camera.rect = r;
-////#if UNITY_2022_1_OR_NEWER
-////                if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
-////                    CustomBlitGLES2(renderTexture_left, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, false);
-////                else
-////                {
-////                    RenderTexture.active = null;
-////                    S3DMaterial.SetTexture("_MainTex", renderTexture_left);
-////                    S3DMaterial.SetPass(pass);
-////                    Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
-////                }
-////#else
-////                RenderTexture rt = new RenderTexture(RenderTexture.active);
-////                Graphics.CopyTexture(RenderTexture.active, rt);
+//        textureBlitMaterial.SetFloat("_ShiftX", -renderTextureOffset);
+//        textureBlitMaterial.SetFloat("_ShiftY", 0);
+//        //Graphics.Blit(canvasRenderTexture, destination, textureBlitMaterial, 1);
+//        //Graphics.Blit(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1);
+//        //CustomBlitGL(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
+//        //CustomBlitGL(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1, false, false, false);
+//        CustomBlitTexture(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1);
 
-////                if (SystemInfo.graphicsDeviceType == GraphicsDeviceType.OpenGLES2)
-////                    CustomBlitGLES2(rt, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, false);
-////                else
-////                {
-////                    RenderTexture.active = null;
-////                    S3DMaterial.SetTexture("_MainTex", rt);
-////                    S3DMaterial.SetPass(pass);
-////                    Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
-////                }
+//        //CustomBlitGL(source, destination, S3DPanelMaterial, 0, false, false);
 
-////                rt.Release();
-////#endif
-////            }
-////            else
-//            {
-//                ////Graphics.Blit(RenderTexture.active, null as RenderTexture);
-//                ////Graphics.Blit(RenderTexture.active, null, S3DMaterial, pass);
-//                ////Graphics.Blit(source, destination);
-//                ////Graphics.Blit(destination, null as RenderTexture);
-//                ////Graphics.Blit(renderTexture_left, null as RenderTexture);
-//                ////Graphics.Blit(renderTexture_left, null, S3DMaterial, pass);
-//                ////Graphics.Blit(rt, null, S3DMaterial, pass);
-//                //Graphics.Blit(RenderTexture.active, null as RenderTexture, S3DMaterial, pass);
-
-//                //CustomBlit(RenderTexture.active, null as RenderTexture, S3DMaterial, pass, false, false, false, clientSizePixelRect);
-//                //CustomBlit(renderTexture_left, null as RenderTexture, S3DMaterial, pass, false, false, false, clientSizePixelRect);
-//                //CustomBlit(RenderTexture.active, null as RenderTexture, S3DMaterial, pass, false, false, false);
-//                CustomBlitDrawProceduralNowRect(RenderTexture.active, null as RenderTexture, S3DMaterial, pass, clientSizePixelRect);
-
-//                //S3DMaterial.SetTexture("_MainTex", RenderTexture.active);
-//                //RenderTexture.active = null;
-//                //S3DMaterial.SetPass(pass);
-//                //Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
-//            }
-//        }
-//        else
-//        {
-//            ////Graphics.Blit(RenderTexture.active, null, S3DMaterial, pass);
-//            //Graphics.Blit(RenderTexture.active, null as RenderTexture);
-//            ////Graphics.Blit(renderTexture_right, null, S3DMaterial, pass);
-//            ////Graphics.Blit(renderTexture_right, null as RenderTexture);
-//            ////CustomBlitGLES2(false, false, renderTexture_right, S3DMaterial);
-
-//            ////S3DMaterial.SetTexture("_MainTex", RenderTexture.active);
-//            ////S3DMaterial.SetInt("_FlipX", 0);
-//            ////S3DMaterial.SetInt("_FlipY", 0);
-//            ////RenderTexture.active = null;
-//            ////S3DMaterial.SetPass(pass);
-//            ////Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
-        
-//            //CustomBlit(RenderTexture.active, null as RenderTexture, S3DMaterial, pass + 1, false, false, false, clientSizePixelRect);
-//            //CustomBlit(renderTexture_right, null as RenderTexture, S3DMaterial, pass + 1, false, false, false, clientSizePixelRect);
-//            //CustomBlit(RenderTexture.active, null as RenderTexture, S3DMaterial, pass + 1, false, false, false);
-//            CustomBlitDrawProceduralNowRect(RenderTexture.active, null as RenderTexture, S3DMaterial, pass + 1, clientSizePixelRect);
-//        }
-
-////#if UNITY_2022_1_OR_NEWER
-////        c.rect = r;
-////#endif
+//        //c.rect = r;
 //    }
 
-    void BlitSourceToDestination_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
-    {
-        //if (debugLog)
-            Debug.Log(c + " BlitSourceToDestination_OnRenderImageDelegate " + Time.time);
-
-        //activeRenderTexture = RenderTexture.active;
-        Graphics.Blit(source, destination);
-        //CustomBlitDrawProceduralNowRect(source, destination, textureBlitMaterial, 0, false, new Rect(-camRectClampedPixels.x, -camRectClampedPixels.y, camRectClampedPixels.width + camRectClampedPixels.x * 2, camRectClampedPixels.height + camRectClampedPixels.y * 2));
-    }
-
-    void RenderTexture_BlitToScreenLeft_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
-    {
-        //if (debugLog)
-            Debug.Log(c + " RenderTexture_BlitToScreenLeft_OnRenderImageDelegate " + Time.time);
-
-        //Graphics.Blit(source, destination);
-
-        c.targetTexture = null;
-
-        //Rect r = c.rect;
-        //c.rect = Rect.MinMaxRect(0, 0, 1, 1); //set temporary rect required before Graphics.Blit to blit render texture correctly with no fullscreen rect
-
-        ////Graphics.Blit(RenderTexture.active, null as RenderTexture);
-        ////Graphics.Blit(RenderTexture.active, null, S3DMaterial, pass);
-        ////Graphics.Blit(source, destination);
-        ////Graphics.Blit(destination, null as RenderTexture);
-        ////Graphics.Blit(renderTexture_left, null as RenderTexture);
-        ////Graphics.Blit(renderTexture_left, null, S3DMaterial, pass);
-        ////Graphics.Blit(rt, null, S3DMaterial, pass);
-        //Graphics.Blit(RenderTexture.active, null as RenderTexture, S3DMaterial, pass);
-
-        //CustomBlit(RenderTexture.active, null as RenderTexture, S3DMaterial, pass, false, false, false, clientSizePixelRect);
-        //CustomBlit(renderTexture_left, null as RenderTexture, S3DMaterial, pass, false, false, false, clientSizePixelRect);
-        //CustomBlit(RenderTexture.active, null as RenderTexture, S3DMaterial, pass, false, false, false);
-        //CustomBlitDrawProceduralNowRect(RenderTexture.active, null as RenderTexture, S3DMaterial, pass, clientSizePixelRect);
-        //CustomBlitDrawProceduralNow(renderTexture_left, null as RenderTexture, S3DMaterial, pass);
-        //CustomBlitDrawProceduralNow(RenderTexture.active, null as RenderTexture, S3DMaterial, pass);
-        //activeRenderTexture = RenderTexture.active;
-        //CustomBlitDrawProceduralNowRect(RenderTexture.active, null as RenderTexture, S3DMaterial, pass, cam.pixelRect);
-        //CustomBlitDrawProceduralNowRect(RenderTexture.active, null as RenderTexture, S3DMaterial, pass, blitToScreenClearRequired, cam.pixelRect);
-        //CustomBlitDrawProceduralNowRect(renderTexture_left, null as RenderTexture, S3DMaterial, pass, blitToScreenClearRequired, cam.pixelRect);
-        //CustomBlitDrawProceduralNowRect(renderTexture_left, null as RenderTexture, S3DMaterial, pass, blitToScreenClearRequired, camRectClampedPixels);
-        CustomBlitDrawProceduralNowRect(renderTexture_left, null as RenderTexture, S3DMaterial, pass, blitToScreenClearRequired, camRectClampedPixelsMod);
-
-        //S3DMaterial.SetTexture("_MainTex", RenderTexture.active);
-        //RenderTexture.active = null;
-        //S3DMaterial.SetPass(pass);
-        //Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
-
-        //c.rect = r;
-    }
-
-    void RenderTexture_BlitToScreenRight_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
-    {
-        //if (debugLog)
-            Debug.Log(c + " RenderTexture_BlitToScreenRight_OnRenderImageDelegate " + Time.time);
-
-        //Graphics.Blit(source, destination);
-
-        c.targetTexture = null;
-
-        //Rect r = c.rect;
-        //c.rect = Rect.MinMaxRect(0, 0, 1, 1); //set temporary rect required before Graphics.Blit to blit render texture correctly with no fullscreen rect
-
-        ////Graphics.Blit(RenderTexture.active, null, S3DMaterial, pass);
-        //Graphics.Blit(RenderTexture.active, null as RenderTexture);
-        ////Graphics.Blit(renderTexture_right, null, S3DMaterial, pass);
-        ////Graphics.Blit(renderTexture_right, null as RenderTexture);
-        ////CustomBlitGLES2(false, false, renderTexture_right, S3DMaterial);
-
-        ////S3DMaterial.SetTexture("_MainTex", RenderTexture.active);
-        ////S3DMaterial.SetInt("_FlipX", 0);
-        ////S3DMaterial.SetInt("_FlipY", 0);
-        ////RenderTexture.active = null;
-        ////S3DMaterial.SetPass(pass);
-        ////Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
-        
-        //CustomBlit(RenderTexture.active, null as RenderTexture, S3DMaterial, pass + 1, false, false, false, clientSizePixelRect);
-        //CustomBlit(renderTexture_right, null as RenderTexture, S3DMaterial, pass + 1, false, false, false, clientSizePixelRect);
-        //CustomBlit(RenderTexture.active, null as RenderTexture, S3DMaterial, pass + 1, false, false, false);
-        //CustomBlitDrawProceduralNowRect(RenderTexture.active, null as RenderTexture, S3DMaterial, pass + 1, clientSizePixelRect);
-        //CustomBlitDrawProceduralNow(renderTexture_right, null as RenderTexture, S3DMaterial, pass + 1);
-        //CustomBlitDrawProceduralNow(RenderTexture.active, null as RenderTexture, S3DMaterial, pass + 1);
-        //CustomBlitDrawProceduralNowRect(RenderTexture.active, null as RenderTexture, S3DMaterial, pass + 1, cam.pixelRect);
-        //CustomBlitDrawProceduralNowRect(RenderTexture.active, null as RenderTexture, S3DMaterial, pass + 1, blitToScreenClearRequired, cam.pixelRect);
-        //CustomBlitDrawProceduralNowRect(renderTexture_right, null as RenderTexture, S3DMaterial, pass + 1, blitToScreenClearRequired, cam.pixelRect);
-        CustomBlitDrawProceduralNowRect(renderTexture_right, null as RenderTexture, S3DMaterial, pass + 1, blitToScreenClearRequired, camRectClampedPixels);
-
-        //c.rect = r;
-    }
-
-    void RenderTexture_BlitToScreenLeftGLES2_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
-    {
-        //if (debugLog)
-            Debug.Log(c + " RenderTexture_BlitToScreenLeftGLES2_OnRenderImageDelegate " + Time.time);
-
-        c.targetTexture = null;
-
-        ////Graphics.Blit(RenderTexture.active, null as RenderTexture);
-        ////Graphics.Blit(RenderTexture.active, null, S3DMaterial, pass);
-        ////Graphics.Blit(source, destination);
-        ////Graphics.Blit(destination, null as RenderTexture);
-        ////Graphics.Blit(renderTexture_left, null as RenderTexture);
-        ////Graphics.Blit(renderTexture_left, null, S3DMaterial, pass);
-        ////Graphics.Blit(rt, null, S3DMaterial, pass);
-        //Graphics.Blit(RenderTexture.active, null as RenderTexture, S3DMaterial, pass);
-
-        //CustomBlit(RenderTexture.active, null as RenderTexture, S3DMaterial, pass, false, false, false, clientSizePixelRect);
-        //CustomBlit(renderTexture_left, null as RenderTexture, S3DMaterial, pass, false, false, false, clientSizePixelRect);
-        //CustomBlit(RenderTexture.active, null as RenderTexture, S3DMaterial, pass, false, false, false);
-        //CustomBlitDrawProceduralNowRect(RenderTexture.active, null as RenderTexture, S3DMaterial, pass, clientSizePixelRect);
-        //CustomBlitGLES2(RenderTexture.active, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, false, clientSizePixelRect);
-        //CustomBlitGLES2(RenderTexture.active, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, false);
-        //CustomBlitGLES2(RenderTexture.active, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, false, cam.pixelRect);
-        //CustomBlitGLES2(RenderTexture.active, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, cam.pixelRect);
-        //CustomBlitGLES2(RenderTexture.active, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, camRectClampedPixels);
-        CustomBlitGLES2(RenderTexture.active, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, camRectClampedPixelsMod);
-
-        //S3DMaterial.SetTexture("_MainTex", RenderTexture.active);
-        //RenderTexture.active = null;
-        //S3DMaterial.SetPass(pass);
-        //Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
-    }
-
-    void RenderTexture_BlitToScreenRightGLES2_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
-    {
-        //if (debugLog)
-            Debug.Log(c + " RenderTexture_BlitToScreenRightGLES2_OnRenderImageDelegate " + Time.time);
-
-        c.targetTexture = null;
-
-        ////Graphics.Blit(RenderTexture.active, null, S3DMaterial, pass);
-        //Graphics.Blit(RenderTexture.active, null as RenderTexture);
-        ////Graphics.Blit(renderTexture_right, null, S3DMaterial, pass);
-        ////Graphics.Blit(renderTexture_right, null as RenderTexture);
-        ////CustomBlitGLES2(false, false, renderTexture_right, S3DMaterial);
-
-        ////S3DMaterial.SetTexture("_MainTex", RenderTexture.active);
-        ////S3DMaterial.SetInt("_FlipX", 0);
-        ////S3DMaterial.SetInt("_FlipY", 0);
-        ////RenderTexture.active = null;
-        ////S3DMaterial.SetPass(pass);
-        ////Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
-        
-        //CustomBlit(RenderTexture.active, null as RenderTexture, S3DMaterial, pass + 1, false, false, false, clientSizePixelRect);
-        //CustomBlit(renderTexture_right, null as RenderTexture, S3DMaterial, pass + 1, false, false, false, clientSizePixelRect);
-        //CustomBlit(RenderTexture.active, null as RenderTexture, S3DMaterial, pass + 1, false, false, false);
-        //CustomBlitDrawProceduralNowRect(RenderTexture.active, null as RenderTexture, S3DMaterial, pass + 1, clientSizePixelRect);
-        //CustomBlitGLES2(RenderTexture.active, null, S3DMaterial, pass, false, false, false, clientSizePixelRect);
-        //CustomBlitGLES2(RenderTexture.active, null, S3DMaterial, pass, false, false, false);
-        //CustomBlitGLES2(RenderTexture.active, null, S3DMaterial, pass, false, false, false, cam.pixelRect);
-        //CustomBlitGLES2(RenderTexture.active, null, S3DMaterial, pass, false, false, cam.pixelRect);
-        CustomBlitGLES2(RenderTexture.active, null, S3DMaterial, pass, false, false, camRectClampedPixels);
-    }
-
-    //void BlitToTexture(RenderTexture source, RenderTexture destination, Camera c)
-    //{
-    //    //if (debugLog)
-    //        Debug.Log(c + " OnRenderImage_BlitToTExture " + Time.time);
-
-    //    //GL.Viewport(new Rect(cam.rect.x * clientSize.x, cam.rect.y * clientSize.y, cam.rect.width * clientSize.x, cam.rect.height * clientSize.y));
-    //    //GL.Viewport(new Rect(0, 0, 0, 0));
-
-    //    //GL.Viewport(new Rect(flipX ? (1 - cam.rect.x) * clientSize.x - cam.pixelWidth : cam.rect.x * clientSize.x, 
-    //    //    flipY ? (1 - cam.rect.y) * clientSize.y - cam.pixelHeight : cam.rect.y * clientSize.y, 
-    //    //    cam.rect.width * clientSize.x, 
-    //    //    cam.rect.height * clientSize.y));
-
-    //    //Rect r = c.rect;
-    //    //c.rect = Rect.MinMaxRect(0, 0, 1, 1); //set temporary rect required before Graphics.Blit to blit render texture correctly with no fullscreen rect
-
-    //    if (c.name.Contains("_left"))
-    //    {
-    //        Graphics.Blit(source, destination);
-    //        //CustomBlit(source, destination, null, pass, false, false);
-
-    //        textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset);
-    //        textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift);
-    //        Graphics.Blit(canvasCamera.targetTexture, renderTexture_left, textureBlitMaterial, 1);
-    //        //Graphics.Blit(canvasCamera.targetTexture, destination, textureBlitMaterial, 1);
-    //        //CustomBlit(source, destination, textureBlitMaterial, 1, false, false);
-    //    }
-    //    else
-    //        if (c.name.Contains("_right"))
-    //        {
-    //            Graphics.Blit(source, destination);
-    //            //CustomBlit(source, destination, null, pass, false, false);
-
-    //            //textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset);
-    //            //textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift);
-    //            ////Graphics.Blit(canvasCamera.targetTexture, renderTexture_right, textureBlitMaterial, 2);
-    //            //Graphics.Blit(canvasCamera.targetTexture, destination, textureBlitMaterial, 2);
-
-    //            textureBlitMaterial.SetFloat("_ShiftX", -renderTextureOffset);
-    //            textureBlitMaterial.SetFloat("_ShiftY", 0);
-    //            //Graphics.Blit(canvasCamera.targetTexture, destination, textureBlitMaterial, 1);
-    //            Graphics.Blit(canvasCamera.targetTexture, renderTexture_right, textureBlitMaterial, 1);
-    //            //CustomBlit(source, destination, textureBlitMaterial, 1, false, false);
-    //        }
-    //        //else
-    //        //{
-    //        //    Graphics.Blit(source, destination);
-
-    //        //    //textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset);
-    //        //    //textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift);
-    //        //    ////Graphics.Blit(canvasCamera.targetTexture, renderTexture_right, textureBlitMaterial, 2);
-    //        //    //Graphics.Blit(canvasCamera.targetTexture, destination, textureBlitMaterial, 2);
-
-    //        //    textureBlitMaterial.SetFloat("_ShiftX", 0);
-    //        //    textureBlitMaterial.SetFloat("_ShiftY", 0);
-    //        //    Graphics.Blit(canvasCamera.targetTexture, destination, textureBlitMaterial, 1);
-    //        //}
-
-    //    //c.rect = r;
-    //}
-
-    //bool nativeRenderingPluginDataSetOnce;
-    IntPtr renderTexturePtr;
-
-    void SetTexture_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
-    //void Canvas_BlitToLeftRightRenderTexture_OnPostRender(Camera c)
-    {
-        //if (debugLog)
-        Debug.Log(c + " SetTexture_OnRenderImageDelegate " + Time.time);
-
-        //Graphics.Blit(source, destination);
-
-        ////if (!renderTexture)
-        //if (renderTexture == null)
-        ////if (renderTexture == null && source != null)
-        ////if (renderTexture == null && RenderTexture.active != null)
-        {
-            //Debug.Log(c + " renderTexture = c.activeTexture " + Time.time);
-            renderTexture = RenderTexture.active;
-            //renderTexture = source;
-            //renderTexture = new RenderTexture(source);
-            //Graphics.CopyTexture(source, renderTexture);
-            //AssignRenderTextures_S3DOff();
-
-            //if (!nativeRenderingPluginDataSetOnce)
-            if (renderTexturePtr != renderTexture.GetNativeTexturePtr())
-            {
-                renderTexturePtr = renderTexture.GetNativeTexturePtr();
-                //nativeRenderingPluginDataSetOnce = true;
-                SetTexturesForPlugin(renderTexture, null);
-            }
-        }
-        //else
-        //    Graphics.CopyTexture(source, renderTexture);
-
-        //Graphics.Blit(source, destination);
-        onRenderImageDelegate_cameraMain.RenderImageEvent -= SetTexture_OnRenderImageDelegate;
-    }
-
-    //void SetTextureLeft_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
-    ////void Canvas_BlitToLeftRightRenderTexture_OnPostRender(Camera c)
-    //{
-    //    //if (debugLog)
-    //    Debug.Log(c + " SetTextureLeft_OnRenderImageDelegate " + Time.time);
-
-    //    //Graphics.Blit(source, destination);
-
-    //    //if (!renderTexture_left)
-    //    //{
-    //    //    //Debug.Log(c + " renderTexture = c.activeTexture " + Time.time);
-    //    //    //renderTexture = RenderTexture.active;
-    //    //    //renderTexture_left = source;
-    //    //    renderTexture_left = new RenderTexture(RenderTexture.active);
-    //    //}
-
-    //    //Graphics.CopyTexture(source, renderTexture_left);
-    //    Graphics.Blit(source, renderTexture_left);
-
-    //    //Graphics.Blit(source, destination);
-    //}
-
-    //void SetTextureRight_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
-    ////void Canvas_BlitToLeftRightRenderTexture_OnPostRender(Camera c)
-    //{
-    //    //if (debugLog)
-    //    Debug.Log(c + " SetTextureRight_OnRenderImageDelegate " + Time.time);
-
-    //    //Graphics.Blit(source, destination);
-
-    //    //if (!renderTexture_right)
-    //    //{
-    //    //    //Debug.Log(c + " renderTexture = c.activeTexture " + Time.time);
-    //    //    //renderTexture = RenderTexture.active;
-    //    //    //renderTexture_right = source;
-    //    //    renderTexture_right = new RenderTexture(RenderTexture.active);
-    //    //    //SetTexturesForPlugin(renderTexture_left, renderTexture_right);
-    //    //}
-
-    //    //Graphics.CopyTexture(source, renderTexture_right);
-    //    Graphics.Blit(source, renderTexture_right);
-    //    SetTexturesForPlugin(renderTexture_left, renderTexture_right);
-
-    //    //Graphics.Blit(source, destination);
-    //}
-
-    void Canvas_BlitToRenderTexture_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
-    //void Canvas_BlitToLeftRightRenderTexture_OnPostRender(Camera c)
-    {
-        //if (debugLog)
-            Debug.Log(c + " Canvas_BlitToRenderTexture_OnRenderImageDelegate " + Time.time);
-
-        //Graphics.Blit(source, destination);
-
-        //if (!renderTexture)
-        //{
-        //    //Debug.Log(c + " renderTexture = c.activeTexture " + Time.time);
-        //    //renderTexture = RenderTexture.active;
-        //    renderTexture = source;
-        //    //renderTexture = new RenderTexture(source);
-        //}
-
-        //Graphics.CopyTexture(source, renderTexture);
-
-        //Graphics.Blit(source, destination);
-
-        //Canvas_BlitToRenderTexture();
-        //CustomBlitDrawProceduralNow(canvasRenderTexture, destination, textureBlitMaterial, 0);
-        CustomBlitDrawProceduralNow(canvasRenderTexture, renderTexture, textureBlitMaterial, 0);
-    }
-
-    void Canvas_BlitToRenderTextureGLES2_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
-    {
-        //if (debugLog)
-            Debug.Log(c + " Canvas_BlitToRenderTextureGLES2_OnRenderImageDelegate " + Time.time);
-
-        //Canvas_BlitToRenderTextureGLES2();
-        CustomBlitGLES2(canvasRenderTexture, destination, textureBlitMaterial, 0, false, false);
-    }
-
-    void Canvas_BlitToLeftRightRenderTexture_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
-    //void Canvas_BlitToLeftRightRenderTexture_OnPostRender(Camera c)
-    {
-        //if (debugLog)
-            Debug.Log(c + " Canvas_BlitToLeftRightRenderTexture_OnRenderImageDelegate " + Time.time);
-
-        Canvas_BlitToLeftRightRenderTexture();
-    }
-
-    void Canvas_BlitToLeftRightRenderTextureGLES2_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
-    {
-        //if (debugLog)
-            Debug.Log(c + " Canvas_BlitToLeftRightRenderTextureGLES2_OnRenderImageDelegate " + Time.time);
-
-        Canvas_BlitToLeftRightRenderTextureGLES2();
-    }
-
-    void Canvas_BlitToLeftRightRenderTexture_OnEndOfFrame()
-    {
-        //if (debugLog)
-            Debug.Log("Canvas_BlitToLeftRightRenderTexture_OnEndOfFrame " + Time.time);
-
-        Canvas_BlitToLeftRightRenderTexture();
-    }
-
-    void Canvas_BlitToLeftRightRenderTextureGLES2_OnEndOfFrame()
-    {
-        //if (debugLog)
-            Debug.Log("Canvas_BlitToLeftRightRenderTextureGLES2_OnEndOfFrame " + Time.time);
-
-        Canvas_BlitToLeftRightRenderTextureGLES2();
-    }
-
-    //void Canvas_BlitToScreenEmpty(int left)
-    //{
-    //    //if (debugLog)
-    //        Debug.Log("Canvas_BlitToScreenEmpty " + Time.time);
-    //}
-
-    //void Canvas_BlitToScreen(int right)
-    void Canvas_BlitToScreen(int left)
-    {
-        //if (debugLog)
-            Debug.Log("Canvas_BlitToScreen " + Time.time);
-
-        textureBlitMaterial.SetTexture("_MainTex", canvasRenderTexture);
-        textureBlitMaterial.SetInt("_Clockwise", 1);
-        //textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset * (1 - 2 * right));
-        //textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift * (1 - right));
-        textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset * (2 * left - 1));
-        textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift * left);
-        textureBlitMaterial.SetInt("_FlipX", (method == Method.Two_Displays_MirrorX ? 1 : 0) * left);
-        textureBlitMaterial.SetInt("_FlipY", (method == Method.Two_Displays_MirrorY ? 1 : 0) * left);
-        textureBlitMaterial.SetPass(1);    // start the first rendering pass
-
-        Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
-    }
-
-    //void Canvas_BlitToScreenGLES2(int right)
-    void Canvas_BlitToScreenGLES2(int left)
-    {
-        //if (debugLog)
-            Debug.Log("Canvas_BlitToScreenGLES2 " + Time.time);
-
-        textureBlitMaterial.SetTexture("_MainTex", canvasRenderTexture);
-        textureBlitMaterial.SetInt("_Clockwise", 1);
-        //textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset * (1 - 2 * right));
-        //textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift * (1 - right));
-        textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset * (2 * left - 1));
-        textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift * left);
-        //textureBlitMaterial.SetInt("_FlipX", (method == Method.Two_Displays_MirrorX ? 1 : 0) * left);
-        //textureBlitMaterial.SetInt("_FlipY", (method == Method.Two_Displays_MirrorY ? 1 : 0) * left);
-
-        bool flipX = method == Method.Two_Displays_MirrorX;
-        bool flipY = method == Method.Two_Displays_MirrorY;
-        //comment above & uncomment below if two displays works with OpenGL
-        //int flipXInt = (method == Method.Two_Displays_MirrorX ? 1 : 0) * left;
-        //int flipYInt = (method == Method.Two_Displays_MirrorY ? 1 : 0) * left;
-        //bool flipX = flipXInt == 1 ? true : false;
-        //bool flipY = flipYInt == 1 ? true : false;
-
-        textureBlitMaterial.SetPass(1);    // start the first rendering pass
-
-        int vertexMin = -1;
-
-        // Low-Level Graphics Library calls
-        GL.PushMatrix();    // Calculate MVP Matrix and push it to the GL stack
-
-        GL.LoadOrtho();    // Set up Ortho-Perspective Transform
-
-        GL.Begin(GL.QUADS);
-
-        GL.TexCoord2(flipX ? 1 : 0, flipY ? 1 : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
-        GL.Vertex3(vertexMin, vertexMin, 0.0f); // Finalize and submit this vertex for rendering (bottom left)
-
-        GL.TexCoord2(flipX ? 1 : 0, flipY ? 0 : 1); // prepare input struct (Texcoord0 (UV's)) for this vertex
-        GL.Vertex3(vertexMin, 1.0f, 0.0f); // Finalize and submit this vertex for rendering (top left)
-
-        GL.TexCoord2(flipX ? 0 : 1, flipY ? 0 : 1); // prepare input struct (Texcoord0 (UV's)) for this vertex
-        GL.Vertex3(1.0f, 1.0f, 0.0f); // Finalize and submit this vertex for rendering  (top right)
-
-        GL.TexCoord2(flipX ? 0 : 1, flipY ? 1 : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
-        GL.Vertex3(1.0f, vertexMin, 0.0f); // Finalize and submit this vertex for rendering  (bottom right)
-
-        GL.End();
-        GL.PopMatrix(); // Pop the matrices off the stack
-    }
-
-    //void Canvas_BlitToRenderTexture()
-    //{
-    //    //if (debugLog)
-    //        //Debug.Log("Canvas_BlitToRenderTexture " + Time.time);
-
-    //    CustomBlitDrawProceduralNow(canvasRenderTexture, renderTexture, textureBlitMaterial, 0);
-    //}
-
-    //void Canvas_BlitToRenderTextureGLES2()
-    //{
-    //    //if (debugLog)
-    //        //Debug.Log("Canvas_BlitToRenderTextureGLES2 " + Time.time);
-
-    //    CustomBlitGLES2(canvasRenderTexture, renderTexture, textureBlitMaterial, 0, false, false);
-    //}
-
-    void Canvas_BlitToLeftRightRenderTexture()
-    {
-        //if (debugLog)
-            //Debug.Log("Canvas_BlitToLeftRightRenderTexture " + Time.time);
-
-        //GL.Viewport(new Rect(cam.rect.x * clientSize.x, cam.rect.y * clientSize.y, cam.rect.width * clientSize.x, cam.rect.height * clientSize.y));
-        //GL.Viewport(new Rect(0, 0, 0, 0));
-
-        //GL.Viewport(new Rect(flipX ? (1 - cam.rect.x) * clientSize.x - cam.pixelWidth : cam.rect.x * clientSize.x, 
-        //    flipY ? (1 - cam.rect.y) * clientSize.y - cam.pixelHeight : cam.rect.y * clientSize.y, 
-        //    cam.rect.width * clientSize.x, 
-        //    cam.rect.height * clientSize.y));
-
-        //Rect r = c.rect;
-        //c.rect = Rect.MinMaxRect(0, 0, 1, 1); //set temporary rect required before Graphics.Blit to blit render texture correctly with no fullscreen rect
-
-        //Graphics.Blit(source, destination);
-        //CustomBlit(source, destination, S3DPanelMaterial, 0, false, false, true, cam.pixelRect);
-
-        textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset);
-        textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift);
-        //Graphics.Blit(canvasRenderTexture, destination, textureBlitMaterial, 1);
-        //Graphics.Blit(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1);
-        //CustomBlit(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
-        //CustomBlit(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false, false);
-        CustomBlitDrawProceduralNow(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1);
-
-        textureBlitMaterial.SetFloat("_ShiftX", -renderTextureOffset);
-        textureBlitMaterial.SetFloat("_ShiftY", 0);
-        //Graphics.Blit(canvasRenderTexture, destination, textureBlitMaterial, 1);
-        //Graphics.Blit(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1);
-        //CustomBlit(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
-        //CustomBlit(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1, false, false, false);
-        CustomBlitDrawProceduralNow(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1);
-
-        //CustomBlit(source, destination, S3DPanelMaterial, 0, false, false);
-
-        //c.rect = r;
-    }
-
-    void Canvas_BlitToLeftRightRenderTextureGLES2()
-    {
-        //if (debugLog)
-            //Debug.Log("Canvas_BlitToLeftRightRenderTextureGLES2 " + Time.time);
-
-        textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset);
-        textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift);
-        //CustomBlitGLES2(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false, false);
-        //CustomBlitGLES2(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false, false, cam.pixelRect);
-        CustomBlitGLES2(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false);
-
-        textureBlitMaterial.SetFloat("_ShiftX", -renderTextureOffset);
-        textureBlitMaterial.SetFloat("_ShiftY", 0);
-        //CustomBlitGLES2(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1, false, false, false);
-        //CustomBlitGLES2(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1, false, false, false, cam.pixelRect);
-        CustomBlitGLES2(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1, false, false);
-    }
-
-    void Canvas_BlitToLeftRenderTexture_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
-    //void BlitCanvasToLeftCamera(Camera c)
-    {
-        //if (debugLog)
-            Debug.Log(c + " Canvas_BlitToLeftRenderTexture_OnRenderImageDelegate " + Time.time);
-
-        textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset);
-        textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift);
-
-        ////Graphics.Blit(canvasRenderTexture, destination, textureBlitMaterial, 1);
-        ////Graphics.Blit(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1);
-        ////CustomBlit(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
-        //CustomBlit(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1, false, false, false);
-
-        ////Graphics.Blit(source, destination);
-        //CustomBlit(source, destination, textureBlitMaterial, 0, false, false, false, c.pixelRect);
-        ////CustomBlit(canvasRenderTexture, destination, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
-
-        //CustomBlit(source, renderTexture_left, textureBlitMaterial, 0, false, false, false, c.pixelRect);
-        //CustomBlit(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
-        //CustomBlitDrawProceduralNow(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1);
-        //CustomBlitDrawProceduralNow(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1);
-        //CustomBlitDrawProceduralNow(canvasActiveRenderTexture, RenderTexture.active, textureBlitMaterial, 1);
-        CustomBlitDrawProceduralNow(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1);
-    }
-
-    void Canvas_BlitToRightRenderTexture_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
-    //void BlitCanvasToRightCamera(Camera c)
-    {
-        //if (debugLog)
-            Debug.Log(c + " Canvas_BlitToRightRenderTexture_OnRenderImageDelegate " + Time.time);
-
-        textureBlitMaterial.SetFloat("_ShiftX", -renderTextureOffset);
-        textureBlitMaterial.SetFloat("_ShiftY", 0);
-
-        ////Graphics.Blit(canvasRenderTexture, destination, textureBlitMaterial, 1);
-        ////Graphics.Blit(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1);
-        ////CustomBlit(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
-        //CustomBlit(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1, false, false, false);
-
-        ////Graphics.Blit(source, destination);
-        //CustomBlit(source, destination, textureBlitMaterial, 0, false, false, false, c.pixelRect);
-        ////CustomBlit(canvasRenderTexture, destination, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
-
-        //CustomBlit(source, renderTexture_right, textureBlitMaterial, 0, false, false, false, c.pixelRect);
-        //CustomBlit(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
-        //CustomBlitDrawProceduralNow(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1);
-        //CustomBlitDrawProceduralNow(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1);
-        //CustomBlitDrawProceduralNow(canvasActiveRenderTexture, RenderTexture.active, textureBlitMaterial, 1);
-        CustomBlitDrawProceduralNow(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1);
-    }
-
-    void Canvas_BlitToLeftRenderTextureGLES2_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
-    {
-        //if (debugLog)
-            Debug.Log(c + " Canvas_BlitToLeftRenderTextureGLES2_OnRenderImageDelegate " + Time.time);
-
-        textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset);
-        textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift);
-        //CustomBlitGLES2(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1, false, false, false);
-        //CustomBlitGLES2(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
-        CustomBlitGLES2(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1, false, false);
-    }
-
-    void Canvas_BlitToRightRenderTextureGLES2_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
-    {
-        //if (debugLog)
-            Debug.Log(c + " Canvas_BlitToRightRenderTextureGLES2_OnRenderImageDelegate " + Time.time);
-
-        textureBlitMaterial.SetFloat("_ShiftX", -renderTextureOffset);
-        textureBlitMaterial.SetFloat("_ShiftY", 0);
-        //CustomBlitGLES2(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1, false, false, false);
-        //CustomBlitGLES2(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
-        CustomBlitGLES2(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1, false, false);
-    }
-
-//    void Canvas_BlitToRenderTexture(
+//    void Canvas_BlitToLeftRenderTexture_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
+//    //void BlitCanvasToLeftCamera(Camera c)
+//    {
+//        //if (debugLog) Debug.Log(c + " Canvas_BlitToLeftRenderTexture_OnRenderImageDelegate " + Time.time);
+
+//        textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset);
+//        textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift);
+
+//        ////Graphics.Blit(canvasRenderTexture, destination, textureBlitMaterial, 1);
+//        ////Graphics.Blit(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1);
+//        ////CustomBlitGL(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
+//        //CustomBlitGL(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1, false, false, false);
+
+//        ////Graphics.Blit(source, destination);
+//        //CustomBlitGL(source, destination, textureBlitMaterial, 0, false, false, false, c.pixelRect);
+//        ////CustomBlitGL(canvasRenderTexture, destination, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
+
+//        //CustomBlitGL(source, renderTexture_left, textureBlitMaterial, 0, false, false, false, c.pixelRect);
+//        //CustomBlitGL(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
+//        //CustomBlitScreen(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1);
+//        //CustomBlitScreen(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1);
+//        //CustomBlitScreen(canvasActiveRenderTexture, RenderTexture.active, textureBlitMaterial, 1);
+//        CustomBlitScreen(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1);
+//    }
+
+//    void Canvas_BlitToRightRenderTexture_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
+//    //void BlitCanvasToRightCamera(Camera c)
+//    {
+//        //if (debugLog) Debug.Log(c + " Canvas_BlitToRightRenderTexture_OnRenderImageDelegate " + Time.time);
+
+//        textureBlitMaterial.SetFloat("_ShiftX", -renderTextureOffset);
+//        textureBlitMaterial.SetFloat("_ShiftY", 0);
+
+//        ////Graphics.Blit(canvasRenderTexture, destination, textureBlitMaterial, 1);
+//        ////Graphics.Blit(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1);
+//        ////CustomBlitGL(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
+//        //CustomBlitGL(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1, false, false, false);
+
+//        ////Graphics.Blit(source, destination);
+//        //CustomBlitGL(source, destination, textureBlitMaterial, 0, false, false, false, c.pixelRect);
+//        ////CustomBlitGL(canvasRenderTexture, destination, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
+
+//        //CustomBlitGL(source, renderTexture_right, textureBlitMaterial, 0, false, false, false, c.pixelRect);
+//        //CustomBlitGL(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
+//        //CustomBlitScreen(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1);
+//        //CustomBlitScreen(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1);
+//        //CustomBlitScreen(canvasActiveRenderTexture, RenderTexture.active, textureBlitMaterial, 1);
+//        CustomBlitScreen(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1);
+//    }
+
+////    void Canvas_BlitToLeftRightRenderTexture(
+////#if URP || HDRP
+////#if UNITY_2021_1_OR_NEWER
+////        ScriptableRenderContext context, List<Camera> cameraList
+////#else
+////        ScriptableRenderContext context, Camera[] cameraList
+////#endif
+////#else
+////        Camera c
+////#endif
+////    )
+#if URP && !UNITY_6000_0_OR_NEWER
 //#if URP || HDRP
-//#if UNITY_2021_1_OR_NEWER
-//        ScriptableRenderContext context, List<Camera> cameraList
-//#else
-//        ScriptableRenderContext context, Camera[] cameraList
-//#endif
-//#else
-//        Camera c
-//#endif
-//    )
-#if URP || HDRP
 #if UNITY_2021_1_OR_NEWER
     void Canvas_BlitToRenderTexture_EndContextRendering(ScriptableRenderContext context, List<Camera> cameraList)
 #else
     void Canvas_BlitToRenderTexture_EndFrameRendering(ScriptableRenderContext context, Camera[] cameraList)
 #endif
-#else
-    void Canvas_BlitToRenderTexture_OnPostRender(Camera c)
-#endif
+//#else
+//    void Canvas_BlitToRenderTexture_OnPostRender(Camera c)
+//#endif
     {
-#if URP || HDRP
+//#if URP || HDRP
         foreach (var c in cameraList)
-#endif
+//#endif
         {
-            //if (debugLog)
-            Debug.Log(c + " Canvas_BlitToRenderTexture " + Time.time);
+            //if (debugLog) Debug.Log(c + " Canvas_BlitToLeftRightRenderTexture " + Time.time);
 
             //if (c == canvasCamera)
             //{
@@ -14257,199 +16001,100 @@ struct tagRECT
             //    textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift);
             //    //Graphics.Blit(canvasRenderTexture, destination, textureBlitMaterial, 1);
             //    //Graphics.Blit(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1);
-            //    //CustomBlit(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
-            //    CustomBlit(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false, false);
+            //    //CustomBlitGL(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
+            //    CustomBlitGL(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false, false);
 
             //    textureBlitMaterial.SetFloat("_ShiftX", -renderTextureOffset);
             //    textureBlitMaterial.SetFloat("_ShiftY", 0);
             //    //Graphics.Blit(canvasRenderTexture, destination, textureBlitMaterial, 1);
             //    //Graphics.Blit(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1);
-            //    //CustomBlit(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
-            //    CustomBlit(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1, false, false, false);
+            //    //CustomBlitGL(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
+            //    CustomBlitGL(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1, false, false, false);
             //}
-#if URP
+//#if URP
             if (c == cam)
-#else
-            if (c == topmostCamera)
-#endif
+//#else
+//            if (c == topmostCamera)
+//#endif
             {
-                if (!S3DEnabled)
-                {
-                    //Debug.Log("Canvas_BlitToRenderTexture_MainCam " + Time.time);
-                    //Graphics.Blit(canvasRenderTexture, renderTexture, textureBlitMaterial, 0);
-                    //CustomBlit(canvasRenderTexture, renderTexture, textureBlitMaterial, 0, false, false, false);
-                    CustomBlitDrawProceduralNow(canvasRenderTexture, renderTexture, textureBlitMaterial, 0);
-                }
+                //if (!S3DEnabled)
+                //{
+                //    //Debug.Log("Canvas_BlitToRenderTexture_MainCam " + Time.time);
+                //    //Graphics.Blit(canvasRenderTexture, renderTexture, textureBlitMaterial, 0);
+                //    //CustomBlitGL(canvasRenderTexture, renderTexture, textureBlitMaterial, 0, false, false, false);
+                //    CustomBlitScreen(canvasRenderTexture, renderTexture, textureBlitMaterial, 0);
+                //}
+
+                canvasBlitDelegate(1);
             }
             else
-#if URP
+//#if URP
                 if (c == camera_left)
-#else
-                if (c == topmostCamera_left)
-#endif
+//#else
+//                if (c == topmostCamera_left)
+//#endif
                 {
-                    textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset);
-                    textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift);
+                    //textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset);
+                    //textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift);
 
-                    //Graphics.Blit(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1);
-                    //CustomBlit(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false, false);
-                    //CustomBlitDrawProceduralNow(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1);
-                    CustomBlitDrawProceduralNow(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1);
+                    ////Graphics.Blit(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1);
+                    ////CustomBlitGL(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false, false);
+                    ////CustomBlitScreen(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1);
+                    //CustomBlitScreen(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1);
+
+                    canvasBlitDelegate(1);
                 }
                 else
-#if URP
+//#if URP
                     if (c == camera_right)
-#else
-                    if (c == topmostCamera_right)
-#endif
+//#else
+//                    if (c == topmostCamera_right)
+//#endif
                     {
-                        textureBlitMaterial.SetFloat("_ShiftX", -renderTextureOffset);
-                        textureBlitMaterial.SetFloat("_ShiftY", 0);
+                        //textureBlitMaterial.SetFloat("_ShiftX", -renderTextureOffset);
+                        //textureBlitMaterial.SetFloat("_ShiftY", 0);
 
-                        //Graphics.Blit(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1);
-                        //CustomBlit(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1, false, false, false);
-                        //CustomBlitDrawProceduralNow(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1);
-                        CustomBlitDrawProceduralNow(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1);
+                        ////Graphics.Blit(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1);
+                        ////CustomBlitGL(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1, false, false, false);
+                        ////CustomBlitScreen(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1);
+                        //CustomBlitScreen(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1);
+
+                        canvasBlitDelegate(0);
                     }
         }
     }
-
-#if URP || HDRP
-#if UNITY_2021_1_OR_NEWER
-    void Canvas_BlitToRenderTextureLeftRight_EndContextRendering(ScriptableRenderContext context, List<Camera> cameraList)
-#else
-    void Canvas_BlitToRenderTextureLeftRight_EndFrameRendering(ScriptableRenderContext context, Camera[] cameraList)
 #endif
-#else
-    void Canvas_BlitToRenderTextureLeftRight_OnPostRender(Camera c)
-#endif
-    {
-#if URP || HDRP
-        foreach (var c in cameraList)
-#endif
-        {
-            //if (debugLog)
-            Debug.Log(c + " Canvas_BlitToRenderTextureLeftRight " + Time.time);
 
-            if (c == cam)
-            {
-                //if (!S3DEnabled)
-                //{
-                //    //Debug.Log("Canvas_BlitToRenderTexture_MainCam " + Time.time);
-                //    //Graphics.Blit(canvasRenderTexture, renderTexture, textureBlitMaterial, 0);
-                //    //CustomBlit(canvasRenderTexture, renderTexture, textureBlitMaterial, 0, false, false, false);
-                //    CustomBlitDrawProceduralNow(canvasRenderTexture, renderTexture, textureBlitMaterial, 0);
-                //}
-
-                Canvas_BlitToLeftRightRenderTexture();
-            }
-        }
-    }
-
-#if URP || HDRP
-#if UNITY_2021_1_OR_NEWER
-    void Canvas_BlitToRenderTextureLeftRightGLES2_EndContextRendering(ScriptableRenderContext context, List<Camera> cameraList)
-#else
-    void Canvas_BlitToRenderTextureLeftRightGLES2_EndFrameRendering(ScriptableRenderContext context, Camera[] cameraList)
-#endif
-#else
-    void Canvas_BlitToRenderTextureLeftRightGLES2_OnPostRender(Camera c)
-#endif
-    {
-#if URP || HDRP
-        foreach (var c in cameraList)
-#endif
-        {
-            //if (debugLog)
-            Debug.Log(c + " Canvas_BlitToRenderTextureLeftRightGLES2 " + Time.time);
-
-            if (c == cam)
-            {
-                //if (!S3DEnabled)
-                //{
-                //    //Debug.Log("Canvas_BlitToRenderTexture_MainCam " + Time.time);
-                //    //Graphics.Blit(canvasRenderTexture, renderTexture, textureBlitMaterial, 0);
-                //    //CustomBlit(canvasRenderTexture, renderTexture, textureBlitMaterial, 0, false, false, false);
-                //    CustomBlitDrawProceduralNow(canvasRenderTexture, renderTexture, textureBlitMaterial, 0);
-                //}
-
-                Canvas_BlitToLeftRightRenderTextureGLES2();
-            }
-        }
-    }
-
-//    void Canvas_BlitToRenderTextureGLES2(
 //#if URP || HDRP
 //#if UNITY_2021_1_OR_NEWER
-//        ScriptableRenderContext context, List<Camera> cameraList
+//    void Canvas_BlitToRenderTextureLeftRight_EndContextRendering(ScriptableRenderContext context, List<Camera> cameraList)
 //#else
-//        ScriptableRenderContext context, Camera[] cameraList
+//    void Canvas_BlitToRenderTextureLeftRight_EndFrameRendering(ScriptableRenderContext context, Camera[] cameraList)
 //#endif
 //#else
-//        Camera c
+//    void Canvas_BlitToRenderTextureLeftRight_OnPostRender(Camera c)
 //#endif
-//    )
-#if URP || HDRP
-#if UNITY_2021_1_OR_NEWER
-    void Canvas_BlitToRenderTextureGLES2_EndContextRendering(ScriptableRenderContext context, List<Camera> cameraList)
-#else
-    void Canvas_BlitToRenderTextureGLES2_EndFrameRendering(ScriptableRenderContext context, Camera[] cameraList)
-#endif
-#else
-    void Canvas_BlitToRenderTextureGLES2_OnPostRender(Camera c)
-#endif
-    {
-#if URP || HDRP
-        foreach (var c in cameraList)
-#endif
-        {
-            //if (debugLog)
-            Debug.Log(c + " Canvas_BlitToRenderTextureGLES2 " + Time.time);
+//    {
+//#if URP || HDRP
+//        foreach (var c in cameraList)
+//#endif
+//        {
+//            //if (debugLog) Debug.Log(c + " Canvas_BlitToRenderTextureLeftRight " + Time.time);
 
-#if URP
-            if (c == cam)
-#else
-            if (c == topmostCamera)
-#endif
-            {
-                if (!S3DEnabled)
-                    //CustomBlitGLES2(canvasRenderTexture, renderTexture, textureBlitMaterial, 0, false, false, false, false, false);
-                    //CustomBlitGLES2(canvasRenderTexture, renderTexture, textureBlitMaterial, 0, false, false, false);
-                    //CustomBlitGLES2(canvasRenderTexture, renderTexture, textureBlitMaterial, 0, false, false, false, clientSizePixelRect);
-                    CustomBlitGLES2(canvasRenderTexture, renderTexture, textureBlitMaterial, 0, false, false);
-            }
-            else
-#if URP
-                if (c == camera_left)
-#else
-                if (c == topmostCamera_left)
-#endif
-                {
-                    textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset);
-                    textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift);
+//            if (c == cam)
+//            {
+//                //if (!S3DEnabled)
+//                //{
+//                //    //Debug.Log("Canvas_BlitToRenderTexture_MainCam " + Time.time);
+//                //    //Graphics.Blit(canvasRenderTexture, renderTexture, textureBlitMaterial, 0);
+//                //    //CustomBlitGL(canvasRenderTexture, renderTexture, textureBlitMaterial, 0, false, false, false);
+//                //    CustomBlitScreen(canvasRenderTexture, renderTexture, textureBlitMaterial, 0);
+//                //}
 
-                    //CustomBlitGLES2(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false, false, false, false);
-                    //CustomBlitGLES2(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false, false);
-                    //CustomBlitGLES2(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
-                    CustomBlitGLES2(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false);
-                }
-                else
-#if URP
-                    if (c == camera_right)
-#else
-                    if (c == topmostCamera_right)
-#endif
-                    {
-                        textureBlitMaterial.SetFloat("_ShiftX", -renderTextureOffset);
-                        textureBlitMaterial.SetFloat("_ShiftY", 0);
-
-                        //CustomBlitGLES2(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1, false, false, false, false, false);
-                        //CustomBlitGLES2(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1, false, false, false);
-                        //CustomBlitGLES2(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
-                        CustomBlitGLES2(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1, false, false);
-                    }
-        }
-    }
+//                Canvas_BlitToLeftRightRenderTexture();
+//            }
+//        }
+//    }
 
     //void BlitToScreen(Camera c, Material m)
     //{
@@ -14491,12 +16136,150 @@ struct tagRECT
     //    }
     //}
 
-    //void CustomBlit(RenderTexture source, RenderTexture destination, Material material, int pass, bool flipX, bool flipY, bool clear, [Optional]Rect rect)
-    void CustomBlit(RenderTexture source, RenderTexture destination, Material material, int pass, bool flipX, bool flipY, bool clear, Rect rect)
+    ////void CustomBlitGL(RenderTexture source, RenderTexture destination, Material material, int pass, bool flipX, bool flipY, bool clear, [Optional]Rect rect)
+    //void CustomBlitGL(RenderTexture source, RenderTexture destination, Material material, int pass, bool flipX, bool flipY, bool clear, Rect rect)
+    //{
+    //    //Debug.Log("CustomBlitGL pixelRect " + pixelRect);
+    //    //Debug.Log("CustomBlitGL rect " + rect);
+    //    RenderTexture.active = destination;
+
+    //    if (clear)
+    //    {
+    //        GL.Viewport(clientSizePixelRect);
+    //        GL.Clear(true, true, clearScreenColor);
+    //    }
+
+    //    if (material)
+    //    {
+    //        material.SetTexture("_MainTex", source);
+    //        material.SetPass(pass);
+    //    }
+
+    //    // Low-Level Graphics Library calls
+    //    GL.PushMatrix();    // Calculate MVP Matrix and push it to the GL stack
+
+    //    if (rect != Rect.zero)
+    //        GL.Viewport(rect);
+
+    //    //if (clear)
+    //    //    GL.Clear(true, true, Color.clear);
+
+    //    GL.LoadOrtho();    // Set up Ortho-Perspective Transform
+    //    //GL.LoadIdentity();
+    //    //GL.Viewport(new Rect(cam.rect.x * clientSize.x, cam.rect.y * clientSize.y, cam.rect.width * clientSize.x, cam.rect.height * clientSize.y));
+    //    //GL.Viewport(pixelRect);
+
+    //    //if (rect != Rect.zero)
+    //    //    GL.Viewport(rect);
+
+    //    //GL.Viewport(new Rect(flipX ? (1 - cam.rect.x) * clientSize.x - cam.pixelWidth : cam.rect.x * clientSize.x, 
+    //    //    flipY ? (1 - cam.rect.y) * clientSize.y - cam.pixelHeight : cam.rect.y * clientSize.y, 
+    //    //    cam.rect.width * clientSize.x, 
+    //    //    cam.rect.height * clientSize.y));
+
+    //    GL.Begin(GL.QUADS);
+
+    //    GL.TexCoord2(flipX ? 1 : 0, flipY ? 1 : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
+    //    GL.Vertex3(0.0f, 0.0f, 0.0f); // Finalize and submit this vertex for rendering (bottom left)
+
+    //    GL.TexCoord2(flipX ? 1 : 0, flipY ? 0 : 1); // prepare input struct (Texcoord0 (UV's)) for this vertex
+    //    GL.Vertex3(0.0f, 1.0f, 0.0f); // Finalize and submit this vertex for rendering (top left)
+
+    //    GL.TexCoord2(flipX ? 0 : 1, flipY ? 0 : 1); // prepare input struct (Texcoord0 (UV's)) for this vertex
+    //    GL.Vertex3(1.0f, 1.0f, 0.0f); // Finalize and submit this vertex for rendering  (top right)
+
+    //    GL.TexCoord2(flipX ? 0 : 1, flipY ? 1 : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
+    //    GL.Vertex3(1.0f, 0.0f, 0.0f); // Finalize and submit this vertex for rendering  (bottom right)
+
+    //    GL.End();
+
+    //    //Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
+
+    //    GL.PopMatrix(); // Pop the matrices off the stack
+    //}
+
+//void CustomBlitTexture(RenderTexture source, RenderTexture destination, Material material, int pass)
+void CustomBlitTexture(RenderTexture source, RenderTexture destination, Mesh blitMesh, Material material, int pass)
     {
-        //Debug.Log("CustomBlit pixelRect " + pixelRect);
-        //Debug.Log("CustomBlit rect " + rect);
+        //Debug.Log("CustomBlitTexture");
         RenderTexture.active = destination;
+
+        if (material)
+        {
+            material.SetTexture("_MainTex", source);
+            material.SetPass(pass);
+        }
+
+        //Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
+        Graphics.DrawMeshNow(blitMesh, Matrix4x4.identity); //169 *2 FPS //299 *2 FPS Mono
+    }
+
+//void CustomBlitScreen(RenderTexture source, RenderTexture destination, Material material, int pass, [Optional]Rect rect)
+void CustomBlitScreen(RenderTexture source, RenderTexture destination, Mesh blitMesh, Material material, int pass, bool clear
+    , [Optional]Rect rect
+    //, [Optional]Display display
+    )
+    {
+        //if (debugLog) 
+        //Debug.Log("CustomBlitScreen pixelRect " + pixelRect);
+        //Debug.Log("CustomBlitScreen rect " + rect);
+        //Debug.Log("CustomBlitScreen");
+
+        GL.PushMatrix();    // Calculate MVP Matrix and push it to the GL stack
+
+        //if (display != null)
+        //{
+        //    Graphics.SetRenderTarget(display.colorBuffer, display.depthBuffer);
+
+        //    if (clear)
+        //    {
+        //        GL.Viewport(clientSizePixelRect);
+        //        GL.Clear(true, true, clearScreenColor);
+        //    }
+        //}
+        //else
+        {
+            if (clear)
+            {
+                RenderTexture.active = null;
+                GL.Viewport(clientSizePixelRect);
+                GL.Clear(true, true, clearScreenColor);
+            }
+
+            RenderTexture.active = destination;
+            //GL.Viewport(clientSizePixelRect);
+        }
+
+        if (material)
+        {
+            material.SetTexture("_MainTex", source);
+            material.SetPass(pass);
+        }
+
+        //if (display != null)
+        //    Graphics.SetRenderTarget(display.colorBuffer, display.depthBuffer);
+
+        //// Low-Level Graphics Library calls
+        //GL.PushMatrix();    // Calculate MVP Matrix and push it to the GL stack
+
+        if (rect != Rect.zero)
+            GL.Viewport(rect);
+
+        GL.LoadOrtho();    // Set up Ortho-Perspective Transform
+
+        //Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
+        Graphics.DrawMeshNow(blitMesh, Matrix4x4.identity); //169 *2 FPS //299 *2 FPS Mono
+
+        GL.PopMatrix(); // Pop the matrices off the stack
+    }
+
+void CustomBlitDisplay(RenderTexture source, Display display, Mesh blitMesh, Material material, int pass, bool clear
+    //, [Optional]Rect rect
+    )
+    {
+        //if (debugLog) Debug.Log("CustomBlitDisplay");
+
+        Graphics.SetRenderTarget(display.colorBuffer, display.depthBuffer);
 
         if (clear)
         {
@@ -14510,182 +16293,604 @@ struct tagRECT
             material.SetPass(pass);
         }
 
+        //if (display != null)
+        //    Graphics.SetRenderTarget(display.colorBuffer, display.depthBuffer);
+
         // Low-Level Graphics Library calls
         GL.PushMatrix();    // Calculate MVP Matrix and push it to the GL stack
-
-        if (rect != Rect.zero)
-            GL.Viewport(rect);
-
-        //if (clear)
-        //    GL.Clear(true, true, Color.clear);
-
-        GL.LoadOrtho();    // Set up Ortho-Perspective Transform
-        //GL.LoadIdentity();
-        //GL.Viewport(new Rect(cam.rect.x * clientSize.x, cam.rect.y * clientSize.y, cam.rect.width * clientSize.x, cam.rect.height * clientSize.y));
-        //GL.Viewport(pixelRect);
 
         //if (rect != Rect.zero)
         //    GL.Viewport(rect);
 
-        //GL.Viewport(new Rect(flipX ? (1 - cam.rect.x) * clientSize.x - cam.pixelWidth : cam.rect.x * clientSize.x, 
-        //    flipY ? (1 - cam.rect.y) * clientSize.y - cam.pixelHeight : cam.rect.y * clientSize.y, 
-        //    cam.rect.width * clientSize.x, 
-        //    cam.rect.height * clientSize.y));
-
-        GL.Begin(GL.QUADS);
-
-        GL.TexCoord2(flipX ? 1 : 0, flipY ? 1 : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
-        GL.Vertex3(0.0f, 0.0f, 0.0f); // Finalize and submit this vertex for rendering (bottom left)
-
-        GL.TexCoord2(flipX ? 1 : 0, flipY ? 0 : 1); // prepare input struct (Texcoord0 (UV's)) for this vertex
-        GL.Vertex3(0.0f, 1.0f, 0.0f); // Finalize and submit this vertex for rendering (top left)
-
-        GL.TexCoord2(flipX ? 0 : 1, flipY ? 0 : 1); // prepare input struct (Texcoord0 (UV's)) for this vertex
-        GL.Vertex3(1.0f, 1.0f, 0.0f); // Finalize and submit this vertex for rendering  (top right)
-
-        GL.TexCoord2(flipX ? 0 : 1, flipY ? 1 : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
-        GL.Vertex3(1.0f, 0.0f, 0.0f); // Finalize and submit this vertex for rendering  (bottom right)
-
-        GL.End();
+        GL.LoadOrtho();    // Set up Ortho-Perspective Transform
 
         //Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
+        Graphics.DrawMeshNow(blitMesh, Matrix4x4.identity); //169 *2 FPS //299 *2 FPS Mono
 
         GL.PopMatrix(); // Pop the matrices off the stack
     }
 
-void CustomBlitDrawProceduralNow(RenderTexture source, RenderTexture destination, Material material, int pass) 
-    {
-        //Debug.Log("CustomBlitDrawProceduralNow");
-        RenderTexture.active = destination;
+//#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
 
-        if (material)
-        {
-            material.SetTexture("_MainTex", source);
-            material.SetPass(pass);
-        }
+//#if URP || HDRP
+//    //void SingleDisplayBlitToScreenGLES2_EndCameraRendering(ScriptableRenderContext context, Camera camera)
+//#if UNITY_2021_1_OR_NEWER
+//    void SingleDisplayBlitToScreenGLES2_EndContextRendering(ScriptableRenderContext context, List<Camera> cameraList)
+//#else
+//    void SingleDisplayBlitToScreenGLES2_EndFrameRendering(ScriptableRenderContext context, Camera[] cameraList)
+//#endif
+//#else
+//    void SingleDisplayBlitToScreenGLES2_OnPostRender(Camera c)
+//#endif
+//    {
+//#if URP || HDRP
+//        foreach (Camera c in cameraList)
+//#endif
+//        if (c == cam)
+//        {
+//            //if (debugLog) Debug.Log(c + " SingleDisplayBlitToScreenGLES2 " + Time.time);
 
-        Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
-    }
+//            //Rect r = c.rect;
+//            //c.rect = Rect.MinMaxRect(0, 0, 1, 1); //set temporary rect required before Graphics.Blit to blit render texture correctly with no fullscreen rect
 
-//void CustomBlitDrawProceduralNowRect(RenderTexture source, RenderTexture destination, Material material, int pass, [Optional]Rect rect)
-void CustomBlitDrawProceduralNowRect(RenderTexture source, RenderTexture destination, Material material, int pass, bool clear, Rect rect)
-    {
-        //Debug.Log("CustomBlit pixelRect " + pixelRect);
-        //Debug.Log("CustomBlit rect " + rect);
-        RenderTexture.active = destination;
+//            //if (c == cam)
+//            //    //CustomBlitGLES2(null, null, S3DMaterial, pass, false, false, false, false, false);
+//            //    CustomBlitGLES2(null, null, S3DMaterial, pass, false, false, false);
 
-        if (clear)
-        {
-            GL.Viewport(clientSizePixelRect);
-            GL.Clear(true, true, clearScreenColor);
-        }
+//            //c.rect = r;
 
-        if (material)
-        {
-            material.SetTexture("_MainTex", source);
-            material.SetPass(pass);
-        }
+//            SingleDisplayBlitToScreenGLES2();
+//        }
+//    }
 
-        // Low-Level Graphics Library calls
-        GL.PushMatrix();    // Calculate MVP Matrix and push it to the GL stack
+//    void BlitToActiveTextureGLES2(RenderTexture rt, int pass, Display display, Rect pixelRect)
+//    {
+//        RenderTexture rta = RenderTexture.active;
+//        activeRenderTexture = RenderTexture.active;
+//        Graphics.Blit(RenderTexture.active, rt);
 
-        if (rect != Rect.zero)
-            GL.Viewport(rect);
+//        //CustomBlitGLES2(rt, rta, S3DMaterial, this.pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, blitToScreenClearRequired);
+//        CustomBlitGLES2(rt, rta, S3DMaterial, pass, false, false, blitToScreenClearRequired);
+//    }
 
-        GL.LoadOrtho();    // Set up Ortho-Perspective Transform
+//    void BlitToScreenGLES2(RenderTexture rt, int pass, Display display, Rect pixelRect)
+//    {
+//        //CustomBlitGLES2(rt, null, S3DMaterial, this.pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, blitToScreenClearRequired, pixelRect);
+//        CustomBlitGLES2(rt, null, S3DMaterial, pass, false, false, blitToScreenClearRequired, pixelRect);
+//    }
 
-        Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
+////    void RenderTexture_BlitToScreenGLES2_OnPostRender(Camera c)
+////    {
+////        //if (debugLog)
+////            //Debug.Log(c + " RenderTexture_BlitToScreenGLES2 " + Time.time);
 
-        GL.PopMatrix(); // Pop the matrices off the stack
-    }
+////        //if (c == camera_left)
+////        if (c == topmostCamera_left)
+////        {
+////            //if (canvasCamera && canvasCamera.isActiveAndEnabled)
+////            //{
+////            //    textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset);
+////            //    textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift);
 
-    //void CustomBlitGLES2(RenderTexture source, RenderTexture destination, Material material, int pass) 
-    //void CustomBlitGLES2(bool flipX, bool flipY) 
-    //void CustomBlitGLES2(RenderTexture source, RenderTexture destination, Material material, int pass, bool flipX, bool flipY, bool clear, bool halfX, bool halfY, [Optional]Rect rect) 
-    //void CustomBlitGLES2(RenderTexture source, RenderTexture destination, Material material, int pass, bool flipX, bool flipY, bool clear
-    void CustomBlitGLES2(RenderTexture source, RenderTexture destination, Material material, int pass, bool flipX, bool flipY
-        , [Optional]Rect rect
-        //, Rect rect
-        , [Optional]bool clear
-        ) 
-    {
-        // Set new rendertexture as active and feed the source texture into the material
-        RenderTexture.active = destination;
-        //RenderTexture.active = null;
+////            //    CustomBlitGLES2(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false, false);
+////            //}
 
-        if (clear)
-        {
-            GL.Viewport(clientSizePixelRect);
-            GL.Clear(true, true, clearScreenColor);
-        }
+////            //CustomBlitGLES2(renderTexture_left, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, false, false, false, clientSizePixelRect);
+////            //CustomBlitGLES2(renderTexture_left, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, false, clientSizePixelRect);
+////            //CustomBlitGLES2(renderTexture_left, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, false);
+////            //CustomBlitGLES2(renderTexture_left, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, false, cam.pixelRect);
+////            //CustomBlitGLES2(renderTexture_left, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY);
+////            //CustomBlitGLES2(renderTexture_left, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, cam.pixelRect);
+////            //CustomBlitGLES2(renderTexture_left, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, camRectClampedPixels);
+////            CustomBlitGLES2(renderTexture_left, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, camRectClampedPixelsFlipped);
+////        }
+////        else
+////            //if (c == camera_right)
+////            //if (c == topmostCamera_right && Display.displays[twoDisplaysIndex_right].active)
+////            if (c == topmostCamera_right
+////#if !UNITY_EDITOR
+////            //&& Display.displays[twoDisplaysIndex_right].active
+////            && display_right != null && display_right.active
+////#endif
+////            )
+////            {
+////                //if (canvasCamera && canvasCamera.isActiveAndEnabled)
+////                //{
+////                //    textureBlitMaterial.SetFloat("_ShiftX", -renderTextureOffset);
+////                //    textureBlitMaterial.SetFloat("_ShiftY", 0);
 
-        int vertexMin = 0;
+////                //    CustomBlitGLES2(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1, false, false, false);
+////                //}
 
-        if (material)
-        {
-            material.SetTexture("_MainTex", source);
-            material.SetPass(pass);    // start the first rendering pass
-            vertexMin = -1;
-        }
+////                //CustomBlitGLES2(renderTexture_right, null, S3DMaterial, pass, false, false, false, false, false, clientSizePixelRect);
+////                //CustomBlitGLES2(renderTexture_right, null, S3DMaterial, pass, false, false, false, clientSizePixelRect);
+////                //CustomBlitGLES2(renderTexture_right, null, S3DMaterial, pass, false, false, false);
+////                //CustomBlitGLES2(renderTexture_right, null, S3DMaterial, pass, false, false, false, cam.pixelRect);
+////                //CustomBlitGLES2(renderTexture_right, null, S3DMaterial, pass, false, false);
+////                //CustomBlitGLES2(renderTexture_right, null, S3DMaterial, pass, false, false, cam.pixelRect);
+////                CustomBlitGLES2(renderTexture_right, null, S3DMaterial, pass, false, false, camRectClampedPixels);
+////            }
+////    }
 
-        // Low-Level Graphics Library calls
-        GL.PushMatrix();    // Calculate MVP Matrix and push it to the GL stack
+//    void RenderTexture_BlitToScreenLeftGLES2_OnEndOfFrame()
+//    {
+//        if (debugLog) Debug.Log("RenderTexture_BlitToScreenLeftGLES2_OnEndOfFrame " + Time.time);
 
-        if (rect != Rect.zero)
-            GL.Viewport(rect);
+//        //RenderTexture.active = null;
+//#if !UNITY_EDITOR
+//        //if (!openGL)
+//        if (SystemInfo.graphicsDeviceType.ToString().Contains("Direct3D"))
+//#endif
+//            //Graphics.SetRenderTarget(Display.displays[twoDisplaysIndex_left].colorBuffer, Display.displays[twoDisplaysIndex_left].depthBuffer);
+//            Graphics.SetRenderTarget(display_left.colorBuffer, display_left.depthBuffer);
 
-        GL.LoadOrtho();    // Set up Ortho-Perspective Transform
-        //GL.LoadIdentity();
-        //GL.Viewport(new Rect(cam.rect.x * clientSize.x, cam.rect.y * clientSize.y, cam.rect.width * clientSize.x, cam.rect.height * clientSize.y));
-        //GL.Viewport(pixelRect);
+//        GL.Clear(true, true, clearScreenColor);
+//        //GL.Viewport(cam.pixelRect);
+//        //GL.Viewport(camRectClampedPixels);
+//        GL.Viewport(camRectClampedPixelsFlipped);
 
-        //GL.Viewport(new Rect(flipX ? (1 - cam.rect.x) * clientSize.x - cam.pixelWidth : cam.rect.x * clientSize.x, 
-        //    flipY ? (1 - cam.rect.y) * clientSize.y - cam.pixelHeight : cam.rect.y * clientSize.y, 
-        //    cam.rect.width * clientSize.x, 
-        //    cam.rect.height * clientSize.y));
+//        //S3DMaterial.SetTexture("_MainTex", renderTexture_left);
+//        S3DMaterial.SetPass(pass);
 
-        GL.Begin(GL.QUADS);
+//        bool flipX = method == Method.Two_Displays_MirrorX;
+//        bool flipY = method == Method.Two_Displays_MirrorY;
+//        int vertexMin = -1;
 
-        //GL.TexCoord2(flipX ? 1 : 0, flipY ? 1 : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
-        //GL.Vertex3(0.0f, 0.0f, 0.0f); // Finalize and submit this vertex for rendering (bottom left)
+//        // Low-Level Graphics Library calls
+//        GL.PushMatrix();    // Calculate MVP Matrix and push it to the GL stack
 
-        //GL.TexCoord2(flipX ? 1 : 0, flipY ? 0 : 1); // prepare input struct (Texcoord0 (UV's)) for this vertex
-        //GL.Vertex3(0.0f, 1.0f, 0.0f); // Finalize and submit this vertex for rendering (top left)
+//        GL.LoadOrtho();    // Set up Ortho-Perspective Transform
 
-        //GL.TexCoord2(flipX ? 0 : 1, flipY ? 0 : 1); // prepare input struct (Texcoord0 (UV's)) for this vertex
-        //GL.Vertex3(1.0f, 1.0f, 0.0f); // Finalize and submit this vertex for rendering  (top right)
+//        GL.Begin(GL.QUADS);
 
-        //GL.TexCoord2(flipX ? 0 : 1, flipY ? 1 : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
-        //GL.Vertex3(1.0f, 0.0f, 0.0f); // Finalize and submit this vertex for rendering  (bottom right)
+//        GL.TexCoord2(flipX ? 1 : 0, flipY ? 1 : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
+//        GL.Vertex3(vertexMin, vertexMin, 0.0f); // Finalize and submit this vertex for rendering (bottom left)
 
-        ////for OpenGLES20
-        //GL.TexCoord2(flipX ? verticesUV[3].x * (halfX ? .5f : 1) : 0, flipY ? verticesUV[1].y * (halfY ? .5f : 1) : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
-        //GL.Vertex3(vertexMin, vertexMin, 0.0f); // Finalize and submit this vertex for rendering (bottom left)
+//        GL.TexCoord2(flipX ? 1 : 0, flipY ? 0 : 1); // prepare input struct (Texcoord0 (UV's)) for this vertex
+//        GL.Vertex3(vertexMin, 1.0f, 0.0f); // Finalize and submit this vertex for rendering (top left)
 
-        //GL.TexCoord2(flipX ? verticesUV[2].x * (halfX ? .5f : 1) : 0, flipY ? 0 : verticesUV[1].y * (halfY ? .5f : 1)); // prepare input struct (Texcoord0 (UV's)) for this vertex
-        //GL.Vertex3(vertexMin, 1.0f, 0.0f); // Finalize and submit this vertex for rendering (top left)
+//        GL.TexCoord2(flipX ? 0 : 1, flipY ? 0 : 1); // prepare input struct (Texcoord0 (UV's)) for this vertex
+//        GL.Vertex3(1.0f, 1.0f, 0.0f); // Finalize and submit this vertex for rendering  (top right)
 
-        //GL.TexCoord2(flipX ? 0 : verticesUV[2].x * (halfX ? .5f : 1), flipY ? 0 : verticesUV[2].y * (halfY ? .5f : 1)); // prepare input struct (Texcoord0 (UV's)) for this vertex
-        //GL.Vertex3(1.0f, 1.0f, 0.0f); // Finalize and submit this vertex for rendering  (top right)
+//        GL.TexCoord2(flipX ? 0 : 1, flipY ? 1 : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
+//        GL.Vertex3(1.0f, vertexMin, 0.0f); // Finalize and submit this vertex for rendering  (bottom right)
 
-        //GL.TexCoord2(flipX ? 0 : verticesUV[3].x * (halfX ? .5f : 1), flipY ? verticesUV[2].y * (halfY ? .5f : 1) : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
-        //GL.Vertex3(1.0f, vertexMin, 0.0f); // Finalize and submit this vertex for rendering  (bottom right)
+//        GL.End();
+//        GL.PopMatrix(); // Pop the matrices off the stack
 
-        GL.TexCoord2(flipX ? 1 : 0, flipY ? 1 : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
-        GL.Vertex3(vertexMin, vertexMin, 0.0f); // Finalize and submit this vertex for rendering (bottom left)
+//        ////if (canvasBlitDelegate != null)
+//        //    canvasBlitDelegate(1);
+//    }
 
-        GL.TexCoord2(flipX ? 1 : 0, flipY ? 0 : 1); // prepare input struct (Texcoord0 (UV's)) for this vertex
-        GL.Vertex3(vertexMin, 1.0f, 0.0f); // Finalize and submit this vertex for rendering (top left)
+//    void SingleDisplayBlitToScreenGLES2_OnEndOfFrame()
+//    {
+//        if (debugLog) Debug.Log("SingleDisplayBlitToScreenGLES2_OnEndOfFrame " + Time.time);
 
-        GL.TexCoord2(flipX ? 0 : 1, flipY ? 0 : 1); // prepare input struct (Texcoord0 (UV's)) for this vertex
-        GL.Vertex3(1.0f, 1.0f, 0.0f); // Finalize and submit this vertex for rendering  (top right)
+//        SingleDisplayBlitToScreenGLES2();
+//    }
 
-        GL.TexCoord2(flipX ? 0 : 1, flipY ? 1 : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
-        GL.Vertex3(1.0f, vertexMin, 0.0f); // Finalize and submit this vertex for rendering  (bottom right)
+//    void SingleDisplayBlitToScreenGLES2_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
+//    {
+//        if (debugLog) Debug.Log(c + " SingleDisplayBlitToScreenGLES2_OnRenderImageDelegate " + Time.time);
 
-        GL.End();
-        GL.PopMatrix(); // Pop the matrices off the stack
-    }
+//        SingleDisplayBlitToScreenGLES2();
+//    }
+
+//    void SingleDisplayBlitToScreenGLES2()
+//    {
+//        if (debugLog) Debug.Log("SingleDisplayBlitToScreenGLES2 " + Time.time);
+
+//        //Rect r = cam.rect;
+//        //cam.rect = Rect.MinMaxRect(0, 0, 1, 1); //set temporary rect required before Graphics.Blit to blit render texture correctly with no fullscreen rect
+
+//        ////CustomBlitGLES2(null, null, S3DMaterial, pass, false, false, false, clientSizePixelRect);
+//        ////CustomBlitGLES2(null, null, S3DMaterial, pass, false, false, false);
+//        ////CustomBlitGLES2(null, null, S3DMaterial, pass, false, false, false, cam.pixelRect);
+//        ////CustomBlitGLES2(null, null, S3DMaterial, pass, false, false);
+//        //CustomBlitGLES2(null, null, S3DMaterial, pass, false, false, cam.pixelRect);
+//        //CustomBlitGLES2(null, null, S3DMaterial, pass, false, false, camRectClampedPixels);
+//        CustomBlitGLES2(null, null, S3DMaterial, pass, false, false, blitToScreenClearRequired, camRectClampedPixels);
+
+//        //cam.rect = r;
+//    }
+
+//    void RenderTexture_BlitToScreenLeftGLES2_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
+//    {
+//        if (debugLog) Debug.Log(c + " RenderTexture_BlitToScreenLeftGLES2_OnRenderImageDelegate " + Time.time);
+
+//        camerasTargetRemoveDelegateLeft();
+//        c.targetTexture = null;
+
+//        ////Graphics.Blit(RenderTexture.active, null as RenderTexture);
+//        ////Graphics.Blit(RenderTexture.active, null, S3DMaterial, pass);
+//        ////Graphics.Blit(source, destination);
+//        ////Graphics.Blit(destination, null as RenderTexture);
+//        ////Graphics.Blit(renderTexture_left, null as RenderTexture);
+//        ////Graphics.Blit(renderTexture_left, null, S3DMaterial, pass);
+//        ////Graphics.Blit(rt, null, S3DMaterial, pass);
+//        //Graphics.Blit(RenderTexture.active, null as RenderTexture, S3DMaterial, pass);
+
+//        //CustomBlitGL(RenderTexture.active, null as RenderTexture, S3DMaterial, pass, false, false, false, clientSizePixelRect);
+//        //CustomBlitGL(renderTexture_left, null as RenderTexture, S3DMaterial, pass, false, false, false, clientSizePixelRect);
+//        //CustomBlitGL(RenderTexture.active, null as RenderTexture, S3DMaterial, pass, false, false, false);
+//        //CustomBlitScreen(RenderTexture.active, null as RenderTexture, S3DMaterial, pass, clientSizePixelRect);
+//        //CustomBlitGLES2(RenderTexture.active, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, false, clientSizePixelRect);
+//        //CustomBlitGLES2(RenderTexture.active, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, false);
+//        //CustomBlitGLES2(RenderTexture.active, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, false, cam.pixelRect);
+//        //CustomBlitGLES2(RenderTexture.active, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, cam.pixelRect);
+//        //CustomBlitGLES2(RenderTexture.active, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, camRectClampedPixels);
+//        //CustomBlitGLES2(RenderTexture.active, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, camRectClampedPixelsFlipped);
+//        CustomBlitGLES2(RenderTexture.active, null, S3DMaterial, pass, method == Method.Two_Displays_MirrorX, method == Method.Two_Displays_MirrorY, blitToScreenClearRequired, camRectClampedPixelsFlipped);
+
+//        //S3DMaterial.SetTexture("_MainTex", RenderTexture.active);
+//        //RenderTexture.active = null;
+//        //S3DMaterial.SetPass(pass);
+//        //Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
+//    }
+
+//    void RenderTexture_BlitToScreenRightGLES2_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
+//    {
+//        if (debugLog) Debug.Log(c + " RenderTexture_BlitToScreenRightGLES2_OnRenderImageDelegate " + Time.time);
+
+//        camerasTargetRemoveDelegateRight();
+//        c.targetTexture = null;
+
+//        ////Graphics.Blit(RenderTexture.active, null, S3DMaterial, pass);
+//        //Graphics.Blit(RenderTexture.active, null as RenderTexture);
+//        ////Graphics.Blit(renderTexture_right, null, S3DMaterial, pass);
+//        ////Graphics.Blit(renderTexture_right, null as RenderTexture);
+//        ////CustomBlitGLES2(false, false, renderTexture_right, S3DMaterial);
+
+//        ////S3DMaterial.SetTexture("_MainTex", RenderTexture.active);
+//        ////S3DMaterial.SetInt("_FlipX", 0);
+//        ////S3DMaterial.SetInt("_FlipY", 0);
+//        ////RenderTexture.active = null;
+//        ////S3DMaterial.SetPass(pass);
+//        ////Graphics.DrawProceduralNow(MeshTopology.Quads, 4); //169 *2 FPS //299 *2 FPS Mono
+        
+//        //CustomBlitGL(RenderTexture.active, null as RenderTexture, S3DMaterial, pass + 1, false, false, false, clientSizePixelRect);
+//        //CustomBlitGL(renderTexture_right, null as RenderTexture, S3DMaterial, pass + 1, false, false, false, clientSizePixelRect);
+//        //CustomBlitGL(RenderTexture.active, null as RenderTexture, S3DMaterial, pass + 1, false, false, false);
+//        //CustomBlitScreen(RenderTexture.active, null as RenderTexture, S3DMaterial, pass + 1, clientSizePixelRect);
+//        //CustomBlitGLES2(RenderTexture.active, null, S3DMaterial, pass, false, false, false, clientSizePixelRect);
+//        //CustomBlitGLES2(RenderTexture.active, null, S3DMaterial, pass, false, false, false);
+//        //CustomBlitGLES2(RenderTexture.active, null, S3DMaterial, pass, false, false, false, cam.pixelRect);
+//        //CustomBlitGLES2(RenderTexture.active, null, S3DMaterial, pass, false, false, cam.pixelRect);
+//        //CustomBlitGLES2(RenderTexture.active, null, S3DMaterial, pass, false, false, camRectClampedPixels);
+//        CustomBlitGLES2(RenderTexture.active, null, S3DMaterial, pass, false, false, blitToScreenClearRequired, camRectClampedPixels);
+//    }
+
+////    void Canvas_BlitToRenderTextureGLES2_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
+////    {
+////        //if (debugLog) Debug.Log(c + " Canvas_BlitToRenderTextureGLES2_OnRenderImageDelegate " + Time.time);
+
+////        //Canvas_BlitToRenderTextureGLES2();
+////        CustomBlitGLES2(canvasRenderTexture, destination, textureBlitMaterial, 0, false, false);
+////    }
+
+////    void Canvas_BlitToLeftRightRenderTextureGLES2_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
+////    {
+////        //if (debugLog) Debug.Log(c + " Canvas_BlitToLeftRightRenderTextureGLES2_OnRenderImageDelegate " + Time.time);
+
+////        Canvas_BlitToLeftRightRenderTextureGLES2();
+////    }
+
+////    void Canvas_BlitToLeftRightRenderTextureGLES2_OnEndOfFrame()
+////    {
+////        //if (debugLog) Debug.Log("Canvas_BlitToLeftRightRenderTextureGLES2_OnEndOfFrame " + Time.time);
+
+////        Canvas_BlitToLeftRightRenderTextureGLES2();
+////    }
+
+////    //void Canvas_BlitToScreenGLES2(int right)
+////    void Canvas_BlitToScreenGLES2(int left)
+////    {
+////        //if (debugLog) Debug.Log("Canvas_BlitToScreenGLES2 " + Time.time);
+
+////        textureBlitMaterial.SetTexture("_MainTex", canvasRenderTexture);
+////        textureBlitMaterial.SetInt("_Clockwise", 1);
+////        //textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset * (1 - 2 * right));
+////        //textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift * (1 - right));
+////        textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset * (2 * left - 1));
+////        textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift * left);
+////        //textureBlitMaterial.SetInt("_FlipX", (method == Method.Two_Displays_MirrorX ? 1 : 0) * left);
+////        //textureBlitMaterial.SetInt("_FlipY", (method == Method.Two_Displays_MirrorY ? 1 : 0) * left);
+
+////        bool flipX = method == Method.Two_Displays_MirrorX;
+////        bool flipY = method == Method.Two_Displays_MirrorY;
+////        //comment above & uncomment below if two displays works with OpenGL
+////        //int flipXInt = (method == Method.Two_Displays_MirrorX ? 1 : 0) * left;
+////        //int flipYInt = (method == Method.Two_Displays_MirrorY ? 1 : 0) * left;
+////        //bool flipX = flipXInt == 1 ? true : false;
+////        //bool flipY = flipYInt == 1 ? true : false;
+
+////        textureBlitMaterial.SetPass(1);    // start the first rendering pass
+
+////        int vertexMin = -1;
+
+////        // Low-Level Graphics Library calls
+////        GL.PushMatrix();    // Calculate MVP Matrix and push it to the GL stack
+
+////        GL.LoadOrtho();    // Set up Ortho-Perspective Transform
+
+////        GL.Begin(GL.QUADS);
+
+////        GL.TexCoord2(flipX ? 1 : 0, flipY ? 1 : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
+////        GL.Vertex3(vertexMin, vertexMin, 0.0f); // Finalize and submit this vertex for rendering (bottom left)
+
+////        GL.TexCoord2(flipX ? 1 : 0, flipY ? 0 : 1); // prepare input struct (Texcoord0 (UV's)) for this vertex
+////        GL.Vertex3(vertexMin, 1.0f, 0.0f); // Finalize and submit this vertex for rendering (top left)
+
+////        GL.TexCoord2(flipX ? 0 : 1, flipY ? 0 : 1); // prepare input struct (Texcoord0 (UV's)) for this vertex
+////        GL.Vertex3(1.0f, 1.0f, 0.0f); // Finalize and submit this vertex for rendering  (top right)
+
+////        GL.TexCoord2(flipX ? 0 : 1, flipY ? 1 : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
+////        GL.Vertex3(1.0f, vertexMin, 0.0f); // Finalize and submit this vertex for rendering  (bottom right)
+
+////        GL.End();
+////        GL.PopMatrix(); // Pop the matrices off the stack
+////    }
+
+////    //void Canvas_BlitToRenderTextureGLES2()
+////    //{
+////    //    //if (debugLog)
+////    //        //Debug.Log("Canvas_BlitToRenderTextureGLES2 " + Time.time);
+
+////    //    CustomBlitGLES2(canvasRenderTexture, renderTexture, textureBlitMaterial, 0, false, false);
+////    //}
+
+////    void Canvas_BlitToLeftRightRenderTextureGLES2()
+////    {
+////        //if (debugLog)
+////            //Debug.Log("Canvas_BlitToLeftRightRenderTextureGLES2 " + Time.time);
+
+////        textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset);
+////        textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift);
+////        //CustomBlitGLES2(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false, false);
+////        //CustomBlitGLES2(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false, false, cam.pixelRect);
+////        CustomBlitGLES2(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false);
+
+////        textureBlitMaterial.SetFloat("_ShiftX", -renderTextureOffset);
+////        textureBlitMaterial.SetFloat("_ShiftY", 0);
+////        //CustomBlitGLES2(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1, false, false, false);
+////        //CustomBlitGLES2(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1, false, false, false, cam.pixelRect);
+////        CustomBlitGLES2(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1, false, false);
+////    }
+
+////    void Canvas_BlitToLeftRenderTextureGLES2_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
+////    {
+////        //if (debugLog) Debug.Log(c + " Canvas_BlitToLeftRenderTextureGLES2_OnRenderImageDelegate " + Time.time);
+
+////        textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset);
+////        textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift);
+////        //CustomBlitGLES2(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1, false, false, false);
+////        //CustomBlitGLES2(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
+////        CustomBlitGLES2(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1, false, false);
+////    }
+
+////    void Canvas_BlitToRightRenderTextureGLES2_OnRenderImageDelegate(RenderTexture source, RenderTexture destination, Camera c)
+////    {
+////        //if (debugLog) Debug.Log(c + " Canvas_BlitToRightRenderTextureGLES2_OnRenderImageDelegate " + Time.time);
+
+////        textureBlitMaterial.SetFloat("_ShiftX", -renderTextureOffset);
+////        textureBlitMaterial.SetFloat("_ShiftY", 0);
+////        //CustomBlitGLES2(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1, false, false, false);
+////        //CustomBlitGLES2(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
+////        CustomBlitGLES2(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1, false, false);
+////    }
+
+////#if URP || HDRP
+////#if UNITY_2021_1_OR_NEWER
+////    void Canvas_BlitToRenderTextureLeftRightGLES2_EndContextRendering(ScriptableRenderContext context, List<Camera> cameraList)
+////#else
+////    void Canvas_BlitToRenderTextureLeftRightGLES2_EndFrameRendering(ScriptableRenderContext context, Camera[] cameraList)
+////#endif
+////#else
+////    void Canvas_BlitToRenderTextureLeftRightGLES2_OnPostRender(Camera c)
+////#endif
+////    {
+////#if URP || HDRP
+////        foreach (var c in cameraList)
+////#endif
+////        {
+////            //if (debugLog) Debug.Log(c + " Canvas_BlitToRenderTextureLeftRightGLES2 " + Time.time);
+
+////            if (c == cam)
+////            {
+////                //if (!S3DEnabled)
+////                //{
+////                //    //Debug.Log("Canvas_BlitToRenderTexture_MainCam " + Time.time);
+////                //    //Graphics.Blit(canvasRenderTexture, renderTexture, textureBlitMaterial, 0);
+////                //    //CustomBlitGL(canvasRenderTexture, renderTexture, textureBlitMaterial, 0, false, false, false);
+////                //    CustomBlitScreen(canvasRenderTexture, renderTexture, textureBlitMaterial, 0);
+////                //}
+
+////                Canvas_BlitToLeftRightRenderTextureGLES2();
+////            }
+////        }
+////    }
+
+//////    void Canvas_BlitToRenderTextureGLES2(
+//////#if URP || HDRP
+//////#if UNITY_2021_1_OR_NEWER
+//////        ScriptableRenderContext context, List<Camera> cameraList
+//////#else
+//////        ScriptableRenderContext context, Camera[] cameraList
+//////#endif
+//////#else
+//////        Camera c
+//////#endif
+//////    )
+////#if URP || HDRP
+////#if UNITY_2021_1_OR_NEWER
+////    void Canvas_BlitToRenderTextureGLES2_EndContextRendering(ScriptableRenderContext context, List<Camera> cameraList)
+////#else
+////    void Canvas_BlitToRenderTextureGLES2_EndFrameRendering(ScriptableRenderContext context, Camera[] cameraList)
+////#endif
+////#else
+////    void Canvas_BlitToRenderTextureGLES2_OnPostRender(Camera c)
+////#endif
+////    {
+////#if URP || HDRP
+////        foreach (var c in cameraList)
+////#endif
+////        {
+////            //if (debugLog) Debug.Log(c + " Canvas_BlitToRenderTextureGLES2 " + Time.time);
+
+////#if URP
+////            if (c == cam)
+////#else
+////            if (c == topmostCamera)
+////#endif
+////            {
+////                if (!S3DEnabled)
+////                    //CustomBlitGLES2(canvasRenderTexture, renderTexture, textureBlitMaterial, 0, false, false, false, false, false);
+////                    //CustomBlitGLES2(canvasRenderTexture, renderTexture, textureBlitMaterial, 0, false, false, false);
+////                    //CustomBlitGLES2(canvasRenderTexture, renderTexture, textureBlitMaterial, 0, false, false, false, clientSizePixelRect);
+////                    CustomBlitGLES2(canvasRenderTexture, renderTexture, textureBlitMaterial, 0, false, false);
+////            }
+////            else
+////#if URP
+////                if (c == camera_left)
+////#else
+////                if (c == topmostCamera_left)
+////#endif
+////                {
+////                    textureBlitMaterial.SetFloat("_ShiftX", renderTextureOffset);
+////                    textureBlitMaterial.SetFloat("_ShiftY", renderTextureOneRowShift);
+
+////                    //CustomBlitGLES2(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false, false, false, false);
+////                    //CustomBlitGLES2(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false, false);
+////                    //CustomBlitGLES2(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
+////#if UNITY_EDITOR
+////                    CustomBlitGLES2(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1, false, false);
+////#else
+////                    CustomBlitGLES2(canvasRenderTexture, renderTexture_left, textureBlitMaterial, 1, false, false);
+////#endif
+////                }
+////                else
+////#if URP
+////                    if (c == camera_right)
+////#else
+////                    if (c == topmostCamera_right)
+////#endif
+////                    {
+////                        textureBlitMaterial.SetFloat("_ShiftX", -renderTextureOffset);
+////                        textureBlitMaterial.SetFloat("_ShiftY", 0);
+
+////                        //CustomBlitGLES2(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1, false, false, false, false, false);
+////                        //CustomBlitGLES2(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1, false, false, false);
+////                        //CustomBlitGLES2(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1, false, false, false, clientSizePixelRect);
+////#if UNITY_EDITOR
+////                        CustomBlitGLES2(canvasRenderTexture, RenderTexture.active, textureBlitMaterial, 1, false, false);
+////#else
+////                        CustomBlitGLES2(canvasRenderTexture, renderTexture_right, textureBlitMaterial, 1, false, false);
+////#endif
+////                    }
+////        }
+////    }
+
+//    //void CustomBlitGLES2(RenderTexture source, RenderTexture destination, Material material, int pass) 
+//    //void CustomBlitGLES2(bool flipX, bool flipY) 
+//    //void CustomBlitGLES2(RenderTexture source, RenderTexture destination, Material material, int pass, bool flipX, bool flipY, bool clear, bool halfX, bool halfY, [Optional]Rect rect) 
+//    //void CustomBlitGLES2(RenderTexture source, RenderTexture destination, Material material, int pass, bool flipX, bool flipY, bool clear
+//    void CustomBlitGLES2(RenderTexture source, RenderTexture destination, Material material, int pass, bool flipX, bool flipY
+//        , [Optional]bool clear
+//        , [Optional]Rect rect
+//        //, Rect rect
+//        ) 
+//    {
+//        if (clear)
+//        {
+//            RenderTexture.active = null;
+//            GL.Viewport(clientSizePixelRect);
+//            GL.Clear(true, true, clearScreenColor);
+//        }
+
+//        // Set new rendertexture as active and feed the source texture into the material
+//        RenderTexture.active = destination;
+//        //RenderTexture.active = null;
+
+//        //int vertexMin = 0;
+
+//        if (material)
+//        {
+//            material.SetTexture("_MainTex", source);
+//            material.SetPass(pass);    // start the first rendering pass
+//            //vertexMin = -1;
+//        }
+
+//        // Low-Level Graphics Library calls
+//        GL.PushMatrix();    // Calculate MVP Matrix and push it to the GL stack
+
+//        if (rect != Rect.zero)
+//            GL.Viewport(rect);
+
+//        GL.LoadOrtho();    // Set up Ortho-Perspective Transform
+//        //GL.LoadIdentity();
+//        //GL.Viewport(new Rect(cam.rect.x * clientSize.x, cam.rect.y * clientSize.y, cam.rect.width * clientSize.x, cam.rect.height * clientSize.y));
+//        //GL.Viewport(pixelRect);
+
+//        //GL.Viewport(new Rect(flipX ? (1 - cam.rect.x) * clientSize.x - cam.pixelWidth : cam.rect.x * clientSize.x, 
+//        //    flipY ? (1 - cam.rect.y) * clientSize.y - cam.pixelHeight : cam.rect.y * clientSize.y, 
+//        //    cam.rect.width * clientSize.x, 
+//        //    cam.rect.height * clientSize.y));
+
+//        GL.Begin(GL.QUADS);
+
+//        ////GL.TexCoord2(flipX ? 1 : 0, flipY ? 1 : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
+//        ////GL.Vertex3(0.0f, 0.0f, 0.0f); // Finalize and submit this vertex for rendering (bottom left)
+
+//        ////GL.TexCoord2(flipX ? 1 : 0, flipY ? 0 : 1); // prepare input struct (Texcoord0 (UV's)) for this vertex
+//        ////GL.Vertex3(0.0f, 1.0f, 0.0f); // Finalize and submit this vertex for rendering (top left)
+
+//        ////GL.TexCoord2(flipX ? 0 : 1, flipY ? 0 : 1); // prepare input struct (Texcoord0 (UV's)) for this vertex
+//        ////GL.Vertex3(1.0f, 1.0f, 0.0f); // Finalize and submit this vertex for rendering  (top right)
+
+//        ////GL.TexCoord2(flipX ? 0 : 1, flipY ? 1 : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
+//        ////GL.Vertex3(1.0f, 0.0f, 0.0f); // Finalize and submit this vertex for rendering  (bottom right)
+
+//        //////for OpenGLES20
+//        ////GL.TexCoord2(flipX ? verticesUV[3].x * (halfX ? .5f : 1) : 0, flipY ? verticesUV[1].y * (halfY ? .5f : 1) : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
+//        ////GL.Vertex3(vertexMin, vertexMin, 0.0f); // Finalize and submit this vertex for rendering (bottom left)
+
+//        ////GL.TexCoord2(flipX ? verticesUV[2].x * (halfX ? .5f : 1) : 0, flipY ? 0 : verticesUV[1].y * (halfY ? .5f : 1)); // prepare input struct (Texcoord0 (UV's)) for this vertex
+//        ////GL.Vertex3(vertexMin, 1.0f, 0.0f); // Finalize and submit this vertex for rendering (top left)
+
+//        ////GL.TexCoord2(flipX ? 0 : verticesUV[2].x * (halfX ? .5f : 1), flipY ? 0 : verticesUV[2].y * (halfY ? .5f : 1)); // prepare input struct (Texcoord0 (UV's)) for this vertex
+//        ////GL.Vertex3(1.0f, 1.0f, 0.0f); // Finalize and submit this vertex for rendering  (top right)
+
+//        ////GL.TexCoord2(flipX ? 0 : verticesUV[3].x * (halfX ? .5f : 1), flipY ? verticesUV[2].y * (halfY ? .5f : 1) : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
+//        ////GL.Vertex3(1.0f, vertexMin, 0.0f); // Finalize and submit this vertex for rendering  (bottom right)
+
+//        //GL.TexCoord2(flipX ? 1 : 0, flipY ? 1 : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
+//        //GL.Vertex3(vertexMin, vertexMin, 0.0f); // Finalize and submit this vertex for rendering (bottom left)
+
+//        //GL.TexCoord2(flipX ? 1 : 0, flipY ? 0 : 1); // prepare input struct (Texcoord0 (UV's)) for this vertex
+//        //GL.Vertex3(vertexMin, 1.0f, 0.0f); // Finalize and submit this vertex for rendering (top left)
+
+//        //GL.TexCoord2(flipX ? 0 : 1, flipY ? 0 : 1); // prepare input struct (Texcoord0 (UV's)) for this vertex
+//        //GL.Vertex3(1.0f, 1.0f, 0.0f); // Finalize and submit this vertex for rendering  (top right)
+
+//        //GL.TexCoord2(flipX ? 0 : 1, flipY ? 1 : 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
+//        //GL.Vertex3(1.0f, vertexMin, 0.0f); // Finalize and submit this vertex for rendering  (bottom right)
+
+//        GL.TexCoord2(0, 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
+//        GL.Vertex3(0.0f, 0.0f, 0.0f); // Finalize and submit this vertex for rendering (bottom left)
+
+//        GL.TexCoord2(0, 1); // prepare input struct (Texcoord0 (UV's)) for this vertex
+//        GL.Vertex3(0.0f, 1.0f, 0.0f); // Finalize and submit this vertex for rendering (top left)
+
+//        GL.TexCoord2(1, 1); // prepare input struct (Texcoord0 (UV's)) for this vertex
+//        GL.Vertex3(1.0f, 1.0f, 0.0f); // Finalize and submit this vertex for rendering  (top right)
+
+//        GL.TexCoord2(1, 0); // prepare input struct (Texcoord0 (UV's)) for this vertex
+//        GL.Vertex3(1.0f, 0.0f, 0.0f); // Finalize and submit this vertex for rendering  (bottom right)
+
+//        GL.End();
+//        GL.PopMatrix(); // Pop the matrices off the stack
+//    }
+//#endif
 
 //    void Vertices() //set clip space vertices and texture coordinates for render fullscreen quad via shader buffer
 //    {
@@ -14715,10 +16920,10 @@ void CustomBlitDrawProceduralNowRect(RenderTexture source, RenderTexture destina
 ////        //}
 ////#endif
 
-//        verticesUV[0] = new Vector2(0, 0);
-//        verticesUV[1] = new Vector2(0, 1);
-//        verticesUV[2] = new Vector2(1, 1);
-//        verticesUV[3] = new Vector2(1, 0);
+//        //verticesUV[0] = new Vector2(0, 0);
+//        //verticesUV[1] = new Vector2(0, 1);
+//        //verticesUV[2] = new Vector2(1, 1);
+//        //verticesUV[3] = new Vector2(1, 0);
 //    }
 
     void OnDisable()
@@ -14726,6 +16931,8 @@ void CustomBlitDrawProceduralNowRect(RenderTexture source, RenderTexture destina
         if (!name.Contains("(Clone)"))
         {
             if (debugLog) Debug.Log("OnDisable");
+            //cb_left.Release();
+            //cb_right.Release();
             CursorLockRestore();
             Render_Release();
             //ClearScreenInProcess = false;
@@ -14868,8 +17075,8 @@ void CustomBlitDrawProceduralNowRect(RenderTexture source, RenderTexture destina
             }
 
             Destroy(S3DMaterial);
+            //Destroy(textureBlitMaterial);
             Destroy(canvas.gameObject);
-            Resources.UnloadUnusedAssets(); //free memory
 
 //#if INPUT_SYSTEM && ENABLE_INPUT_SYSTEM
 //            GUIAction.Disable();
@@ -14899,6 +17106,23 @@ void CustomBlitDrawProceduralNowRect(RenderTexture source, RenderTexture destina
 
             if (debugLog) Debug.Log("OnDisable cam.projectionMatrix\n" + cam.projectionMatrix);
             CancelInvoke(); //kill all Invoke processes
+
+            Destroy(renderTexture_left);
+            Destroy(renderTexture_right);
+            Destroy(renderTexture);
+
+#if HDRP
+        for (int i = 0; i < additionalS3DCamerasStruct.Length; i++)
+            if (additionalS3DCamerasStruct[i].camera)
+            {
+                Destroy(additionalS3DCamerasStruct[i].renderTexture_left);
+	            Destroy(additionalS3DCamerasStruct[i].renderTexture_right);
+                Destroy(additionalS3DCamerasStruct[i].renderTexture);
+            }
+#endif
+            Destroy(canvasRenderTexture);
+
+            Resources.UnloadUnusedAssets(); //free memory
         }
     }
 
@@ -14909,6 +17133,21 @@ void CustomBlitDrawProceduralNowRect(RenderTexture source, RenderTexture destina
 #if CINEMACHINE
         if (cineMachineEnabled)
             Cinemachine.CinemachineBrain.SoloCamera = null;
+#endif
+
+        Destroy(clientSizeMesh);
+        //Destroy(clientSizeMeshFlippedX);
+        Destroy(clientSizeMeshFlippedY);
+        //Destroy(twinQuadMesh);
+        Destroy(screenBlitMesh);
+        Destroy(screenBlitMeshFlipped);
+        cb_main.Release();
+        cb_left.Release();
+        cb_right.Release();
+
+#if UNITY_EDITOR
+        if (onGameviewSizeChangedRegistered)
+            gameViewWindow.rootVisualElement.UnregisterCallback<UnityEngine.UIElements.GeometryChangedEvent>(OnGameviewSizeChanged);
 #endif
     }
 
@@ -14962,15 +17201,14 @@ void CustomBlitDrawProceduralNowRect(RenderTexture source, RenderTexture destina
 
     void Render_Release()
     {
-        //if (debugLog)
-            Debug.Log("Render_Release " + name);
+        if (debugLog) Debug.Log("Render_Release " + name);
 
 //#if UNITY_2019_1_OR_NEWER
         //if (!defaultRender)
         //{
 //#if HDRP
 #if URP || HDRP
-            //RenderPipelineManager.endCameraRendering -= SingleDisplayS3D_BlitToScreen_EndCameraRendering;
+            //RenderPipelineManager.endCameraRendering -= SingleDisplayBlitToScreen_EndCameraRendering;
             //RenderPipelineManager.beginCameraRendering -= RenderTexture_Reset_BeginCameraRendering; //remove render context
 //#endif
             //RenderPipelineManager.endCameraRendering -= PostRenderContext; //remove render context
@@ -14978,25 +17216,33 @@ void CustomBlitDrawProceduralNowRect(RenderTexture source, RenderTexture destina
             //RenderPipelineManager.endCameraRendering -= RenderTexture_BlitToScreen_EndCameraRendering;
             //RenderPipelineManager.endCameraRendering -= RenderTexture_BlitToRenderTexture_EndCameraRendering;
 #if UNITY_2021_1_OR_NEWER
-            RenderPipelineManager.endContextRendering -= SingleDisplayS3D_BlitToScreen_EndContextRendering;
+            RenderPipelineManager.endContextRendering -= SingleDisplayBlitToScreen_EndContextRendering;
             RenderPipelineManager.beginContextRendering -= RenderTexture_Reset_BeginContextRendering; //remove render context
             RenderPipelineManager.endContextRendering -= RenderTexture_BlitToScreen_EndContextRendering;
+            RenderPipelineManager.beginContextRendering -= CameraRectSet_BeginContextRendering;
+            RenderPipelineManager.endContextRendering -= CameraRectReset_EndContextRendering;
             //RenderPipelineManager.endContextRendering -= RenderTexture_BlitToRenderTexture_EndContextRendering;
+#if URP && !UNITY_6000_0_OR_NEWER
             RenderPipelineManager.endContextRendering -= Canvas_BlitToRenderTexture_EndContextRendering;
-#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
-            RenderPipelineManager.endContextRendering -= SingleDisplayS3D_BlitToScreenGLES2_EndContextRendering;
-            RenderPipelineManager.endContextRendering -= Canvas_BlitToRenderTextureGLES2_EndContextRendering;
 #endif
+//#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
+//            RenderPipelineManager.endContextRendering -= SingleDisplayBlitToScreenGLES2_EndContextRendering;
+//            RenderPipelineManager.endContextRendering -= Canvas_BlitToRenderTextureGLES2_EndContextRendering;
+//#endif
 #else
-            RenderPipelineManager.endFrameRendering -= SingleDisplayS3D_BlitToScreen_EndFrameRendering;
+            RenderPipelineManager.endFrameRendering -= SingleDisplayBlitToScreen_EndFrameRendering;
             RenderPipelineManager.beginFrameRendering -= RenderTexture_Reset_BeginFrameRendering; //remove render context
             RenderPipelineManager.endFrameRendering -= RenderTexture_BlitToScreen_EndFrameRendering;
+            RenderPipelineManager.beginFrameRendering -= CameraRectSet_BeginFrameRendering;
+            RenderPipelineManager.endFrameRendering -= CameraRectReset_EndFrameRendering;
             //RenderPipelineManager.endFrameRendering -= RenderTexture_BlitToRenderTexture_EndFrameRendering;
+#if URP && !UNITY_6000_0_OR_NEWER
             RenderPipelineManager.endFrameRendering -= Canvas_BlitToRenderTexture_EndFrameRendering;
-#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
-            RenderPipelineManager.endFrameRendering -= SingleDisplayS3D_BlitToScreenGLES2_EndFrameRendering;
-            RenderPipelineManager.endFrameRendering -= Canvas_BlitToRenderTextureGLES2_EndFrameRendering;
 #endif
+//#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
+//            RenderPipelineManager.endFrameRendering -= SingleDisplayBlitToScreenGLES2_EndFrameRendering;
+//            RenderPipelineManager.endFrameRendering -= Canvas_BlitToRenderTextureGLES2_EndFrameRendering;
+//#endif
 #endif
 #else
         ////clearScreen = true;
@@ -15011,15 +17257,17 @@ void CustomBlitDrawProceduralNowRect(RenderTexture source, RenderTexture destina
         ////canvasCamera_right.gameObject.GetComponent<OnRenderImageDelegate>().RenderImageEvent -= RenderTexture_BlitToScreen_OnRenderImageDelegate;
 
         Camera.onPostRender -= RenderTexture_BlitToScreen_OnPostRender;
-        Camera.onPostRender -= Canvas_BlitToRenderTexture_OnPostRender;
-        Camera.onPostRender -= Canvas_BlitToRenderTextureLeftRight_OnPostRender;
-        Camera.onPostRender -= Canvas_BlitToRenderTextureLeftRightGLES2_OnPostRender;
-        endOfFrameDelegate -= Canvas_BlitToLeftRightRenderTexture_OnEndOfFrame;
-#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
-        Camera.onPostRender -= RenderTexture_BlitToScreenGLES2_OnPostRender;
-        Camera.onPostRender -= Canvas_BlitToRenderTextureGLES2_OnPostRender;
-        endOfFrameDelegate -= Canvas_BlitToLeftRightRenderTextureGLES2_OnEndOfFrame;
-#endif
+        //Camera.onPostRender -= Canvas_BlitToRenderTexture_OnPostRender;
+        //Camera.onPostRender -= Canvas_BlitToRenderTextureLeftRight_OnPostRender;
+        //endOfFrameDelegate -= Canvas_BlitToLeftRightRenderTexture_OnEndOfFrame;
+//#if !UNITY_2023_1_OR_NEWER //UNITY_2023_1_OR_NEWER not have GraphicsDeviceType.OpenGLES2
+//        //Camera.onPostRender -= Canvas_BlitToRenderTextureLeftRightGLES2_OnPostRender;
+//        //Camera.onPostRender -= RenderTexture_BlitToScreenGLES2_OnPostRender;
+//        //Camera.onPostRender -= Canvas_BlitToRenderTextureGLES2_OnPostRender;
+//        //endOfFrameDelegate -= Canvas_BlitToLeftRightRenderTextureGLES2_OnEndOfFrame;
+//        Camera.onPostRender -= SingleDisplayBlitToScreenGLES2_OnPostRender;
+//        //endOfFrameDelegate -= RenderTexture_BlitToScreenLeftGLES2_OnEndOfFrame;
+//#endif
 
         ////Destroy(camera_left.gameObject.GetComponent<OnRenderImageDelegate>());
         ////Destroy(camera_right.gameObject.GetComponent<OnRenderImageDelegate>());
@@ -15027,25 +17275,32 @@ void CustomBlitDrawProceduralNowRect(RenderTexture source, RenderTexture destina
         ////Destroy(cam.GetComponent<OnRenderImageDelegate>());
         Destroy(onRenderImageDelegate_cameraMain);
         onRenderImageDelegate_cameraMain = null;
-        Camera.onPostRender -= SingleDisplayS3D_BlitToScreen_OnPostRender;
-        Camera.onPostRender -= SingleDisplayS3D_BlitToScreenGLES2_OnPostRender;
-        endOfFrameDelegate -= SingleDisplayS3D_BlitToScreen_OnEndOfFrame;
-        //endOfFrameDelegate -= RenderTexture_BlitToScreenLeftRight_OnEndOfFrame;
-        endOfFrameDelegate -= RenderTexture_BlitToScreenLeft_OnEndOfFrame;
-        endOfFrameDelegate -= RenderTexture_BlitToScreenRight_OnEndOfFrame;
-        endOfFrameDelegate -= RenderTexture_BlitToScreenLeftGLES2_OnEndOfFrame;
-        //Camera.onPostRender -= GetCanvasCameraActiveRenderTexture;
+        Camera.onPostRender -= SingleDisplayBlitToScreen_OnPostRender;
+        //endOfFrameDelegate -= SingleDisplayBlitToScreen_OnEndOfFrame;
+        ////endOfFrameDelegate -= RenderTexture_BlitToScreenLeftRight_OnEndOfFrame;
+        //endOfFrameDelegate -= RenderTexture_BlitToDisplayLeft_OnEndOfFrame;
+        //endOfFrameDelegate -= RenderTexture_BlitToDisplayRight_OnEndOfFrame;
+        ////Camera.onPostRender -= GetCanvasCameraActiveRenderTexture;
 #endif
-        //canvasBlitToScreenDelegate -= Canvas_BlitToScreenEmpty;
-        canvasBlitToScreenDelegate -= Canvas_BlitToScreen;
-        canvasBlitToScreenDelegate -= Canvas_BlitToScreenGLES2;
+        ////canvasBlitDelegate -= Canvas_BlitToScreenEmpty;
+        //canvasBlitDelegate -= Canvas_BlitToScreen;
+        //canvasBlitDelegate -= Canvas_BlitToScreenGLES2;
 
         ////cam.targetTexture = null;
         ////camera_left.targetTexture = null;
         ////camera_right.targetTexture = null;
         ////camera_left.targetTexture = camera_right.targetTexture = null;
         camera_left.targetTexture = camera_right.targetTexture = cam.targetTexture = null;
-        renderTexture = renderTexture_left = renderTexture_right = null;
+        renderTexture_left = renderTexture_right = renderTexture = null;
+
+        if (renderTexture_left)
+            renderTexture_left.Release();
+
+        if (renderTexture_right)
+	        renderTexture_right.Release();
+
+        if (renderTexture)
+            renderTexture.Release();
 
 //        //camera_left.enabled = false;
 //		//camera_right.enabled = false;
@@ -15094,11 +17349,18 @@ void CustomBlitDrawProceduralNowRect(RenderTexture source, RenderTexture destina
 //                    additionalS3DCamerasStruct[i].PPLayerLastStatus = additionalS3DCamerasStruct[i].PPLayer.enabled = additionalS3DCamerasStruct[i].PPLayerDefaultStatus;
 //#endif
 
-//#if HDRP
-//                additionalS3DCamerasStruct[i].renderTexture.Release();
-//                additionalS3DCamerasStruct[i].renderTexture_left.Release();
-//                additionalS3DCamerasStruct[i].renderTexture_right.Release();
-//#endif
+#if HDRP
+        additionalS3DCamerasStruct[i].renderTexture_left = additionalS3DCamerasStruct[i].renderTexture_right = additionalS3DCamerasStruct[i].renderTexture = null;
+
+                if (additionalS3DCamerasStruct[i].renderTexture_left)
+                    additionalS3DCamerasStruct[i].renderTexture_left.Release();
+
+                if (additionalS3DCamerasStruct[i].renderTexture_right)
+	                additionalS3DCamerasStruct[i].renderTexture_right.Release();
+
+                if (additionalS3DCamerasStruct[i].renderTexture)
+                    additionalS3DCamerasStruct[i].renderTexture.Release();
+#endif
             }
 
         //#if URP
@@ -15114,6 +17376,9 @@ void CustomBlitDrawProceduralNowRect(RenderTexture source, RenderTexture destina
             ////Destroy(canvasCamera_right.gameObject.GetComponent<OnRenderImageDelegate>());
             canvasCamera.targetTexture = null;
             canvasRenderTexture = null;
+
+            if (canvasRenderTexture)
+                canvasRenderTexture.Release();
         }
 
 //        cam.cullingMask = sceneCullingMask;
@@ -15181,6 +17446,7 @@ void CustomBlitDrawProceduralNowRect(RenderTexture source, RenderTexture destina
         //    renderTexture.Release();
         //    canvasRenderTexture.Release();
         //}
+        //verticesPosBuffer.Release();
 
         //Destroy(canvasCamera_left.GetComponent<CameraBlit>());
         //Destroy(canvasCamera_right.GetComponent<CameraBlit>());
@@ -15232,7 +17498,11 @@ void CustomBlitDrawProceduralNowRect(RenderTexture source, RenderTexture destina
     void PreRenderClearScreen(
 #if URP || HDRP
         ScriptableRenderContext context,
+#if UNITY_2021_1_OR_NEWER
+        List<Camera> cameraList
+#else
         Camera[] cameraList
+#endif
 #else
         Camera c
 #endif
@@ -15250,8 +17520,8 @@ void CustomBlitDrawProceduralNowRect(RenderTexture source, RenderTexture destina
         foreach (var c in cameraList)
 #endif
         {
-            //Debug.Log(c + " clearScreen Count " + clearScreenCount + " " + Time.time);
-            //if (debugLog)
+            if (debugLog)
+                //Debug.Log(c + " clearScreen Count " + clearScreenCount + " " + Time.time);
                 Debug.Log(c + " PreRenderClearScreen " + Time.time);
 
             ////if (method == Method.Two_Displays_MirrorX || method == Method.Two_Displays_MirrorY)
@@ -15308,52 +17578,56 @@ void CustomBlitDrawProceduralNowRect(RenderTexture source, RenderTexture destina
 //                    )
                 {
                     //RenderTexture.active = null;
+
+                    //if (nativeRenderingPlugin)
+                    //    RenderTexture.active = renderTexture;
+
                     //GL.Clear(true, true, Color.clear);
                     GL.Clear(true, true, clearScreenColor);
                 }
             }
-//            else
+            else
 //#if !UNITY_EDITOR
 //                if (!openGL)
 //#endif
-//                    if (c == camera_left)
-//                    {
-//                        //RenderTexture rt = c.targetTexture;
-//                        ////c.targetTexture = null;
-//                        //RenderTexture.active = rt;
-//                        //RenderTexture rta = RenderTexture.active;
+                    if (c == camera_left)
+                    {
+                        //RenderTexture rt = c.targetTexture;
+                        ////c.targetTexture = null;
+                        //RenderTexture.active = rt;
+                        //RenderTexture rta = RenderTexture.active;
 
-//                        if (!method.ToString().Contains("Two_Displays"))
-//                            RenderTexture.active = renderTexture_left;
+                        //if (!method.ToString().Contains("Two_Displays"))
+                        //    RenderTexture.active = renderTexture_left;
 
-//                        //Rect rect = c.rect;
-//                        //c.rect = Rect.MinMaxRect(0, 0, 1, 1); //set temporary rect required before Graphics.Blit to blit render texture correctly with no fullscreen rect
-//                        //Graphics.Blit(RenderTexture.active, null as RenderTexture);
-//                        //c.rect = cam.rect;
-//                        //GL.Clear(true, true, Color.clear);
-//                        GL.Clear(true, true, clearScreenColor);
-//                        //c.rect = rect;
-//                        //c.targetTexture = rt;
-//                        //RenderTexture.active = rta;
-//                    }
-//                    else
-//                        if (c == camera_right)
-//                        {
-//                            //RenderTexture rta = RenderTexture.active;
+                        //Rect rect = c.rect;
+                        //c.rect = Rect.MinMaxRect(0, 0, 1, 1); //set temporary rect required before Graphics.Blit to blit render texture correctly with no fullscreen rect
+                        //Graphics.Blit(RenderTexture.active, null as RenderTexture);
+                        //c.rect = cam.rect;
+                        //GL.Clear(true, true, Color.clear);
+                        GL.Clear(true, true, clearScreenColor);
+                        //c.rect = rect;
+                        //c.targetTexture = rt;
+                        //RenderTexture.active = rta;
+                    }
+                    else
+                        if (c == camera_right)
+                        {
+                            //RenderTexture rta = RenderTexture.active;
 
-//                            if (!method.ToString().Contains("Two_Displays"))
-//                                RenderTexture.active = renderTexture_right;
+                            //if (!method.ToString().Contains("Two_Displays"))
+                            //    RenderTexture.active = renderTexture_right;
 
-//                            //Rect rect = c.rect;
-//                            //c.rect = Rect.MinMaxRect(0, 0, 1, 1); //set temporary rect required before Graphics.Blit to blit render texture correctly with no fullscreen rect
-//                            //Graphics.Blit(RenderTexture.active, null as RenderTexture);
-//                            //c.rect = cam.rect;
-//                            //GL.Clear(true, true, Color.clear);
-//                            GL.Clear(true, true, clearScreenColor);
-//                            //c.rect = rect;
-//                            //c.targetTexture = rt;
-//                            //RenderTexture.active = rta;
-//                        }
+                            //Rect rect = c.rect;
+                            //c.rect = Rect.MinMaxRect(0, 0, 1, 1); //set temporary rect required before Graphics.Blit to blit render texture correctly with no fullscreen rect
+                            //Graphics.Blit(RenderTexture.active, null as RenderTexture);
+                            //c.rect = cam.rect;
+                            //GL.Clear(true, true, Color.clear);
+                            GL.Clear(true, true, clearScreenColor);
+                            //c.rect = rect;
+                            //c.targetTexture = rt;
+                            //RenderTexture.active = rta;
+                        }
 
     ////#if UNITY_2019 || UNITY_2020 || UNITY_2021
     ////#if UNITY_2022_1_OR_NEWER
@@ -15898,8 +18172,7 @@ void CustomBlitDrawProceduralNowRect(RenderTexture source, RenderTexture destina
         string json = JsonUtility.ToJson(data);
         File.WriteAllText(filePath, json);
 
-        if (debugLog)
-            Debug.Log("SaveUserName json " + json);
+        if (debugLog) Debug.Log("SaveUserName json " + json);
     }
 
     void LoadLastSave()
@@ -16959,9 +19232,9 @@ void CustomBlitDrawProceduralNowRect(RenderTexture source, RenderTexture destina
         }
     }
 
-    //[Serializable]
-    //public struct AdditionalS3DCamera
-    struct AdditionalS3DCamera
+    [Serializable]
+    public struct AdditionalS3DCamera
+    //struct AdditionalS3DCamera
     {
         //public Camera[] cameras;
         //public List<Camera> cameras;
@@ -17170,6 +19443,7 @@ void CustomBlitDrawProceduralNowRect(RenderTexture source, RenderTexture destina
 
 //            //while (!packageListRequest.IsCompleted){ } //wait for packageListRequest.IsCompleted
 
+//            if (debugLog)
 //            //foreach (var package in packageListRequest.Result)
 //            //    Debug.Log(package.assetPath);
 
@@ -17261,7 +19535,7 @@ void CustomBlitDrawProceduralNowRect(RenderTexture source, RenderTexture destina
 //    static void CompilationPipeline_assemblyCompilationStarted(string s)
 //    {
 //        //throw new System.NotImplementedException();
-//        Debug.Log("CompilationPipeline_assemblyCompilationStarted: " + s);
+//        if (debugLog) Debug.Log("CompilationPipeline_assemblyCompilationStarted: " + s);
 
 //        //if (UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.inputsystem") == null)
 //        //    RemoveDefine("INPUT_SYSTEM");
@@ -17283,7 +19557,7 @@ void CustomBlitDrawProceduralNowRect(RenderTexture source, RenderTexture destina
 //    private static void CompilationPipeline_compilationStarted(object o)
 //    {
 //        //throw new System.NotImplementedException();
-//        Debug.Log("CompilationPipeline_compilationStarted: " + o);
+//        if (debugLog) Debug.Log("CompilationPipeline_compilationStarted: " + o);
 
 //        //if (UnityEditor.PackageManager.PackageInfo.FindForAssetPath("Packages/com.unity.inputsystem") == null)
 //        //    RemoveDefine("INPUT_SYSTEM");
