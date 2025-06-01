@@ -528,8 +528,8 @@ public class Stereo3D : MonoBehaviour
     //int counter;
     //IntPtr renderTexturePtr_left;
     //IntPtr renderTexturePtr_right;
-    bool lastFullscreen;
 #if !UNITY_2022_1_OR_NEWER
+    bool lastFullscreen;
     Vector2 lastWindowedClientSize;
     //Vector2 lastWindowedClientSize = new Vector2(Screen.width, Screen.height);
 #endif
@@ -6779,9 +6779,10 @@ struct tagRECT
                     renderTextureOffset = swapLR ? .5f - shift * panelDepth : -.5f + shift * panelDepth;
                     //renderTextureOffset = swapLR ? .25f - shift * panelDepth : -.25f + shift * panelDepth;
             else
-                //if (method == Method.SideBySide_Full)
-                //    renderTextureOffset = shift * (swapLR ? -1 : 1) * panelDepth;
+                if (method == Method.SideBySide_Full)
+                    renderTextureOffset = shift * (swapLR ? -1 : 1) * panelDepth;
                 //if (method == Method.SideBySide)
+                else
                     renderTextureOffset = shift * (swapLR ? -.5f : .5f) * panelDepth;
                 //else
                 //    renderTextureOffset = shift * (swapLR ? -1 : 1) * panelDepth;
@@ -7891,8 +7892,8 @@ struct tagRECT
             if (method == Method.SideBySide_HMD || method == Method.SideBySide_Full)
                 aspect *= .5f;
             else
-            if (method == Method.OverUnder_Full)
-                aspect *= 2;
+                if (method == Method.OverUnder_Full)
+                    aspect *= 2;
 
         //cam.aspect = aspect;
         camera_left.aspect = camera_right.aspect = cam.aspect = aspect;
@@ -9663,12 +9664,12 @@ struct tagRECT
                 S3DMaterial.SetTexture("_CanvasTex", canvasRenderTexture);
 
     //#if URP
-    #if !(URP || HDRP)
+#if !(URP || HDRP)
                 if (renderTextureSetTargetBuffers)
                     canvasCamera.SetTargetBuffers(canvasRenderTexture.colorBuffer, canvasRenderTexture.depthBuffer);
     //#else
                 else
-    #endif
+#endif
                     canvasCamera.targetTexture = canvasRenderTexture;
     //#endif
             }
