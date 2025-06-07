@@ -126,6 +126,7 @@ public class Stereo3D : MonoBehaviour
         SideBySide_HMD, 
         OverUnder, 
         OverUnder_Full, 
+        OverUnder_FramePacking, 
         Two_Displays, 
         Two_Displays_MirrorX, 
         Two_Displays_MirrorY, 
@@ -533,6 +534,7 @@ public class Stereo3D : MonoBehaviour
     Vector2 lastWindowedClientSize;
     //Vector2 lastWindowedClientSize = new Vector2(Screen.width, Screen.height);
 #endif
+    //FullScreenMode defaultScreenMode;
 
 #if Debug
     Text S3DSettingsText;
@@ -1127,6 +1129,9 @@ struct tagRECT
              GameObject.Find("SceneCamera").GetComponent<Camera>().pixelRect also not correct OnEnable
              EditorWindow.GetWindow<SceneView>().camera.pixelRect works but changing active window to scene view
              */
+
+            //defaultScreenMode = Screen.fullScreenMode;
+            //Screen.SetResolution(Display.main.systemWidth, Display.main.systemHeight, FullScreenMode.Windowed);
 
             cb_main = new CommandBuffer();
             cb_left = new CommandBuffer();
@@ -7598,6 +7603,7 @@ struct tagRECT
     //Rect pixelRect;
     bool borders;
     bool blitToScreenClearRequired;
+    const int framePackingPixelActiveSpace = 45;
 
     void Aspect_Set()
     {
@@ -7649,15 +7655,20 @@ struct tagRECT
 
             if (S3DEnabled && method.ToString().Contains("SideBySide"))
             {
+                float leftViewportLeftSide = camRectClampedPixelsNormilized.x * .5f;
+                float leftViewportRightSide = rectRightSide * .5f;
+                float rightViewportLeftSide = leftViewportLeftSide + .5f;
+                float rightViewportRightSide = leftViewportRightSide + .5f;
+
                 screenBlitMeshVertices = new Vector3[]{
-                    new Vector2(camRectClampedPixelsNormilized.x * .5f, camRectClampedPixelsNormilized.y),
-                    new Vector2(camRectClampedPixelsNormilized.x * .5f, rectTopSide),
-                    new Vector2(rectRightSide * .5f, rectTopSide),
-                    new Vector2(rectRightSide * .5f, camRectClampedPixelsNormilized.y),
-                    new Vector2(camRectClampedPixelsNormilized.x * .5f + .5f, camRectClampedPixelsNormilized.y),
-                    new Vector2(camRectClampedPixelsNormilized.x * .5f + .5f, rectTopSide),
-                    new Vector2(rectRightSide * .5f + .5f, rectTopSide),
-                    new Vector2(rectRightSide * .5f + .5f, camRectClampedPixelsNormilized.y)
+                    new Vector2(leftViewportLeftSide, camRectClampedPixelsNormilized.y),
+                    new Vector2(leftViewportLeftSide, rectTopSide),
+                    new Vector2(leftViewportRightSide, rectTopSide),
+                    new Vector2(leftViewportRightSide, camRectClampedPixelsNormilized.y),
+                    new Vector2(rightViewportLeftSide, camRectClampedPixelsNormilized.y),
+                    new Vector2(rightViewportLeftSide, rectTopSide),
+                    new Vector2(rightViewportRightSide, rectTopSide),
+                    new Vector2(rightViewportRightSide, camRectClampedPixelsNormilized.y)
                 };
 
                 screenBlitMeshUV = new Vector2[]{
@@ -7676,15 +7687,20 @@ struct tagRECT
             else
                 if (S3DEnabled && method.ToString().Contains("OverUnder"))
                 {
+                    float bottomViewportBottomSide = camRectClampedPixelsNormilized.y * .5f;
+                    float bottomViewportTopSide = rectTopSide * .5f;
+                    float topViewportBottomSide = bottomViewportBottomSide + .5f;
+                    float topViewportTopSide = bottomViewportTopSide + .5f;
+
                     screenBlitMeshVertices = new Vector3[]{
-                        new Vector2(camRectClampedPixelsNormilized.x, camRectClampedPixelsNormilized.y * .5f),
-                        new Vector2(camRectClampedPixelsNormilized.x, rectTopSide * .5f),
-                        new Vector2(rectRightSide, rectTopSide * .5f),
-                        new Vector2(rectRightSide, camRectClampedPixelsNormilized.y * .5f),
-                        new Vector2(camRectClampedPixelsNormilized.x, camRectClampedPixelsNormilized.y * .5f + .5f),
-                        new Vector2(camRectClampedPixelsNormilized.x, rectTopSide * .5f + .5f),
-                        new Vector2(rectRightSide, rectTopSide * .5f + .5f),
-                        new Vector2(rectRightSide, camRectClampedPixelsNormilized.y * .5f + .5f)
+                        new Vector2(camRectClampedPixelsNormilized.x, bottomViewportBottomSide),
+                        new Vector2(camRectClampedPixelsNormilized.x, bottomViewportTopSide),
+                        new Vector2(rectRightSide, bottomViewportTopSide),
+                        new Vector2(rectRightSide, bottomViewportBottomSide),
+                        new Vector2(camRectClampedPixelsNormilized.x, topViewportBottomSide),
+                        new Vector2(camRectClampedPixelsNormilized.x, topViewportTopSide),
+                        new Vector2(rectRightSide, topViewportTopSide),
+                        new Vector2(rectRightSide, topViewportBottomSide)
                     };
 
                     screenBlitMeshUV = new Vector2[]{
@@ -7736,6 +7752,39 @@ struct tagRECT
         }
         else
             clientRightBorder = clientTopBorder = 0;
+
+        if (S3DEnabled && method == Method.OverUnder_FramePacking)
+        {
+            float framePackingPixelActiveSpaceNormilized = (float)framePackingPixelActiveSpace / clientSize.y;
+            float bottomViewportBottomSide = camRectClampedPixelsNormilized.y * .5f;
+            float bottomViewportTopSide = (rectTopSide - framePackingPixelActiveSpaceNormilized) * .5f;
+            float topViewportBottomSide = bottomViewportBottomSide + .5f + framePackingPixelActiveSpaceNormilized * .5f;
+            float topViewportTopSide = bottomViewportTopSide + .5f + framePackingPixelActiveSpaceNormilized * .5f;
+
+            screenBlitMeshVertices = new Vector3[]{
+                new Vector2(camRectClampedPixelsNormilized.x, bottomViewportBottomSide),
+                new Vector2(camRectClampedPixelsNormilized.x, bottomViewportTopSide),
+                new Vector2(rectRightSide, bottomViewportTopSide),
+                new Vector2(rectRightSide, bottomViewportBottomSide),
+                new Vector2(camRectClampedPixelsNormilized.x, topViewportBottomSide),
+                new Vector2(camRectClampedPixelsNormilized.x, topViewportTopSide),
+                new Vector2(rectRightSide, topViewportTopSide),
+                new Vector2(rectRightSide, topViewportBottomSide)
+            };
+
+            screenBlitMeshUV = new Vector2[]{
+                new Vector2(0, 0),
+                new Vector2(0, .5f),
+                new Vector2(1, .5f),
+                new Vector2(1, 0),
+                new Vector2(0, .5f),
+                new Vector2(0, 1),
+                new Vector2(1, 1),
+                new Vector2(1, .5f)
+            };
+
+            screenBlitMeshIndices = twinQuadIndicesClockwise;
+        }
 
         screenBlitMesh.Clear();
 
@@ -7894,6 +7943,9 @@ struct tagRECT
             else
                 if (method == Method.OverUnder_Full)
                     aspect *= 2;
+                else
+                    if (method == Method.OverUnder_FramePacking)
+                        aspect = viewportSize.x / (float)(viewportSize.y - framePackingPixelActiveSpace) * 2;
 
         //cam.aspect = aspect;
         camera_left.aspect = camera_right.aspect = cam.aspect = aspect;
@@ -9886,12 +9938,33 @@ struct tagRECT
 
                 case Method.OverUnder_Full:
                     MethodOverUnder();
+                    //Screen.SetResolution(1920, 1080, Screen.fullScreenMode = FullScreenMode.ExclusiveFullScreen, new RefreshRate(){ numerator = 24, denominator = 1 });
+                    //Screen.SetResolution(1920, 2205, Screen.fullScreenMode = FullScreenMode.ExclusiveFullScreen, new RefreshRate(){ numerator = 24, denominator = 1 });
+                    //Screen.SetResolution(1920, 2205, Screen.fullScreenMode = FullScreenMode.ExclusiveFullScreen, new RefreshRate(){ numerator = 24, denominator = 1 });
+                    //Screen.SetResolution(1280, 720, Screen.fullScreenMode = FullScreenMode.ExclusiveFullScreen, new RefreshRate(){ numerator = 50, denominator = 1 });
+                break;
+
+                case Method.OverUnder_FramePacking:
+                    MethodOverUnder();
+                    //Screen.SetResolution(1280, 720, Screen.fullScreenMode = FullScreenMode.ExclusiveFullScreen);
+                    //Screen.SetResolution(1920, 2205, Screen.fullScreenMode = FullScreenMode.ExclusiveFullScreen);
+                    //Screen.SetResolution(1920, 2205, Screen.fullScreen);
+                    //Screen.SetResolution(1280, 720, Screen.fullScreenMode = FullScreenMode.ExclusiveFullScreen, new RefreshRate(){ numerator = 24, denominator = 1 });
+                    //Screen.SetResolution(1920, 1080, Screen.fullScreenMode = FullScreenMode.ExclusiveFullScreen, new RefreshRate(){ numerator = 23, denominator = 1 });
+                    //Screen.SetResolution(1920, 2205, Screen.fullScreenMode = FullScreenMode.ExclusiveFullScreen, new RefreshRate(){ numerator = 23, denominator = 1 });
+                    //Screen.SetResolution(1280, 720, Screen.fullScreenMode = FullScreenMode.ExclusiveFullScreen, new RefreshRate(){ numerator = 50, denominator = 1 });
                 break;
 
                 void MethodOverUnder()
                 {
-                    if (optimize)
-                        rtHeight /= 2;
+                    if (method == Method.OverUnder_FramePacking)
+                        if (optimize)
+                            rtHeight = (viewportSize.y - framePackingPixelActiveSpace) / 2;
+                        else
+                            rtHeight = viewportSize.y - framePackingPixelActiveSpace;
+                    else
+                        if (optimize)
+                            rtHeight /= 2;
 
                     //verticesUV[1] = new Vector2(0, 2);
                     //verticesUV[2] = new Vector2(1, 2);
@@ -11562,12 +11635,14 @@ struct tagRECT
         OnPreRenderClearScreen(false);
         blitToScreenClearRequired = false;
 
+        if (!nativeRenderingPlugin)
         if (
             //borders && 
             //!S3DEnabled && !nativeRenderingPlugin
             //&& cam.pixelRect != Rect.MinMaxRect(0, 0, clientSize.x, clientSize.y)
             //&& cam.rect != Rect.MinMaxRect(0, 0, 1, 1)
-            borders && !nativeRenderingPlugin
+            borders
+            //&& !nativeRenderingPlugin
 #if !UNITY_EDITOR
             && (SystemInfo.graphicsDeviceType == GraphicsDeviceType.Direct3D11 || SystemInfo.graphicsDeviceType == GraphicsDeviceType.Vulkan
 #if URP
@@ -11601,12 +11676,16 @@ struct tagRECT
             }
             else
 #if HDRP
-                blitToScreenClearRequired = true;
-#else
-                OnPreRenderClearScreen(true);
+                if (additionalS3DTopmostCameraIndex != -1)
+                    blitToScreenClearRequired = true;
+                else
 #endif
+                    OnPreRenderClearScreen(true);
 
         }
+        else
+            if (S3DEnabled && method == Method.OverUnder_FramePacking)
+                blitToScreenClearRequired = true;
 
         if (canvasCamera && canvasCamera.isActiveAndEnabled)
             canvasBlitDelegate = Canvas_BlitToLeftRightRenderTexture;
@@ -17150,6 +17229,8 @@ void CustomBlitDisplay(RenderTexture source, Display display, Mesh blitMesh, Mat
         if (onGameviewSizeChangedRegistered)
             gameViewWindow.rootVisualElement.UnregisterCallback<UnityEngine.UIElements.GeometryChangedEvent>(OnGameviewSizeChanged);
 #endif
+
+        //Screen.SetResolution(Display.main.systemWidth, Display.main.systemHeight, defaultScreenMode);
     }
 
     //    void ClosestCamera_SceneNearClipSet()
