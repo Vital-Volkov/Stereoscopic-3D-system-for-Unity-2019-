@@ -163,14 +163,14 @@ public class Stereo3D : MonoBehaviour
     public Vector2 FOVMinMax = new Vector2(10, 170);
     public bool tracking;
 
-    [Serializable]
-    public struct TrackingDataType
-    {
-        public bool screenRelative; //tracking sensor on screen or wall
-        public bool absolutePosition; //precision position relative tracking start point or tracking delta
-    }
+    //[Serializable]
+    //public struct TrackingDataType
+    //{
+    //    public bool screenRelative; //tracking sensor on screen or wall
+    //    public bool absolutePosition; //precision position relative tracking start point or tracking delta
+    //}
 
-    public TrackingDataType trackingDataType = new TrackingDataType{ screenRelative = true };
+    //public TrackingDataType trackingDataType = new TrackingDataType{ screenRelative = true };
 
     //public Transform trackingViewport;
 
@@ -3141,6 +3141,7 @@ struct tagRECT
 
             trackingRotationHelper = new GameObject("trackingRotationHelper");
             trackingRotationHelper.transform.SetParent(transform, false);
+            BackupCamPosition();
         }
     }
 
@@ -6808,20 +6809,38 @@ struct tagRECT
     //Vector3 trackingViewportCenterGuessLocalPosition;
     Vector3 trackingViewportCenterPosition;
     //Vector3 trackingViewportCenterGuessPosition;
-    bool trackingApplyed;
+    //bool trackingApplyed;
     //public Transform axisVisualizer;
     Vector3 camBackupLocalPosition;
     Quaternion camBackupLocalRotation;
     float screenDistanceBackup;
+    float camBackupFOV;
     //AxisSelect lastUpDirection;
     //AxisSelect lastForwardDirection;
     //Vector3 trackingPositionStart;
+
+    void BackupCamPosition()
+    {
+        camBackupLocalPosition = transform.localPosition;
+        camBackupLocalRotation = transform.localRotation;
+        screenDistanceBackup = screenDistance;
+        camBackupFOV = cam.fieldOfView;
+
+        if (debugLog) Debug.Log("BackupCamPosition " + camBackupLocalPosition);
+    }
 
     void ResetCamPosition()
     {
         transform.localPosition = camBackupLocalPosition;
         transform.localRotation = camBackupLocalRotation;
-        trackingApplyed = false;
+        cam.fieldOfView = camera_left.fieldOfView = camera_right.fieldOfView = camBackupFOV;
+        FOV_PassiveUpdate();
+
+        foreach (var c in additionalS3DCamerasStruct)
+            if (c.camera)
+                c.camera.fieldOfView = c.camera_left.fieldOfView = c.camera_right.fieldOfView = camBackupFOV;
+
+        //trackingApplyed = false;
     }
 
     void TrackingViewportAxis_Set()
@@ -6962,34 +6981,34 @@ struct tagRECT
         //    transform.LookAt(perpendicularToViewportPoint, trackingViewport.upAxis);
         //}
 
-        if (!trackingApplyed)
-        {
-            ////if (trackingViewport)
-            //if (trackingViewport.center)
-            //    AlignToTrackingViewport();
-            //else
-            //{
-            //    //trackingViewportCenterGuessPosition = transform.position + transform.forward * screenDistance * .001f;
-            //    //trackingViewportCenterPosition = trackingViewportCenterGuessPosition;
-            //    trackingViewportCenterPosition = transform.position + transform.forward * screenDistance * .001f;
-            //}
+        //if (!trackingApplyed)
+        //{
+        //    ////if (trackingViewport)
+        //    //if (trackingViewport.center)
+        //    //    AlignToTrackingViewport();
+        //    //else
+        //    //{
+        //    //    //trackingViewportCenterGuessPosition = transform.position + transform.forward * screenDistance * .001f;
+        //    //    //trackingViewportCenterPosition = trackingViewportCenterGuessPosition;
+        //    //    trackingViewportCenterPosition = transform.position + transform.forward * screenDistance * .001f;
+        //    //}
 
-            camBackupLocalPosition = transform.localPosition;
-            camBackupLocalRotation = transform.localRotation;
-            screenDistanceBackup = screenDistance;
-            //trackingPositionStart = trackingDataInput.position;
+        //    camBackupLocalPosition = transform.localPosition;
+        //    camBackupLocalRotation = transform.localRotation;
+        //    screenDistanceBackup = screenDistance;
+        //    //trackingPositionStart = trackingDataInput.position;
 
-            //trackingViewportCenterGuessLocalPosition = camBackupLocalPosition + transform.parent.InverseTransformDirection(transform.forward) * screenDistance * .001f;
+        //    //trackingViewportCenterGuessLocalPosition = camBackupLocalPosition + transform.parent.InverseTransformDirection(transform.forward) * screenDistance * .001f;
 
-            if (debugLog) Debug.Log("Tracking_Set camBackupLocalPosition " + camBackupLocalPosition);
-        }
+        //    if (debugLog) Debug.Log("Tracking_Set camBackupLocalPosition " + camBackupLocalPosition);
+        //}
 
         if (tracking)
         {
             if (debugLog) Debug.Log($"Tracking_Set Camera.main.transform.localPosition x: {Camera.main.transform.localPosition.x} y: {Camera.main.transform.localPosition.y} z: {Camera.main.transform.localPosition.z}");
             
             panelDepth = 0;
-            trackingApplyed = true;
+            //trackingApplyed = true;
 
             //float translationShiftX = -transform.localPosition.x * 1000 / imageWidth;
             //float translationShiftY = -transform.localPosition.y * 1000 / imageWidth * aspect;
@@ -7421,13 +7440,20 @@ struct tagRECT
                     }
             }
 
-            vFOV = cam.fieldOfView; //set lensShift changes cam.fieldOfView so here required
-            FOV = Mathf.Atan(aspect * Mathf.Tan(vFOV * Mathf.PI / 360)) * 360 / Mathf.PI;
-            FOV_slider.value = FOV;
-            //FOV_inputField.text = Convert.ToString(FOV);
-            FOV_inputField.text = FOV.ToString();
-            lastFOV = FOV;
+            FOV_PassiveUpdate();
         }
+        else
+            BackupCamPosition();
+    }
+
+    void FOV_PassiveUpdate()
+    { 
+        vFOV = cam.fieldOfView; //set lensShift changes cam.fieldOfView so here required to avoid FOV_Set
+        FOV = Mathf.Atan(aspect * Mathf.Tan(vFOV * Mathf.PI / 360)) * 360 / Mathf.PI;
+        FOV_slider.value = FOV;
+        //FOV_inputField.text = Convert.ToString(FOV);
+        FOV_inputField.text = FOV.ToString();
+        lastFOV = FOV;
     }
 
 #if URP || HDRP
