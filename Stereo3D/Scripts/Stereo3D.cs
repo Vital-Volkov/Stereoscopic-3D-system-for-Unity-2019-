@@ -6341,7 +6341,7 @@ struct tagRECT
 
                         //onOffToggle = vCamChanged = true;
                         onOffToggle = true;
-                        CameraDataStruct_Change(); //prevent change current sceneNearClip and sceneFarClip by virtual camera changed and required to restore previous virtual camera settings OnDisable
+                        //CameraDataStruct_Change(); //prevent change current sceneNearClip and sceneFarClip by virtual camera changed and required to restore previous virtual camera settings OnDisable
                 //}
                     //OnOffToggle();
                     //onOffToggle = true;
@@ -7427,16 +7427,19 @@ struct tagRECT
             {
                 lastCameraDataStruct.lensShift = cam.lensShift;
                 lastCameraDataStruct.focalLength = cam.focalLength;
+#if !CINEMACHINE                
                 lastCameraDataStruct.nonJitteredProjectionMatrix = cam.nonJitteredProjectionMatrix;
                 lastCameraDataStruct.projectionMatrix = cam.projectionMatrix;
-
+#endif
                 for (int i = 0; i < additionalS3DCamerasStruct.Length; i++)
                     if (additionalS3DCamerasStruct[i].camera)
                     {
                         additionalS3DCamerasStruct[i].lastCameraDataStruct.lensShift = additionalS3DCamerasStruct[i].camera.lensShift;
                         additionalS3DCamerasStruct[i].lastCameraDataStruct.focalLength = additionalS3DCamerasStruct[i].camera.focalLength;
+#if !CINEMACHINE
                         additionalS3DCamerasStruct[i].lastCameraDataStruct.nonJitteredProjectionMatrix = additionalS3DCamerasStruct[i].camera.nonJitteredProjectionMatrix;
                         additionalS3DCamerasStruct[i].lastCameraDataStruct.projectionMatrix = additionalS3DCamerasStruct[i].camera.projectionMatrix;
+#endif
                     }
             }
 
@@ -8128,7 +8131,7 @@ struct tagRECT
             //cam.Reset();
             //cam.nearClipPlane = -1; //Hack for more fps in SRP(Scriptable Render Pipeline)
             //((Cinemachine.CinemachineVirtualCamera)vCam).m_Lens.NearClipPlane = -1;
-            CameraDataStruct_Change();
+            //CameraDataStruct_Change();
         }
         else
             Invoke("VCamCullingOff", Time.deltaTime);
@@ -10695,9 +10698,10 @@ struct tagRECT
         {
             lastCameraDataStruct.lensShift = cam.lensShift;
             lastCameraDataStruct.focalLength = cam.focalLength;
+#if !CINEMACHINE
             lastCameraDataStruct.nonJitteredProjectionMatrix = cam.nonJitteredProjectionMatrix;
             lastCameraDataStruct.projectionMatrix = cam.projectionMatrix;
-
+#endif
             //if (!GUIAsOverlay || nearClipHack)
             {
                 lastCameraDataStruct.nearClipPlane = cam.nearClipPlane; //for !GUIAsOverlay || nearClipHack
@@ -10709,9 +10713,10 @@ struct tagRECT
                 {
                     additionalS3DCamerasStruct[i].lastCameraDataStruct.lensShift = additionalS3DCamerasStruct[i].camera.lensShift;
                     additionalS3DCamerasStruct[i].lastCameraDataStruct.focalLength = additionalS3DCamerasStruct[i].camera.focalLength;
+#if !CINEMACHINE
                     additionalS3DCamerasStruct[i].lastCameraDataStruct.nonJitteredProjectionMatrix = additionalS3DCamerasStruct[i].camera.nonJitteredProjectionMatrix;
                     additionalS3DCamerasStruct[i].lastCameraDataStruct.projectionMatrix = additionalS3DCamerasStruct[i].camera.projectionMatrix;
-
+#endif
                     //if (!GUIAsOverlay)
                     {
                         additionalS3DCamerasStruct[i].lastCameraDataStruct.nearClipPlane = additionalS3DCamerasStruct[i].camera.nearClipPlane; //for !GUIAsOverlay
